@@ -959,13 +959,11 @@ class AudioLoop:
                                 elif fc.name == "run_jules_agent":
                                     print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
                                     source = fc.args.get("source")
-                                    result_text = await self.handle_jules_request(prompt, source)
+                                    result = await self.handle_jules_request(prompt, source)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={
-                                            "result": result_text,
-                                        }
+                                        response={"result": result},
                                     )
                                     function_responses.append(function_response)
 
@@ -973,76 +971,42 @@ class AudioLoop:
                                     print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
                                     session_id = fc.args.get("session_id")
                                     feedback = fc.args.get("feedback")
-                                    
-                                    async def do_feedback():
-                                        res = await self.handle_jules_feedback(session_id, feedback)
-                                        try:
-                                            await self.session.send(input=f"System Notification: Jules Feedback result: {res}", end_of_turn=True)
-                                        except Exception as e:
-                                            print(f"[ADA DEBUG] [ERR] Failed to send feedback result: {e}")
-                                    
-                                    asyncio.create_task(do_feedback())
+                                    result = await self.handle_jules_feedback(session_id, feedback)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={
-                                            "result": "Sending feedback...",
-                                        }
+                                        response={"result": result},
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_sessions":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
-                                    
-                                    async def do_list_sessions():
-                                        res = await self.handle_list_jules_sessions()
-                                        try:
-                                            await self.session.send(input=f"System Notification: Jules Sessions: {res}", end_of_turn=True)
-                                        except Exception as e:
-                                            print(f"[ADA DEBUG] [ERR] Failed to send list sessions result: {e}")
-                                            
-                                    asyncio.create_task(do_list_sessions())
+                                    result = await self.handle_list_jules_sessions()
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={"result": "Fetching sessions..."},
+                                        response={"result": result},
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_sources":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
-                                    
-                                    async def do_list_sources():
-                                        res = await self.handle_list_jules_sources()
-                                        try:
-                                            await self.session.send(input=f"System Notification: Jules Sources: {res}", end_of_turn=True)
-                                        except Exception as e:
-                                            print(f"[ADA DEBUG] [ERR] Failed to send list sources result: {e}")
-                                            
-                                    asyncio.create_task(do_list_sources())
+                                    result = await self.handle_list_jules_sources()
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={"result": "Fetching sources..."},
+                                        response={"result": result},
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_activities":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
                                     session_id = fc.args.get("session_id")
-                                    
-                                    async def do_list_activities():
-                                        res = await self.handle_list_jules_activities(session_id)
-                                        try:
-                                            await self.session.send(input=f"System Notification: Jules Activities for {session_id}: {res}", end_of_turn=True)
-                                        except Exception as e:
-                                            print(f"[ADA DEBUG] [ERR] Failed to send list activities result: {e}")
-                                            
-                                    asyncio.create_task(do_list_activities())
+                                    result = await self.handle_list_jules_activities(session_id)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={"result": "Fetching activities..."},
+                                        response={"result": result},
                                     )
                                     function_responses.append(function_response)
 
