@@ -740,19 +740,7 @@ class AudioLoop:
                         print("The tool was called")
                         function_responses = []
                         for fc in response.tool_call.function_calls:
-                            if fc.name.startswith("trello_"):
-                                tool_name = fc.name.replace("trello_", "")
-                                trello_func = getattr(self.trello_agent, tool_name)
-                                result = trello_func(**fc.args)
-                                function_response = types.FunctionResponse(
-                                    id=fc.id,
-                                    name=fc.name,
-                                    response={"result": result}
-                                )
-                                function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "run_jules_agent", "send_jules_feedback"]:
-                                prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
-                                
+                            if fc.name.startswith("trello_") or fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
                                 # Check Permissions (Default to True if not set)
                                 confirmation_required = self.permissions.get(fc.name, True)
                                 
@@ -762,55 +750,62 @@ class AudioLoop:
                                     pass
                                 else:
                                     # Confirmation Logic
+                                    import uuid
+                                    request_id = str(uuid.uuid4())
+
                                     if self.on_tool_confirmation:
-                                        import uuid
-                                        request_id = str(uuid.uuid4())
-                                    print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
-                                    
-                                    future = asyncio.Future()
-                                    self._pending_confirmations[request_id] = future
-                                    
-                                    self.on_tool_confirmation({
-                                        "id": request_id, 
-                                        "tool": fc.name, 
-                                        "args": fc.args
-                                    })
-                                    
-                                    try:
-                                        # Wait for user response
-                                        confirmed = await future
+                                        print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
 
-                                    finally:
-                                        self._pending_confirmations.pop(request_id, None)
+                                        future = asyncio.Future()
+                                        self._pending_confirmations[request_id] = future
 
-                                    print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
+                                        self.on_tool_confirmation({
+                                            "id": request_id,
+                                            "tool": fc.name,
+                                            "args": fc.args
+                                        })
 
-                                    if not confirmed:
-                                        print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
-                                        function_response = types.FunctionResponse(
-                                            id=fc.id,
-                                            name=fc.name,
-                                            response={
-                                                "result": "User denied the request to use this tool.",
-                                            }
-                                        )
-                                        function_responses.append(function_response)
-                                        continue
+                                        try:
+                                            # Wait for user response
+                                            confirmed = await future
+                                        finally:
+                                            self._pending_confirmations.pop(request_id, None)
 
-                                    if not confirmed:
-                                        print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
-                                        function_response = types.FunctionResponse(
-                                            id=fc.id,
-                                            name=fc.name,
-                                            response={
-                                                "result": "User denied the request to use this tool.",
-                                            }
-                                        )
-                                        function_responses.append(function_response)
-                                        continue
+                                        print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
+
+                                        if not confirmed:
+                                            print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
+                                            function_response = types.FunctionResponse(
+                                                id=fc.id,
+                                                name=fc.name,
+                                                response={
+                                                    "result": "User denied the request to use this tool.",
+                                                }
+                                            )
+                                            function_responses.append(function_response)
+                                            continue
+                                    else:
+                                        # No confirmation callback, but confirmation is required?
+                                        # Default to allowed but log it.
+                                        print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no callback set. Proceeding.")
 
                                 # If confirmed (or no callback configured, or auto-allowed), proceed
-                                if fc.name == "generate_cad":
+                                if fc.name.startswith("trello_"):
+                                    tool_name = fc.name.replace("trello_", "")
+                                    trello_func = getattr(self.trello_agent, tool_name)
+
+                                    print(f"[ADA DEBUG] [TOOL] Tool Call: '{fc.name}'")
+                                    # Now that `trello_agent` is async, `await trello_func(**fc.args)` will NOT block the event loop.
+                                    result = await trello_func(**fc.args)
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "generate_cad":
                                     print(f"\n[ADA DEBUG] --------------------------------------------------")
                                     print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
                                     print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
