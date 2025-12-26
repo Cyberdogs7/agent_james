@@ -245,7 +245,12 @@ class WebAgent:
                         config=config
                     )
                 except Exception as e:
-                    print(f"[CRITICAL] Critical API Error: {e}")
+                    error_msg = str(e)
+                    if "429" in error_msg:
+                        print(f"Rate limited (429) for Gemini API at generate_content. Error: {e}")
+                    else:
+                        print(f"[CRITICAL] Critical API Error: {e}")
+                    
                     if update_callback: await update_callback(None, f"Error: {e}")
                     break
                 

@@ -394,6 +394,13 @@ class AudioLoop:
         if resolved_input_device_index is None:
              print("[ADA] Using Default Input Device")
 
+        # Determine actual channels to use
+        actual_input_device_index = resolved_input_device_index if resolved_input_device_index is not None else mic_info["index"]
+        
+        # Try to open with requested CHANNELS, fallback if needed
+        self.audio_stream = None
+        stream_channels = CHANNELS
+        
         try:
             self.audio_stream = await asyncio.to_thread(
                 pya.open,
@@ -401,11 +408,39 @@ class AudioLoop:
                 channels=CHANNELS,
                 rate=SEND_SAMPLE_RATE,
                 input=True,
-                input_device_index=resolved_input_device_index if resolved_input_device_index is not None else mic_info["index"],
+                input_device_index=actual_input_device_index,
                 frames_per_buffer=CHUNK_SIZE,
             )
-        except OSError as e:
-            print(f"[ADA] [ERR] Failed to open audio input stream: {e}")
+        except OSError:
+            print(f"[ADA] Failed to open stream with {CHANNELS} channels. Trying to detect supported channels...")
+            try:
+                device_info = pya.get_device_info_by_index(actual_input_device_index)
+                max_channels = int(device_info.get('maxInputChannels', 0))
+                
+                # Try common counts up to max_channels
+                for c in [1, 2, 4, 8]:
+                    if c == CHANNELS: continue
+                    if c > max_channels and max_channels > 0: continue
+                    try:
+                        self.audio_stream = await asyncio.to_thread(
+                            pya.open,
+                            format=FORMAT,
+                            channels=c,
+                            rate=SEND_SAMPLE_RATE,
+                            input=True,
+                            input_device_index=actual_input_device_index,
+                            frames_per_buffer=CHUNK_SIZE,
+                        )
+                        stream_channels = c
+                        print(f"[ADA] Successfully opened audio stream with {c} channels.")
+                        break
+                    except OSError:
+                        continue
+            except Exception as e:
+                print(f"[ADA] [ERR] Device info lookup failed: {e}")
+
+        if not self.audio_stream:
+            print(f"[ADA] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
             print("[ADA] [WARN] Audio features will be disabled. Please check microphone permissions.")
             return
 
@@ -426,6 +461,15 @@ class AudioLoop:
             try:
                 data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
                 
+                # Downmix if needed (Gemini expects Mono)
+                if stream_channels > 1:
+                    count = len(data) // (2 * stream_channels)
+                    if count > 0:
+                        shorts = struct.unpack(f"<{count * stream_channels}h", data)
+                        # Take the first channel (left)
+                        mono_shorts = shorts[::stream_channels]
+                        data = struct.pack(f"<{count}h", *mono_shorts)
+
                 # 1. Send Audio
                 if self.out_queue:
                     await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
@@ -645,21 +689,44 @@ class AudioLoop:
         print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
         if not source:
             print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
-            sources_response = await self.jules_agent.list_sources()
-            if sources_response and "sources" in sources_response:
-                sources = [s["name"] for s in sources_response["sources"]]
-                sources_str = "\n".join(sources)
-                return f"Please ask the user to select a source from the following list:\n{sources_str}"
-            else:
-                return "Failed to fetch Jules sources. Please specify a source."
+            
+            async def fetch_sources_and_notify():
+                sources_response = await self.jules_agent.list_sources()
+                if sources_response and "sources" in sources_response:
+                    sources = [s["name"] for s in sources_response["sources"]]
+                    sources_str = "\n".join(sources)
+                    msg = f"System Notification: Available Jules sources:\n{sources_str}\n\nPlease ask the user to select one."
+                else:
+                    msg = "System Notification: Failed to fetch Jules sources."
+                
+                try:
+                    await self.session.send(input=msg, end_of_turn=True)
+                except Exception as e:
+                    print(f"[ADA DEBUG] [ERR] Failed to send jules sources notification: {e}")
 
-        session = await self.jules_agent.create_session(prompt, source)
-        if session:
-            print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
-            asyncio.create_task(self.jules_agent.poll_for_updates(session["name"]))
-            return "Jules task started."
-        else:
-            return "Failed to start Jules task."
+            asyncio.create_task(fetch_sources_and_notify())
+            return "Fetching available Jules sources. I will notify you shortly."
+
+        async def run_jules_task():
+            session = await self.jules_agent.create_session(prompt, source)
+            if session:
+                print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
+                # poll_for_updates is already backgrounded in handle_jules_request's original version
+                # but we'll keep it consistent. Actually jules_agent.create_session might take time.
+                asyncio.create_task(self.jules_agent.poll_for_updates(session["name"]))
+                try:
+                    await self.session.send(input=f"System Notification: Jules session created: {session['name']}", end_of_turn=True)
+                except Exception as e:
+                    print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
+            else:
+                print("[ADA DEBUG] [JULES] Failed to create session.")
+                try:
+                    await self.session.send(input="System Notification: Failed to start Jules task.", end_of_turn=True)
+                except Exception as e:
+                    print(f"[ADA DEBUG] [ERR] Failed to send jules failure notification: {e}")
+
+        asyncio.create_task(run_jules_task())
+        return "Jules task starting. I will notify you once the session is created."
 
     async def handle_jules_feedback(self, session_id, feedback):
         print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
@@ -875,44 +942,76 @@ class AudioLoop:
                                     print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
                                     session_id = fc.args.get("session_id")
                                     feedback = fc.args.get("feedback")
-                                    result_text = await self.handle_jules_feedback(session_id, feedback)
+                                    
+                                    async def do_feedback():
+                                        res = await self.handle_jules_feedback(session_id, feedback)
+                                        try:
+                                            await self.session.send(input=f"System Notification: Jules Feedback result: {res}", end_of_turn=True)
+                                        except Exception as e:
+                                            print(f"[ADA DEBUG] [ERR] Failed to send feedback result: {e}")
+                                    
+                                    asyncio.create_task(do_feedback())
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
                                         response={
-                                            "result": result_text,
+                                            "result": "Sending feedback...",
                                         }
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_sessions":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
-                                    result_text = await self.handle_list_jules_sessions()
+                                    
+                                    async def do_list_sessions():
+                                        res = await self.handle_list_jules_sessions()
+                                        try:
+                                            await self.session.send(input=f"System Notification: Jules Sessions: {res}", end_of_turn=True)
+                                        except Exception as e:
+                                            print(f"[ADA DEBUG] [ERR] Failed to send list sessions result: {e}")
+                                            
+                                    asyncio.create_task(do_list_sessions())
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={"result": result_text},
+                                        response={"result": "Fetching sessions..."},
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_sources":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
-                                    result_text = await self.handle_list_jules_sources()
+                                    
+                                    async def do_list_sources():
+                                        res = await self.handle_list_jules_sources()
+                                        try:
+                                            await self.session.send(input=f"System Notification: Jules Sources: {res}", end_of_turn=True)
+                                        except Exception as e:
+                                            print(f"[ADA DEBUG] [ERR] Failed to send list sources result: {e}")
+                                            
+                                    asyncio.create_task(do_list_sources())
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={"result": result_text},
+                                        response={"result": "Fetching sources..."},
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_activities":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
                                     session_id = fc.args.get("session_id")
-                                    result_text = await self.handle_list_jules_activities(session_id)
+                                    
+                                    async def do_list_activities():
+                                        res = await self.handle_list_jules_activities(session_id)
+                                        try:
+                                            await self.session.send(input=f"System Notification: Jules Activities for {session_id}: {res}", end_of_turn=True)
+                                        except Exception as e:
+                                            print(f"[ADA DEBUG] [ERR] Failed to send list activities result: {e}")
+                                            
+                                    asyncio.create_task(do_list_activities())
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
-                                        response={"result": result_text},
+                                        response={"result": "Fetching activities..."},
                                     )
                                     function_responses.append(function_response)
 
@@ -1374,8 +1473,13 @@ class AudioLoop:
                     print(f"[ADA DEBUG] [INFO] Main loop stopping.")
                     break
 
-                print(f"[ADA DEBUG] [ERR] Connection Error: {e}")
-                
+                # Check for 429 error (Rate Limit) in Gemini API
+                error_msg = str(e)
+                if "429" in error_msg:
+                     print(f"Rate limited (429) for Gemini API at live.connect. Retrying in {retry_delay} seconds...")
+                else:
+                    print(f"[ADA DEBUG] [ERR] Connection Error: {e}")
+                    
                 # If we have an ExceptionGroup, try to log the sub-exceptions
                 if hasattr(e, 'exceptions'):
                     for idx, se in enumerate(e.exceptions):

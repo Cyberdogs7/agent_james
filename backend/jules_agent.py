@@ -15,75 +15,63 @@ class JulesAgent:
         self.active_sessions = set()
         self.sessions_lock = asyncio.Lock()
 
+    async def _request(self, method, url, **kwargs):
+        """Helper method to make requests with retry logic."""
+        max_retries = 3
+        base_delay = 1
+        for attempt in range(max_retries):
+            try:
+                response = await self.client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"Rate limited (429) for Jules API at {url}. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(delay)
+                else:
+                    print(f"HTTP error occurred: {e}")
+                    return None
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                return None
+        return None
+
     async def create_session(self, prompt, source):
         """Creates a new session in the Jules API."""
-        try:
-            response = await self.client.post(
-                f"{self.base_url}/sessions",
-                json={
-                    "prompt": prompt,
-                    "sourceContext": {
-                        "source": source,
-                        "githubRepoContext": {
-                            "startingBranch": "main"
-                        }
-                    },
-                    "automationMode": "AUTO_CREATE_PR",
-                    "title": "Jules Task"
-                },
-            )
-            response.raise_for_status()
-            session = response.json()
+        data = {
+            "prompt": prompt,
+            "sourceContext": {
+                "source": source,
+                "githubRepoContext": {
+                    "startingBranch": "main"
+                }
+            },
+            "automationMode": "AUTO_CREATE_PR",
+            "title": "Jules Task"
+        }
+        session = await self._request("POST", f"{self.base_url}/sessions", json=data)
+        if session:
             self.session_id = session["name"]
             async with self.sessions_lock:
                 self.active_sessions.add(self.session_id)
-            return session
-        except httpx.HTTPStatusError as e:
-            print(f"Error creating Jules session: {e}")
-            return None
+        return session
 
     async def send_message(self, session_id, message):
         """Sends a message to a session."""
-        try:
-            response = await self.client.post(
-                f"{self.base_url}/{session_id}:sendMessage",
-                json={"prompt": message},
-            )
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            print(f"Error sending message to Jules session: {e}")
-            return None
+        return await self._request("POST", f"{self.base_url}/{session_id}:sendMessage", json={"prompt": message})
 
     async def list_sessions(self):
         """Lists all sessions."""
-        try:
-            response = await self.client.get(f"{self.base_url}/sessions")
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            print(f"Error listing Jules sessions: {e}")
-            return None
+        return await self._request("GET", f"{self.base_url}/sessions")
 
     async def list_sources(self):
         """Lists all sources."""
-        try:
-            response = await self.client.get(f"{self.base_url}/sources")
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            print(f"Error listing Jules sources: {e}")
-            return None
+        return await self._request("GET", f"{self.base_url}/sources")
 
     async def list_activities(self, session_id):
         """Lists all activities for a session."""
-        try:
-            response = await self.client.get(f"{self.base_url}/{session_id}/activities")
-            response.raise_for_status()
-            return response.json()
-        except httpx.HTTPStatusError as e:
-            print(f"Error listing Jules activities: {e}")
-            return None
+        return await self._request("GET", f"{self.base_url}/{session_id}/activities")
 
     async def poll_for_updates(self, session_id):
         """Polls for updates on a session."""
@@ -113,7 +101,7 @@ class JulesAgent:
                         await self.session.send(input=message, end_of_turn=False)
 
                 last_activity_count = len(activities)
-            await asyncio.sleep(30)
+            await asyncio.sleep(60)
 
     async def start_persistent_polling(self):
         """Starts a persistent polling loop to check for active sessions."""
@@ -125,4 +113,4 @@ class JulesAgent:
                         if session["name"] not in self.active_sessions:
                             self.active_sessions.add(session["name"])
                             asyncio.create_task(self.poll_for_updates(session["name"]))
-            await asyncio.sleep(300)
+            await asyncio.sleep(600)
