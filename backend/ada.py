@@ -210,6 +210,7 @@ from web_agent import WebAgent
 from kasa_agent import KasaAgent
 from printer_agent import PrinterAgent
 from trello_agent import TrelloAgent
+from jules_agent import JulesAgent
 
 class AudioLoop:
     def __init__(self, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None):
@@ -259,6 +260,7 @@ class AudioLoop:
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.printer_agent = PrinterAgent()
         self.trello_agent = TrelloAgent()
+        self.jules_agent = JulesAgent()
 
         self.send_text_task = None
         self.stop_event = asyncio.Event()
@@ -639,6 +641,24 @@ class AudioLoop:
         except Exception as e:
              print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
+    async def handle_jules_request(self, prompt, source):
+        print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
+        session = await self.jules_agent.create_session(prompt, source)
+        if session:
+            print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
+            asyncio.create_task(self.jules_agent.poll_for_updates(session["name"]))
+            return "Jules task started."
+        else:
+            return "Failed to start Jules task."
+
+    async def handle_jules_feedback(self, session_id, feedback):
+        print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
+        response = await self.jules_agent.send_message(session_id, feedback)
+        if response:
+            return "Feedback sent successfully."
+        else:
+            return "Failed to send feedback."
+
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         try:
@@ -730,7 +750,7 @@ class AudioLoop:
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
+                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "run_jules_agent", "send_jules_feedback"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
                                 
                                 # Check Permissions (Default to True if not set)
@@ -813,7 +833,32 @@ class AudioLoop:
                                     print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
                                     function_responses.append(function_response)
 
+                                elif fc.name == "run_jules_agent":
+                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
+                                    source = fc.args.get("source")
+                                    result_text = await self.handle_jules_request(prompt, source)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={
+                                            "result": result_text,
+                                        }
+                                    )
+                                    function_responses.append(function_response)
 
+                                elif fc.name == "send_jules_feedback":
+                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
+                                    session_id = fc.args.get("session_id")
+                                    feedback = fc.args.get("feedback")
+                                    result_text = await self.handle_jules_feedback(session_id, feedback)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={
+                                            "result": result_text,
+                                        }
+                                    )
+                                    function_responses.append(function_response)
 
                                 elif fc.name == "write_file":
                                     path = fc.args["path"]
@@ -1194,6 +1239,7 @@ class AudioLoop:
                     asyncio.TaskGroup() as tg,
                 ):
                     self.session = session
+                    self.jules_agent.session = session
 
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=10)
@@ -1209,6 +1255,7 @@ class AudioLoop:
 
                     tg.create_task(self.receive_audio())
                     tg.create_task(self.play_audio())
+                    tg.create_task(self.jules_agent.start_persistent_polling())
 
                     # Handle Startup vs Reconnect Logic
                     if not is_reconnect:

@@ -85,6 +85,16 @@ class TestToolDefinitions:
         assert iterate_cad_tool['name'] == 'iterate_cad'
         print(f"iterate_cad tool: {iterate_cad_tool['name']}")
 
+    def test_run_jules_agent_tool_schema(self):
+        """Test run_jules_agent tool has correct schema."""
+        from tools import run_jules_agent_tool
+
+        assert run_jules_agent_tool['name'] == 'run_jules_agent'
+        assert 'description' in run_jules_agent_tool
+        assert 'parameters' in run_jules_agent_tool
+        assert 'prompt' in run_jules_agent_tool['parameters']['properties']
+        print(f"run_jules_agent tool: {run_jules_agent_tool['name']}")
+
 
 class TestAudioLoopClass:
     """Test AudioLoop class structure."""
@@ -190,6 +200,12 @@ class TestAgentImports:
         from ada import PrinterAgent
         assert PrinterAgent is not None
         print("PrinterAgent imported")
+
+    def test_jules_agent_import(self):
+        """Test JulesAgent is imported."""
+        from ada import JulesAgent
+        assert JulesAgent is not None
+        print("JulesAgent imported")
 
 
 class TestToolConfirmation:
