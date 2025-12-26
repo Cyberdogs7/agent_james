@@ -1,3 +1,5 @@
+const { blackA, gray, red, gold } = require('@radix-ui/colors');
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
     content: [
@@ -7,14 +9,13 @@ module.exports = {
     theme: {
         extend: {
             fontFamily: {
-                mono: ['"Share Tech Mono"', 'monospace'], // Sci-fi font
+                sans: ['"Roboto"', 'sans-serif'],
             },
             colors: {
-                cyan: {
-                    400: '#22d3ee',
-                    500: '#06b6d4',
-                    900: '#164e63',
-                }
+                ...gray,
+                ...red,
+                ...gold,
+                ...blackA
             }
         },
     },
