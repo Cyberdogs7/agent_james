@@ -663,7 +663,12 @@ class AudioLoop:
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         try:
             while True:
-                turn = self.session.receive()
+                try:
+                    turn = self.session.receive()
+                except Exception as e:
+                    print(f"[ADA DEBUG] [ERR] Session receive error: {e}")
+                    raise e
+
                 async for response in turn:
                     # 1. Handle Audio Data
                     if data := response.data:
@@ -1170,7 +1175,10 @@ class AudioLoop:
                 while not self.audio_in_queue.empty():
                     self.audio_in_queue.get_nowait()
         except Exception as e:
-            print(f"Error in receive_audio: {e}")
+            if "1011" in str(e) or "CANCELLED" in str(e).upper():
+                print(f"[ADA DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
+            else:
+                print(f"Error in receive_audio: {e}")
             traceback.print_exc()
             # CRITICAL: Re-raise to crash the TaskGroup and trigger outer loop reconnect
             raise e
@@ -1282,6 +1290,11 @@ class AudioLoop:
                     # Reset retry delay on successful connection
                     retry_delay = 1
                     
+                    # Reset state that shouldn't persist across sessions if they fail early
+                    self._last_input_transcription = ""
+                    self._last_output_transcription = ""
+                    self.chat_buffer = {"sender": None, "text": ""}
+                    
                     # Wait until stop event, or until the session task group exits (which happens on error)
                     # Actually, the TaskGroup context manager will exit if any tasks fail/cancel.
                     # We need to keep this block alive.
@@ -1301,10 +1314,16 @@ class AudioLoop:
                 
             except Exception as e:
                 # This catches the ExceptionGroup from TaskGroup or direct exceptions
+                if self.stop_event.is_set():
+                    print(f"[ADA DEBUG] [INFO] Main loop stopping.")
+                    break
+
                 print(f"[ADA DEBUG] [ERR] Connection Error: {e}")
                 
-                if self.stop_event.is_set():
-                    break
+                # If we have an ExceptionGroup, try to log the sub-exceptions
+                if hasattr(e, 'exceptions'):
+                    for idx, se in enumerate(e.exceptions):
+                        print(f"  Sub-exception {idx}: {se}")
                 
                 print(f"[ADA DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
