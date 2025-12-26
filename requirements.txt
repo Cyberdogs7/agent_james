@@ -22,3 +22,4 @@ python-dotenv
 mediapipe
 # CAD Generation
 build123d
+requests

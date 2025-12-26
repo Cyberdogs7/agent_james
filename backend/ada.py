@@ -209,6 +209,7 @@ from cad_agent import CadAgent
 from web_agent import WebAgent
 from kasa_agent import KasaAgent
 from printer_agent import PrinterAgent
+from trello_agent import TrelloAgent
 
 class AudioLoop:
     def __init__(self, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None):
@@ -257,6 +258,7 @@ class AudioLoop:
         self.web_agent = WebAgent()
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.printer_agent = PrinterAgent()
+        self.trello_agent = TrelloAgent()
 
         self.send_text_task = None
         self.stop_event = asyncio.Event()
@@ -718,7 +720,17 @@ class AudioLoop:
                         print("The tool was called")
                         function_responses = []
                         for fc in response.tool_call.function_calls:
-                            if fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
+                            if fc.name.startswith("trello_"):
+                                tool_name = fc.name.replace("trello_", "")
+                                trello_func = getattr(self.trello_agent, tool_name)
+                                result = trello_func(**fc.args)
+                                function_response = types.FunctionResponse(
+                                    id=fc.id,
+                                    name=fc.name,
+                                    response={"result": result}
+                                )
+                                function_responses.append(function_response)
+                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
                                 
                                 # Check Permissions (Default to True if not set)
