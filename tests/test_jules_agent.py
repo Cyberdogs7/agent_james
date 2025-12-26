@@ -84,6 +84,20 @@ async def test_list_sessions_success(jules_agent):
 
 
 @pytest.mark.asyncio
+async def test_list_sources_success(jules_agent):
+    """Test successfully listing all sources."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"sources": [{"name": "source1"}, {"name": "source2"}]}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=mock_response) as mock_get:
+        response = await jules_agent.list_sources()
+        assert len(response["sources"]) == 2
+        mock_get.assert_called_once_with(f"{jules_agent.base_url}/sources")
+
+
+@pytest.mark.asyncio
 async def test_list_activities_success(jules_agent):
     """Test successfully listing activities for a session."""
     mock_response = MagicMock()

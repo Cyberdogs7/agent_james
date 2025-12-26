@@ -107,17 +107,17 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
     };
 
     return (
-        <div className="w-full h-full relative group bg-gray2 rounded-lg overflow-hidden border border-gold9/20">
+        <div className="w-full h-full relative group bg-gray-900 rounded-lg overflow-hidden border border-cyan-500/30">
             {/* Close Button */}
             <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={onClose} className="bg-red9/20 hover:bg-red9/50 text-red9 p-1 rounded">X</button>
+                <button onClick={onClose} className="bg-red-500/20 hover:bg-red-500/50 text-red-500 p-1 rounded">X</button>
             </div>
 
             {/* Top Toolbar */}
             <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                 <button
                     onClick={() => setIsIterating(true)}
-                    className="bg-gold9/20 hover:bg-gold9/50 text-gold9 text-xs px-2 py-1 rounded border border-gold9/30 backdrop-blur-sm"
+                    className="bg-cyan-500/20 hover:bg-cyan-500/50 text-cyan-400 text-xs px-2 py-1 rounded border border-cyan-500/30 backdrop-blur-sm"
                 >
                     ITERATE
                 </button>
@@ -138,16 +138,16 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
             {/* Iteration / Generation Overlay */}
             {/* Show if iterating OR if no data exists (and not loading) */}
             {(isIterating || (!data && data?.format !== 'loading')) && (
-                <div className={`absolute inset-0 z-20 ${!data ? 'bg-gray2' : 'bg-black/80'} flex items-center justify-center p-4`}>
-                    <div className="bg-gray3 border border-gold9/50 rounded p-4 w-full max-w-sm pointer-events-auto shadow-[0_0_20px_rgba(255,215,0,0.2)]">
-                        <h4 className="text-gold9 text-sm mb-2 font-sans">
+                <div className={`absolute inset-0 z-20 ${!data ? 'bg-gray-900' : 'bg-black/80'} flex items-center justify-center p-4`}>
+                    <div className="bg-gray-800 border border-cyan-500/50 rounded p-4 w-full max-w-sm pointer-events-auto shadow-[0_0_20px_rgba(6,182,212,0.2)]">
+                        <h4 className="text-cyan-400 text-sm mb-2 font-mono">
                             {!data ? "New Design" : "Refine Design"}
                         </h4>
                         <textarea
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             placeholder={!data ? "Describe what you want to create..." : "e.g., Make the wheels bigger..."}
-                            className="w-full bg-gray2 border border-gray7 rounded p-2 text-gray11 text-sm mb-3 focus:outline-none focus:border-gold9 h-24 resize-none"
+                            className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-white text-sm mb-3 focus:outline-none focus:border-cyan-500 h-24 resize-none"
                             autoFocus
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -169,7 +169,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
                             <button
                                 onClick={!data ? handleGenerate : handleIterate}
                                 disabled={isSending}
-                                className="bg-gold9 hover:bg-gold10 text-gray2 text-xs px-3 py-1 rounded"
+                                className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs px-3 py-1 rounded"
                             >
                                 {isSending ? "Generating..." : (!data ? "Generate" : "Update")}
                             </button>
