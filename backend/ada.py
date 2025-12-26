@@ -762,20 +762,51 @@ class AudioLoop:
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
+        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
         try:
+            print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
             while True:
                 try:
                     turn = self.session.receive()
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Session receive error: {e}")
+                    print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
                     raise e
 
                 async for response in turn:
-                    # 1. Handle Audio Data
-                    if data := response.data:
-                        self.audio_in_queue.put_nowait(data)
-                        # NOTE: 'continue' removed here to allow processing transcription/tools in same packet
+                    # Access parts directly to avoid 'non-data parts' / 'non-text parts' warnings 
+                    # from the SDK's lazy properties (.text, .data, .thought)
+                    if response.server_content and response.server_content.model_turn:
+                        parts = response.server_content.model_turn.parts
+                        if parts:
+                            for part in parts:
+                                if hasattr(part, 'thought') and part.thought:
+                                    thought_text = part.thought
+                                    print(f"[ADA DEBUG] [THOUGHT] {thought_text}")
+                                    if self.on_cad_thought:
+                                        self.on_cad_thought(thought_text)
+                                
+                                if hasattr(part, 'text') and part.text:
+                                    text_content = part.text
+                                    print(f"[ADA DEBUG] [TEXT] {text_content}")
+                                    if self.on_transcription:
+                                        self.on_transcription({"sender": "ADA", "text": text_content})
+                                    
+                                    # Update chat buffer for logging
+                                    if self.chat_buffer["sender"] != "ADA":
+                                        if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
+                                            self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
+                                        self.chat_buffer = {"sender": "ADA", "text": text_content}
+                                    else:
+                                        self.chat_buffer["text"] += text_content
 
+                                if hasattr(part, 'inline_data') and part.inline_data:
+                                    self.audio_in_queue.put_nowait(part.inline_data.data)
+
+                    # 1. Handle Audio Data (Fallback if not handled in parts loop, though parts loop is preferred)
+                    # We only use this if we didn't find inline_data in the parts loop to avoid duplicates
+                    # But actually, response.data is just a shortcut. 
+                    # To avoid the warning completely, we should NOT access response.data if we already processed parts.
+                    
                     # 2. Handle Transcription (User & Model)
                     if response.server_content:
                         if response.server_content.input_transcription:
@@ -1388,10 +1419,11 @@ class AudioLoop:
     async def run(self, start_message=None):
         retry_delay = 1
         is_reconnect = False
+        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
         
         while not self.stop_event.is_set():
             try:
-                print(f"[ADA DEBUG] [CONNECT] Connecting to Gemini Live API...")
+                print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
                 async with (
                     client.aio.live.connect(model=MODEL, config=config) as session,
                     asyncio.TaskGroup() as tg,
@@ -1476,9 +1508,9 @@ class AudioLoop:
                 # Check for 429 error (Rate Limit) in Gemini API
                 error_msg = str(e)
                 if "429" in error_msg:
-                     print(f"Rate limited (429) for Gemini API at live.connect. Retrying in {retry_delay} seconds...")
+                     print(f"Rate limited (429) for {service_info}. Retrying in {retry_delay} seconds...")
                 else:
-                    print(f"[ADA DEBUG] [ERR] Connection Error: {e}")
+                    print(f"[ADA DEBUG] [ERR] Connection Error ({service_info}): {e}")
                     
                 # If we have an ExceptionGroup, try to log the sub-exceptions
                 if hasattr(e, 'exceptions'):
