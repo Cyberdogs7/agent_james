@@ -74,7 +74,7 @@ const PrinterWindow = ({
         if (s.includes('print')) return 'text-green-400';
         if (s.includes('paus')) return 'text-yellow-400';
         if (s.includes('error') || s.includes('fail')) return 'text-red-400';
-        return 'text-gold9';
+        return 'text-cyan-400';
     };
 
     return (
@@ -89,19 +89,19 @@ const PrinterWindow = ({
                 width: '380px',
                 zIndex: zIndex
             }}
-            className="pointer-events-auto backdrop-blur-xl bg-black/80 border border-gold9/20 rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.1)] overflow-hidden flex flex-col"
+            className="pointer-events-auto backdrop-blur-xl bg-black/80 border border-green-500/30 rounded-2xl shadow-[0_0_30px_rgba(74,222,128,0.1)] overflow-hidden flex flex-col"
         >
             {/* Header */}
             <div data-drag-handle className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5 cursor-grab active:cursor-grabbing">
                 <div className="flex items-center gap-2">
-                    <Printer size={16} className="text-gold9" />
-                    <span className="text-xs font-bold tracking-widest text-gold9 uppercase">3D Printers</span>
+                    <Printer size={16} className="text-green-400" />
+                    <span className="text-xs font-bold tracking-widest text-green-100 uppercase">3D Printers</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <button
                         onClick={handleDiscover}
                         disabled={isDiscovering}
-                        className={`p-1.5 hover:bg-white/10 rounded-full transition-colors ${isDiscovering ? 'animate-spin text-gold9' : 'text-gray-400 hover:text-gold9'}`}
+                        className={`p-1.5 hover:bg-white/10 rounded-full transition-colors ${isDiscovering ? 'animate-spin text-green-400' : 'text-gray-400 hover:text-green-400'}`}
                     >
                         <RefreshCw size={14} />
                     </button>
@@ -124,14 +124,14 @@ const PrinterWindow = ({
                             id="printer-name-input"
                             type="text"
                             placeholder="Printer Name (e.g. Creality K1)"
-                            className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gold9 focus:border-gold9/50 outline-none placeholder:text-white/20"
+                            className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-green-100 focus:border-green-500/50 outline-none placeholder:text-white/20"
                         />
                         <div className="flex gap-2">
                             <input
                                 id="printer-ip-input"
                                 type="text"
                                 placeholder="IP Address (e.g. 192.168.1.50)"
-                                className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gold9 focus:border-gold9/50 outline-none placeholder:text-white/20"
+                                className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-green-100 focus:border-green-500/50 outline-none placeholder:text-white/20"
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         const ip = e.target.value.trim();
@@ -147,7 +147,7 @@ const PrinterWindow = ({
                                 }}
                             />
                             <button
-                                className="bg-gold9/20 hover:bg-gold9/30 text-gold9 text-xs px-3 rounded transition-colors"
+                                className="bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs px-3 rounded transition-colors"
                                 onClick={() => {
                                     const ipInput = document.getElementById('printer-ip-input');
                                     const nameInput = document.getElementById('printer-name-input');
@@ -212,17 +212,17 @@ const PrinterWindow = ({
                         )}
 
                         {printers.map((printer, idx) => (
-                            <div key={idx} className="bg-white/5 border border-white/10 rounded-lg p-3 hover:border-gold9/30 transition-all">
+                            <div key={idx} className="bg-white/5 border border-white/10 rounded-lg p-3 hover:border-green-500/30 transition-all">
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
-                                        <div className="font-bold text-sm text-gold9">{printer.name}</div>
+                                        <div className="font-bold text-sm text-green-50">{printer.name}</div>
                                         <div className="text-[10px] text-white/40 uppercase tracking-wider">{printer.host}:{printer.port} • {printer.printer_type}</div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {/* Open Interface Button */}
                                         <button
                                             onClick={() => shell.openExternal(`http://${printer.host}`)}
-                                            className="flex items-center gap-1 text-[10px] text-gold8 hover:text-gold9 bg-gold9/10 hover:bg-gold9/20 border border-gold9/30 px-2 py-0.5 rounded transition-colors"
+                                            className="flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 px-2 py-0.5 rounded transition-colors"
                                             title="Open printer web interface"
                                         >
                                             <ExternalLink size={10} />

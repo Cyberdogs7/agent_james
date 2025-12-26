@@ -641,8 +641,18 @@ class AudioLoop:
         except Exception as e:
              print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
-    async def handle_jules_request(self, prompt, source):
+    async def handle_jules_request(self, prompt, source=None):
         print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
+        if not source:
+            print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
+            sources_response = await self.jules_agent.list_sources()
+            if sources_response and "sources" in sources_response:
+                sources = [s["name"] for s in sources_response["sources"]]
+                sources_str = "\n".join(sources)
+                return f"Please ask the user to select a source from the following list:\n{sources_str}"
+            else:
+                return "Failed to fetch Jules sources. Please specify a source."
+
         session = await self.jules_agent.create_session(prompt, source)
         if session:
             print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
@@ -658,6 +668,30 @@ class AudioLoop:
             return "Feedback sent successfully."
         else:
             return "Failed to send feedback."
+
+    async def handle_list_jules_sessions(self):
+        print("[ADA DEBUG] [JULES] Listing all sessions")
+        response = await self.jules_agent.list_sessions()
+        if response and "sessions" in response:
+            return response["sessions"]
+        else:
+            return "Failed to list Jules sessions."
+
+    async def handle_list_jules_sources(self):
+        print("[ADA DEBUG] [JULES] Listing all sources")
+        response = await self.jules_agent.list_sources()
+        if response and "sources" in response:
+            return response["sources"]
+        else:
+            return "Failed to list Jules sources."
+
+    async def handle_list_jules_activities(self, session_id):
+        print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
+        response = await self.jules_agent.list_activities(session_id)
+        if response and "activities" in response:
+            return response["activities"]
+        else:
+            return "Failed to list Jules activities."
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
@@ -750,7 +784,7 @@ class AudioLoop:
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "run_jules_agent", "send_jules_feedback"]:
+                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "run_jules_agent", "send_jules_feedback", "list_jules_sessions", "list_jules_sources", "list_jules_activities"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
                                 
                                 # Check Permissions (Default to True if not set)
@@ -857,6 +891,37 @@ class AudioLoop:
                                         response={
                                             "result": result_text,
                                         }
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_jules_sessions":
+                                    print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
+                                    result_text = await self.handle_list_jules_sessions()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result_text},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_jules_sources":
+                                    print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
+                                    result_text = await self.handle_list_jules_sources()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result_text},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_jules_activities":
+                                    print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
+                                    session_id = fc.args.get("session_id")
+                                    result_text = await self.handle_list_jules_activities(session_id)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result_text},
                                     )
                                     function_responses.append(function_response)
 

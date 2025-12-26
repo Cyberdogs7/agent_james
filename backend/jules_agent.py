@@ -65,6 +65,16 @@ class JulesAgent:
             print(f"Error listing Jules sessions: {e}")
             return None
 
+    async def list_sources(self):
+        """Lists all sources."""
+        try:
+            response = await self.client.get(f"{self.base_url}/sources")
+            response.raise_for_status()
+            return response.json()
+        except httpx.HTTPStatusError as e:
+            print(f"Error listing Jules sources: {e}")
+            return None
+
     async def list_activities(self, session_id):
         """Lists all activities for a session."""
         try:
