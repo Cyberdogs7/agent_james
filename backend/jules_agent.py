@@ -26,7 +26,21 @@ class JulesAgent:
                 response_text = response.text
                 print(f"[JULES_AGENT] Response for {tool_name}:")
                 print(f"  - Status Code: {response.status_code}")
-                print(f"  - Raw Data: {response_text}")
+
+                # Log simplified data for list_sessions to avoid "artifacts"
+                if tool_name == "list_sessions" and response.status_code == 200:
+                    try:
+                        data = response.json()
+                        if "sessions" in data:
+                            simplified = [{"name": s.get("name"), "state": s.get("state")} for s in data["sessions"][:10]]
+                            print(f"  - Simplified Data (First 10): {simplified}")
+                        else:
+                            print(f"  - Raw Data: {response_text}")
+                    except Exception:
+                        print(f"  - Raw Data: {response_text}")
+                else:
+                    print(f"  - Raw Data: {response_text}")
+
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:
@@ -67,9 +81,12 @@ class JulesAgent:
         """Sends a message to a session."""
         return await self._request("POST", f"{self.base_url}/{session_id}:sendMessage", tool_name="send_message", json={"prompt": message})
 
-    async def list_sessions(self):
-        """Lists all sessions."""
-        return await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions")
+    async def list_sessions(self, limit=10):
+        """Lists all sessions, returning only session name and state, limited to 10."""
+        response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions")
+        if response and "sessions" in response:
+            return [{"name": s.get("name"), "state": s.get("state")} for s in response["sessions"][:limit]]
+        return response
 
     async def list_sources(self):
         """Lists all sources."""
@@ -112,9 +129,9 @@ class JulesAgent:
     async def start_persistent_polling(self):
         """Starts a persistent polling loop to check for active sessions."""
         while True:
-            sessions_response = await self.list_sessions()
-            if sessions_response and "sessions" in sessions_response:
-                for session in sessions_response["sessions"]:
+            sessions = await self.list_sessions()
+            if sessions and isinstance(sessions, list):
+                for session in sessions:
                     async with self.sessions_lock:
                         if session["name"] not in self.active_sessions:
                             self.active_sessions.add(session["name"])

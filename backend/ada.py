@@ -736,13 +736,6 @@ class AudioLoop:
         else:
             return "Failed to send feedback."
 
-    async def handle_list_jules_sessions(self):
-        print("[ADA DEBUG] [JULES] Listing all sessions")
-        response = await self.jules_agent.list_sessions()
-        if response and "sessions" in response:
-            return response["sessions"]
-        else:
-            return "Failed to list Jules sessions."
 
     async def handle_list_jules_sources(self):
         print("[ADA DEBUG] [JULES] Listing all sources")
@@ -979,15 +972,6 @@ class AudioLoop:
                                     )
                                     function_responses.append(function_response)
 
-                                elif fc.name == "list_jules_sessions":
-                                    print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
-                                    result = await self.handle_list_jules_sessions()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_sources":
                                     print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")

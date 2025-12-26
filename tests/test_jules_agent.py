@@ -72,16 +72,24 @@ async def test_send_message_success(jules_agent):
 
 @pytest.mark.asyncio
 async def test_list_sessions_success(jules_agent):
-    """Test successfully listing all sessions."""
+    """Test successfully listing all sessions with paging."""
+    mock_sessions = [{"name": f"session{i}", "state": "ACTIVE"} for i in range(15)]
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json.return_value = {"sessions": [{"name": "session1"}, {"name": "session2"}]}
+    mock_response.json.return_value = {"sessions": mock_sessions}
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient.request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
+        # Default limit is 10
         response = await jules_agent.list_sessions()
-        assert len(response["sessions"]) == 2
-        mock_request.assert_called_once_with("GET", f"{jules_agent.base_url}/sessions")
+        assert len(response) == 10
+        assert response[0] == {"name": "session0", "state": "ACTIVE"}
+        
+        # Test with custom limit
+        response_custom = await jules_agent.list_sessions(limit=5)
+        assert len(response_custom) == 5
+        
+        mock_request.assert_called()
 
 
 @pytest.mark.asyncio
@@ -190,9 +198,9 @@ async def test_start_persistent_polling(jules_agent):
 
     # Mock list_sessions to return a new session on the first call
     mock_list_sessions_responses = [
-        {"sessions": [{"name": "sessions/new_session_1"}]},
+        [{"name": "sessions/new_session_1", "state": "ACTIVE"}],
         # Return an empty list on subsequent calls to stop the loop for the test
-        {"sessions": []}
+        []
     ]
 
     with patch.object(jules_agent, "list_sessions", new_callable=AsyncMock) as mock_list_sessions, \

@@ -97,13 +97,6 @@ class TestToolDefinitions:
         assert "source" not in run_jules_agent_tool['parameters']['required']
         print(f"run_jules_agent tool: {run_jules_agent_tool['name']}")
 
-    def test_list_jules_sessions_tool_schema(self):
-        """Test list_jules_sessions tool has correct schema."""
-        from tools import list_jules_sessions_tool
-
-        assert list_jules_sessions_tool['name'] == 'list_jules_sessions'
-        assert 'description' in list_jules_sessions_tool
-        print(f"list_jules_sessions tool: {list_jules_sessions_tool['name']}")
 
     def test_list_jules_sources_tool_schema(self):
         """Test list_jules_sources tool has correct schema."""
@@ -127,10 +120,6 @@ class TestToolDefinitions:
 class TestJulesToolHandlers:
     """Test Jules tool handlers."""
 
-    def test_handle_list_jules_sessions_method_exists(self):
-        """Test handle_list_jules_sessions exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'handle_list_jules_sessions')
 
     def test_handle_list_jules_sources_method_exists(self):
         """Test handle_list_jules_sources exists."""
