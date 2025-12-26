@@ -14,6 +14,43 @@ generate_cad_prototype_tool = {
 }
 
 
+send_jules_feedback_tool = {
+    "name": "send_jules_feedback",
+    "description": "Sends feedback to a Jules session.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The ID of the session to send feedback to."
+            },
+            "feedback": {
+                "type": "STRING",
+                "description": "The feedback to send."
+            }
+        },
+        "required": ["session_id", "feedback"]
+    }
+}
+
+run_jules_agent_tool = {
+    "name": "run_jules_agent",
+    "description": "Creates a new Jules task and notifies the user when there are updates.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The prompt to send to the Jules agent."
+            },
+            "source": {
+                "type": "STRING",
+                "description": "The source to use for the Jules agent."
+            }
+        },
+        "required": ["prompt", "source"]
+    }
+}
 
 
 write_file_tool = {
@@ -385,7 +422,7 @@ tools_list = [{"function_declarations": [
     generate_cad_prototype_tool,
     write_file_tool,
     read_directory_tool,
-    read_file_tool
+    read_file_tool,
+    run_jules_agent_tool,
+    send_jules_feedback_tool
 ] + list(trello_tools.values())}]
-
-
