@@ -35,7 +35,7 @@ send_jules_feedback_tool = {
 
 run_jules_agent_tool = {
     "name": "run_jules_agent",
-    "description": "Creates a new Jules task and notifies the user when there are updates.",
+    "description": "Creates a new Jules task. If the source is not provided, the user will be prompted to select one.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
@@ -45,13 +45,45 @@ run_jules_agent_tool = {
             },
             "source": {
                 "type": "STRING",
-                "description": "The source to use for the Jules agent."
+                "description": "Optional: The source to use for the Jules agent."
             }
         },
-        "required": ["prompt", "source"]
+        "required": ["prompt"]
     }
 }
 
+list_jules_sessions_tool = {
+    "name": "list_jules_sessions",
+    "description": "Lists all Jules sessions.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
+list_jules_sources_tool = {
+    "name": "list_jules_sources",
+    "description": "Lists all available Jules sources.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
+list_jules_activities_tool = {
+    "name": "list_jules_activities",
+    "description": "Lists all activities for a specific Jules session.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The ID of the session to list activities for."
+            }
+        },
+        "required": ["session_id"]
+    }
+}
 
 write_file_tool = {
     "name": "write_file",
@@ -424,5 +456,8 @@ tools_list = [{"function_declarations": [
     read_directory_tool,
     read_file_tool,
     run_jules_agent_tool,
-    send_jules_feedback_tool
+    send_jules_feedback_tool,
+    list_jules_sessions_tool,
+    list_jules_sources_tool,
+    list_jules_activities_tool
 ] + list(trello_tools.values())}]
