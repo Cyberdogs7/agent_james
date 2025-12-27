@@ -674,7 +674,7 @@ class AudioLoop:
             os.makedirs(os.path.dirname(final_path), exist_ok=True)
             with open(final_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            result = f"File '{final_path.name}' written successfully to project '{self.project_manager.current_project}'."
+            result = f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
         except Exception as e:
             result = f"Failed to write file '{path}': {str(e)}"
 
@@ -689,12 +689,17 @@ class AudioLoop:
     async def handle_read_directory(self, path):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [FS] Reading directory: '{path}'")
+        
+        # Resolve path relative to current project
+        current_project_path = self.project_manager.get_current_project_path()
+        final_path = current_project_path / path if not os.path.isabs(path) else path
+        
         try:
-            if not os.path.exists(path):
-                result = f"Directory '{path}' does not exist."
+            if not os.path.exists(final_path):
+                result = f"Directory '{final_path}' does not exist."
             else:
-                items = os.listdir(path)
-                result = f"Contents of '{path}': {', '.join(items)}"
+                items = os.listdir(final_path)
+                result = f"Contents of '{final_path}': {', '.join(items)}"
         except Exception as e:
             result = f"Failed to read directory '{path}': {str(e)}"
 
@@ -709,13 +714,18 @@ class AudioLoop:
     async def handle_read_file(self, path):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [FS] Reading file: '{path}'")
+        
+        # Resolve path relative to current project
+        current_project_path = self.project_manager.get_current_project_path()
+        final_path = current_project_path / path if not os.path.isabs(path) else path
+
         try:
-            if not os.path.exists(path):
-                result = f"File '{path}' does not exist."
+            if not os.path.exists(final_path):
+                result = f"File '{final_path}' does not exist."
             else:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(final_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                result = f"Content of '{path}':\n{content}"
+                result = f"Content of '{final_path}':\n{content}"
         except Exception as e:
             result = f"Failed to read file '{path}': {str(e)}"
 
