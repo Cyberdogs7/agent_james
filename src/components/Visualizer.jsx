@@ -3,7 +3,6 @@ import React, { useEffect, useRef } from 'react';
 const Visualizer = ({ audioData, isListening, intensity = 0, width = 600, height = 400 }) => {
     const canvasRef = useRef(null);
     const audioDataRef = useRef(audioData);
-    const angleRef = useRef(0);
 
     useEffect(() => {
         audioDataRef.current = audioData;
@@ -25,56 +24,62 @@ const Visualizer = ({ audioData, isListening, intensity = 0, width = 600, height
             const h = canvas.height;
             const centerX = w / 2;
             const centerY = h / 2;
-            const radius = Math.min(w, h) / 2 - 20;
 
-            // Fading background
-            ctx.fillStyle = 'rgba(26, 26, 26, 0.1)'; // Dark gray with low alpha for fading effect
+            ctx.clearRect(0, 0, w, h);
+
+            // Background fill (transparent)
+            ctx.fillStyle = 'transparent';
             ctx.fillRect(0, 0, w, h);
 
-            // Sonar grid
-            ctx.strokeStyle = 'rgba(255, 215, 0, 0.2)'; // Faint gold
-            ctx.lineWidth = 1;
-            for (let i = 1; i <= 5; i++) {
+            const radius = Math.min(w, h) / 4; // Base radius of the circle
+            const barWidth = 3;
+            const numBars = data.length;
+            const angleStep = (2 * Math.PI) / numBars;
+
+            // Draw circular spectrum
+            for (let i = 0; i < numBars; i++) {
+                const value = data[i];
+                const barHeight = (value / 255) * (radius * 0.8);
+
+                const angle = i * angleStep;
+                const x1 = centerX + radius * Math.cos(angle);
+                const y1 = centerY + radius * Math.sin(angle);
+                const x2 = centerX + (radius + barHeight) * Math.cos(angle);
+                const y2 = centerY + (radius + barHeight) * Math.sin(angle);
+
+                // Add "glitch" effect with chromatic aberration
+                // Red channel
                 ctx.beginPath();
-                ctx.arc(centerX, centerY, radius * (i / 5), 0, 2 * Math.PI);
+                ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+                ctx.lineWidth = barWidth;
+                ctx.moveTo(x1 - 1, y1);
+                ctx.lineTo(x2 - 1, y2);
+                ctx.stroke();
+
+                // Green channel
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0, 255, 0, 0.7)';
+                ctx.lineWidth = barWidth;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+
+                // Blue channel
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(0, 0, 255, 0.7)';
+                ctx.lineWidth = barWidth;
+                ctx.moveTo(x1 + 1, y1);
+                ctx.lineTo(x2 + 1, y2);
+                ctx.stroke();
+
+                // White highlight
+                ctx.beginPath();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.lineWidth = barWidth / 2;
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
                 ctx.stroke();
             }
-
-            // Rotating sonar sweep
-            angleRef.current += 0.02;
-            const angle = angleRef.current;
-
-            // Waveform on the sweep
-            ctx.beginPath();
-            ctx.strokeStyle = '#ffd700'; // Gold
-            ctx.lineWidth = 2;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = '#ffd700';
-
-            for (let i = 0; i < data.length; i++) {
-                const v = data[i] / 128.0; // a value between 0 and 2
-                const r = radius + (v - 1) * 30; // Modulate radius by audio data
-                const x = centerX + r * Math.cos(angle + (i / data.length) * Math.PI * 0.1); // Spread waveform a bit
-                const y = centerY + r * Math.sin(angle + (i / data.length) * Math.PI * 0.1);
-
-                if (i === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
-            }
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            // Sweep line
-            const x2 = centerX + radius * Math.cos(angle);
-            const y2 = centerY + radius * Math.sin(angle);
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY);
-            ctx.lineTo(x2, y2);
-            ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
-            ctx.stroke();
-
 
             animationId = requestAnimationFrame(draw);
         };
