@@ -71,7 +71,6 @@ function App() {
     // RESTORED STATE
     const [aiAudioData, setAiAudioData] = useState(new Array(64).fill(0));
     const [micAudioData, setMicAudioData] = useState(new Array(32).fill(0));
-    const [combinedAudioData, setCombinedAudioData] = useState(new Array(128).fill(0));
     const [fps, setFps] = useState(0);
 
     // Device states - microphones, speakers, webcams
@@ -172,36 +171,6 @@ function App() {
         isCameraFlippedRef.current = isCameraFlipped;
         console.log("[Ref Sync] Camera flipped ref updated to:", isCameraFlipped);
     }, [isModularMode, elementPositions, isHandTrackingEnabled, cursorSensitivity, isCameraFlipped]);
-
-    // Combine Audio Data for Visualizer
-    useEffect(() => {
-        // Target 128 bins for the visualizer
-        const targetLength = 128;
-        const combined = new Array(targetLength).fill(0);
-
-        // Simple downsample of AI audio (64 -> 64)
-        const aiData = aiAudioData.slice(0, 64);
-
-        // Upsample mic audio (32 -> 64) by duplicating bins
-        const micData = new Array(64).fill(0);
-        for (let i = 0; i < 32; i++) {
-            micData[i * 2] = micAudioData[i];
-            micData[i * 2 + 1] = micAudioData[i];
-        }
-
-        // Interleave AI and Mic data
-        // First half: AI data
-        for (let i = 0; i < 64; i++) {
-            combined[i] = aiData[i] || 0;
-        }
-        // Second half: Mic data (mirrored for symmetry)
-        for (let i = 0; i < 64; i++) {
-            combined[targetLength - 1 - i] = micData[i] || 0;
-        }
-
-
-        setCombinedAudioData(combined);
-    }, [aiAudioData, micAudioData]);
 
     // Live Clock Update
     useEffect(() => {
@@ -1499,7 +1468,7 @@ function App() {
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay z-10"></div>
                     <div className="relative z-20">
                         <Visualizer
-                            audioData={combinedAudioData}
+                            audioData={aiAudioData}
                             isListening={isConnected && !isMuted}
                             intensity={audioAmp}
                             width={elementSizes.visualizer.w}
