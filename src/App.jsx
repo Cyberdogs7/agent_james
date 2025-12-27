@@ -135,6 +135,7 @@ function App() {
     const analyserRef = useRef(null);
     const sourceRef = useRef(null);
     const animationFrameRef = useRef(null);
+    const audioHistoryRef = useRef([]); // For smoothing AI audio
 
     // Video Refs
     const videoRef = useRef(null);
@@ -336,7 +337,36 @@ function App() {
             }
         });
         socket.on('audio_data', (data) => {
-            setAiAudioData(data.data);
+            const rawData = data.data;
+            const history = audioHistoryRef.current;
+            const smoothingWindow = 3; // Averaging window
+
+            history.push(rawData);
+            if (history.length > smoothingWindow) {
+                history.shift();
+            }
+
+            if (history.length > 0) {
+                const smoothedData = new Array(rawData.length).fill(0);
+                for (let i = 0; i < rawData.length; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < history.length; j++) {
+                        sum += history[j][i] || 0;
+                    }
+                    smoothedData[i] = sum / history.length;
+                }
+
+                // Threshold to force silence
+                const silenceThreshold = 5;
+                const isSilent = smoothedData.every(val => val < silenceThreshold);
+                if (isSilent) {
+                    setAiAudioData(new Array(rawData.length).fill(0));
+                } else {
+                    setAiAudioData(smoothedData);
+                }
+            } else {
+                setAiAudioData(rawData);
+            }
         });
         socket.on('auth_status', (data) => {
             console.log("Auth Status:", data);

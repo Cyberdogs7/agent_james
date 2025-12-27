@@ -47,35 +47,27 @@ const Visualizer = ({ audioData, isListening, intensity = 0, width = 600, height
                 const x2 = centerX + (radius + barHeight) * Math.cos(angle);
                 const y2 = centerY + (radius + barHeight) * Math.sin(angle);
 
-                // Add "glitch" effect with chromatic aberration
-                // Red channel
+                // Corrected "glitch" effect for a more subtle, white-centric style
+                // Faint red channel (offset left)
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+                ctx.strokeStyle = 'rgba(255, 200, 200, 0.2)';
                 ctx.lineWidth = barWidth;
                 ctx.moveTo(x1 - 1, y1);
                 ctx.lineTo(x2 - 1, y2);
                 ctx.stroke();
 
-                // Green channel
+                // Faint cyan channel (offset right)
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(0, 255, 0, 0.7)';
-                ctx.lineWidth = barWidth;
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
-                ctx.stroke();
-
-                // Blue channel
-                ctx.beginPath();
-                ctx.strokeStyle = 'rgba(0, 0, 255, 0.7)';
+                ctx.strokeStyle = 'rgba(200, 255, 255, 0.2)';
                 ctx.lineWidth = barWidth;
                 ctx.moveTo(x1 + 1, y1);
                 ctx.lineTo(x2 + 1, y2);
                 ctx.stroke();
 
-                // White highlight
+                // Main white bar
                 ctx.beginPath();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-                ctx.lineWidth = barWidth / 2;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = barWidth * 0.7;
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
                 ctx.stroke();
