@@ -12,7 +12,7 @@ def jules_agent():
     """Fixture to create a JulesAgent instance for testing."""
     # Mock the session object that would be passed from ada.py
     mock_ada_session = AsyncMock()
-    # Set the GINI_API_KEY for the test environment
+    # Set the JULES_API_KEY for the test environment
     os.environ["JULES_API_KEY"] = "test_api_key"
     agent = JulesAgent(session=mock_ada_session)
     return agent
@@ -58,8 +58,26 @@ async def test_create_session_with_github_source_prefix(jules_agent):
 
         call_args = mock_request.call_args.kwargs
         assert call_args["json"]["sourceContext"]["source"] == "sources/github/Cyberdogs7/agent_james"
-        assert "githubRepoContext" not in call_args["json"]["sourceContext"]
+        assert "githubRepoContext" in call_args["json"]["sourceContext"]
+        assert call_args["json"]["sourceContext"]["githubRepoContext"]["startingBranch"] == "main"
 
+
+@pytest.mark.asyncio
+async def test_create_session_title_sanitization(jules_agent):
+    """Test that the session title is sanitized (newlines removed)."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"name": "sessions/test", "state": "CREATING"}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient.request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
+        prompt = "line 1\nline 2\rline 3"
+        await jules_agent.create_session(prompt, "github/repo")
+        
+        call_args = mock_request.call_args.kwargs
+        assert "\n" not in call_args["json"]["title"]
+        assert "\r" not in call_args["json"]["title"]
+        assert "line 1 line 2 line 3" in call_args["json"]["title"]
 
 @pytest.mark.asyncio
 async def test_create_session_failure(jules_agent):

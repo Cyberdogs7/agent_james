@@ -23,6 +23,8 @@ class JulesAgent:
     async def _request(self, method, url, tool_name="<unknown>", **kwargs):
         """Helper method to make requests with retry logic."""
         self._log(f"[JULES_AGENT] Requesting: {tool_name} ({method} {url})")
+        if self.include_raw and "json" in kwargs:
+            print(f"[JULES_AGENT] Request Body: {kwargs['json']}")
         max_retries = 3
         base_delay = 1
         for attempt in range(max_retries):
@@ -69,21 +71,28 @@ class JulesAgent:
         if source:
             if source.startswith("sources/"):
                 source_context["source"] = source
+                source_context["githubRepoContext"] = {"startingBranch": "master"}
             elif source.startswith("github/"):
                 source_context["source"] = f"sources/{source}"
+                source_context["githubRepoContext"] = {"startingBranch": "master"}
             else:
                 # If it doesn't look like a resource name, assume it's a repo reference
                 source_context["githubRepoContext"] = {
                     "repo": source,
-                    "startingBranch": "main"
+                    "startingBranch": "master"
                 }
+        
+        # Sanitize title: remove newlines and limit length
+        clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
         
         data = {
             "prompt": prompt,
-            "sourceContext": source_context,
             "automationMode": "AUTO_CREATE_PR",
-            "title": f"Jules: {prompt[:50]}"
+            "title": f"Jules: {clean_title[:50]}"
         }
+        if source_context:
+            data["sourceContext"] = source_context
+        
         session = await self._request("POST", f"{self.base_url}/sessions", tool_name="create_session", json=data)
         if session:
             self.session_id = session["name"]
