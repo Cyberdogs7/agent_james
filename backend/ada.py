@@ -32,9 +32,8 @@ CHUNK_SIZE = 1024
 
 MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 DEFAULT_MODE = "camera"
-INCLUDE_RAW_LOGS = False
-
 load_dotenv()
+INCLUDE_RAW_LOGS = os.getenv("INCLUDE_RAW_LOGS", "True").lower() == "true"
 os.environ["INCLUDE_RAW_LOGS"] = str(INCLUDE_RAW_LOGS)
 client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -888,6 +887,10 @@ class AudioLoop:
                                 if hasattr(part, 'inline_data') and part.inline_data:
                                     self.audio_in_queue.put_nowait(part.inline_data.data)
 
+                                if hasattr(part, 'call') and part.call:
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool call in Part: {part.call.name}, Args: {part.call.args}", flush=True)
+
                     # 1. Handle Audio Data (Fallback if not handled in parts loop, though parts loop is preferred)
                     # We only use this if we didn't find inline_data in the parts loop to avoid duplicates
                     # But actually, response.data is just a shortcut. 
@@ -964,10 +967,10 @@ class AudioLoop:
                         function_responses = []
                         for fc in response.tool_call.function_calls:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}")
+                                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
                             else:
                                 # Basic log as requested: tool, endpoint, status
-                                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200")
+                                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
 
                             # Unified confirmation logic
                             destructive_keywords = ['delete', 'remove', 'wipe', 'destroy']
@@ -1118,7 +1121,7 @@ class AudioLoop:
                                 elif fc.name == "read_directory":
                                     path = fc.args["path"]
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'", flush=True)
                                     asyncio.create_task(self.handle_read_directory(path))
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": "Reading directory..."}
@@ -1128,7 +1131,7 @@ class AudioLoop:
                                 elif fc.name == "read_file":
                                     path = fc.args["path"]
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'", flush=True)
                                     asyncio.create_task(self.handle_read_file(path))
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": "Reading file..."}
@@ -1138,7 +1141,7 @@ class AudioLoop:
                                 elif fc.name == "create_project":
                                     name = fc.args["name"]
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
                                     success, msg = self.project_manager.create_project(name)
                                     if success:
                                         # Auto-switch to the newly created project
@@ -1154,7 +1157,7 @@ class AudioLoop:
                                 elif fc.name == "switch_project":
                                     name = fc.args["name"]
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
                                     success, msg = self.project_manager.switch_project(name)
                                     if success:
                                         if self.on_project_update:
@@ -1175,7 +1178,7 @@ class AudioLoop:
                                 
                                 elif fc.name == "list_projects":
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
                                     projects = self.project_manager.list_projects()
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": f"Available projects: {', '.join(projects)}"}
@@ -1184,7 +1187,7 @@ class AudioLoop:
 
                                 elif fc.name == "list_smart_devices":
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
                                     # Use cached devices directly for speed
                                     # devices_dict is {ip: SmartDevice}
                                     # Use cached devices directly for speed
@@ -1431,6 +1434,8 @@ class AudioLoop:
                                     )
                                     function_responses.append(function_response)
                         if function_responses:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
                             await self.session.send_tool_response(function_responses=function_responses)
                 
                 # Turn/Response Loop Finished
