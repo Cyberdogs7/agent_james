@@ -14,32 +14,38 @@ class JulesAgent:
         self.session = session
         self.active_sessions = set()
         self.sessions_lock = asyncio.Lock()
+        self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
+
+    def _log(self, *args, **kwargs):
+        if self.include_raw:
+            print(*args, **kwargs)
 
     async def _request(self, method, url, tool_name="<unknown>", **kwargs):
         """Helper method to make requests with retry logic."""
-        print(f"[JULES_AGENT] Requesting: {tool_name} ({method} {url})")
+        self._log(f"[JULES_AGENT] Requesting: {tool_name} ({method} {url})")
         max_retries = 3
         base_delay = 1
         for attempt in range(max_retries):
             try:
                 response = await self.client.request(method, url, **kwargs)
                 response_text = response.text
-                print(f"[JULES_AGENT] Response for {tool_name}:")
-                print(f"  - Status Code: {response.status_code}")
+                self._log(f"[JULES_AGENT] Response for {tool_name}:")
+                self._log(f"  - Status Code: {response.status_code}")
 
                 # Log simplified data for list_sessions to avoid "artifacts"
-                if tool_name == "list_sessions" and response.status_code == 200:
-                    try:
-                        data = response.json()
-                        if "sessions" in data:
-                            simplified = [{"name": s.get("name"), "state": s.get("state")} for s in data["sessions"][:10]]
-                            print(f"  - Simplified Data (First 10): {simplified}")
-                        else:
+                if self.include_raw:
+                    if tool_name == "list_sessions" and response.status_code == 200:
+                        try:
+                            data = response.json()
+                            if "sessions" in data:
+                                simplified = [{"name": s.get("name"), "state": s.get("state")} for s in data["sessions"][:10]]
+                                print(f"  - Simplified Data (First 10): {simplified}")
+                            else:
+                                print(f"  - Raw Data: {response_text}")
+                        except Exception:
                             print(f"  - Raw Data: {response_text}")
-                    except Exception:
+                    else:
                         print(f"  - Raw Data: {response_text}")
-                else:
-                    print(f"  - Raw Data: {response_text}")
 
                 response.raise_for_status()
                 return response.json()

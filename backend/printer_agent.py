@@ -107,6 +107,7 @@ class PrinterAgent:
         self.profiles_dir = profiles_dir
         self._zeroconf: Optional[Zeroconf] = None
         self._error_tracker = set() # Track hosts with errors to prevent log spam
+        self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
         
         # Detect slicer path and profiles directory
         self.slicer_path = self._detect_slicer_path()
@@ -115,6 +116,10 @@ class PrinterAgent:
         # Ensure profiles directory exists
         os.makedirs(profiles_dir, exist_ok=True)
     
+    def _log(self, *args, **kwargs):
+        if self.include_raw:
+            print(*args, **kwargs)
+
     def _detect_orca_profiles_dir(self) -> Optional[str]:
         """Detect OrcaSlicer profiles directory."""
         system = platform.system()
@@ -127,7 +132,7 @@ class PrinterAgent:
             base = os.path.expanduser("~/.config/OrcaSlicer")
         
         if os.path.isdir(base):
-            print(f"[PRINTER] Found OrcaSlicer profiles at: {base}")
+            self._log(f"[PRINTER] Found OrcaSlicer profiles at: {base}")
             return base
         
         return None
@@ -329,7 +334,7 @@ class PrinterAgent:
         
         for path in paths:
             if os.path.exists(path):
-                print(f"[PRINTER] Found Slicer at: {path}")
+                self._log(f"[PRINTER] Found Slicer at: {path}")
                 return path
         
         # Try to find via which/where
@@ -341,12 +346,12 @@ class PrinterAgent:
                 )
                 if result.returncode == 0 and result.stdout.strip():
                     path = result.stdout.strip().split('\n')[0]
-                    print(f"[PRINTER] Found Slicer via PATH: {path}")
+                    self._log(f"[PRINTER] Found Slicer via PATH: {path}")
                     return path
              except Exception:
                 pass
         
-        print("[PRINTER] Warning: No Slicer (Orca/Prusa) found. Slicing will fail.")
+        self._log("[PRINTER] Warning: No Slicer (Orca/Prusa) found. Slicing will fail.")
         return None
 
     async def discover_printers(self, timeout: float = 5.0) -> List[Dict]:
@@ -354,7 +359,7 @@ class PrinterAgent:
         Discovers 3D printers on the local network via mDNS.
         Returns list of discovered printers.
         """
-        print(f"[PRINTER] Starting printer discovery (timeout: {timeout}s)...")
+        self._log(f"[PRINTER] Starting printer discovery (timeout: {timeout}s)...")
         
         self._zeroconf = Zeroconf()
         listener = PrinterDiscoveryListener()
@@ -383,11 +388,11 @@ class PrinterAgent:
         # We try to identify them by hitting known endpoints
         for printer in listener.printers:
             if printer.printer_type == PrinterType.UNKNOWN:
-                print(f"[PRINTER] Probing unknown printer: {printer.host}...")
+                self._log(f"[PRINTER] Probing unknown printer: {printer.host}...")
                 ptype = await self._probe_printer_type(printer.host, printer.port)
                 if ptype != PrinterType.UNKNOWN:
                     printer.printer_type = ptype
-                    print(f"[PRINTER] Identified {printer.name} as {ptype.value}")
+                    self._log(f"[PRINTER] Identified {printer.name} as {ptype.value}")
         
         # PROBE CAMERAS
         for printer in listener.printers:
@@ -402,12 +407,12 @@ class PrinterAgent:
             # Avoid duplicates if we found same host on multiple services
             self.printers[printer.host] = printer
         
-        print(f"[PRINTER] Discovery complete. Found {len(self.printers)} printers.")
+        self._log(f"[PRINTER] Discovery complete. Found {len(self.printers)} printers.")
         return [p.to_dict() for p in self.printers.values()]
 
     async def _probe_printer_type(self, host: str, port: int) -> PrinterType:
         """Probe a host to check if it's running Moonraker or OctoPrint."""
-        print(f"[PRINTER DEBUG] Probing http://{host}:{port}...")
+        self._log(f"[PRINTER DEBUG] Probing http://{host}:{port}...")
         try:
             # Short timeout to avoid hangs on unreachable ports
             timeout = aiohttp.ClientTimeout(total=2.0, connect=1.0)
@@ -417,26 +422,26 @@ class PrinterAgent:
                 try:
                     url = f"http://{host}:{port}/printer/info"
                     async with session.get(url) as resp:
-                        print(f"[PRINTER DEBUG] {url} -> {resp.status}")
+                        self._log(f"[PRINTER DEBUG] {url} -> {resp.status}")
                         if resp.status == 200:
                             data = await resp.json()
                             if "result" in data or "hostname" in data:
-                                print(f"[PRINTER DEBUG] Found MOONRAKER at {host}:{port}")
+                                self._log(f"[PRINTER DEBUG] Found MOONRAKER at {host}:{port}")
                                 return PrinterType.MOONRAKER
                 except asyncio.TimeoutError:
-                    print(f"[PRINTER DEBUG] Timeout probing {host}:{port}")
+                    self._log(f"[PRINTER DEBUG] Timeout probing {host}:{port}")
                 except Exception as e:
-                    print(f"[PRINTER DEBUG] Error probing {host}:{port}: {e}")
+                    self._log(f"[PRINTER DEBUG] Error probing {host}:{port}: {e}")
 
                 # Check OctoPrint
                 # /api/version usually requires key, but returns 401 or 200
                 try:
                      url = f"http://{host}:{port}/api/version"
                      async with session.get(url) as resp:
-                         print(f"[PRINTER DEBUG] {url} -> {resp.status}")
+                         self._log(f"[PRINTER DEBUG] {url} -> {resp.status}")
                          # 200 (if public), 403 (needs key) - both mean it IS OctoPrint
                          if resp.status in (200, 403, 401):
-                             print(f"[PRINTER DEBUG] Found OCTOPRINT at {host}:{port}")
+                             self._log(f"[PRINTER DEBUG] Found OCTOPRINT at {host}:{port}")
                              return PrinterType.OCTOPRINT
                 except asyncio.TimeoutError:
                      pass
@@ -448,17 +453,17 @@ class PrinterAgent:
                     url = f"http://{host}:{port}/"
                     async with session.get(url) as resp:
                         content = await resp.text()
-                        print(f"[PRINTER DEBUG] Root {url} -> {resp.status}")
+                        self._log(f"[PRINTER DEBUG] Root {url} -> {resp.status}")
                         if "<title>" in content:
                             title = content.split("<title>")[1].split("</title>")[0]
-                            print(f"[PRINTER DEBUG] Page Title: {title}")
+                            self._log(f"[PRINTER DEBUG] Page Title: {title}")
                         if "Server" in resp.headers:
-                            print(f"[PRINTER DEBUG] Server Header: {resp.headers['Server']}")
+                            self._log(f"[PRINTER DEBUG] Server Header: {resp.headers['Server']}")
                 except:
                     pass
                     
         except Exception as e:
-            print(f"[PRINTER] Probe error for {host}:{port}: {e}")
+            self._log(f"[PRINTER] Probe error for {host}:{port}: {e}")
         
         return PrinterType.UNKNOWN
 
@@ -489,7 +494,7 @@ class PrinterAgent:
                             # Verify content type is a stream
                             ctype = resp.headers.get("Content-Type", "")
                             if "multipart/x-mixed-replace" in ctype or "image" in ctype:
-                                print(f"[PRINTER] Found Camera: {url}")
+                                self._log(f"[PRINTER] Found Camera: {url}")
                                 return url
                 except:
                     continue
@@ -572,7 +577,7 @@ class PrinterAgent:
             Path to generated G-code file, or None on failure
         """
         if not self.slicer_path:
-            print("[PRINTER] Error: Slicer not found")
+            self._log("[PRINTER] Error: Cannot slice without OrcaSlicer path.")
             return None
         
         # Robust path resolution
@@ -690,13 +695,13 @@ class PrinterAgent:
                 if result.stdout:
                     for line in result.stdout.strip().split('\n'):
                         if line:
-                            print(f"[SLICER OUTPUT] {line}")
+                            self._log(f"[SLICER OUTPUT] {line}")
                 
                 if progress_callback:
                     await progress_callback(90, "Finalizing...")
                 
             except Exception as e:
-                print(f"[PRINTER] Subprocess run failed: {e}")
+                self._log(f"[PRINTER] Subprocess run failed: {e}")
                 return None
             
             if result.returncode == 0:
@@ -722,23 +727,23 @@ class PrinterAgent:
                         if actual_gcode != output_path:
                             import shutil
                             shutil.move(actual_gcode, output_path)
-                            print(f"[PRINTER] Renamed {os.path.basename(actual_gcode)} -> {os.path.basename(output_path)}")
+                            self._log(f"[PRINTER] Renamed {os.path.basename(actual_gcode)} -> {os.path.basename(output_path)}")
                     elif not os.path.exists(output_path):
-                        print(f"[PRINTER] Warning: Expected G-code not found in {output_dir}")
+                        self._log(f"[PRINTER] Warning: Expected G-code not found in {output_dir}")
 
-                print(f"[PRINTER] Slicing complete: {output_path}")
+                self._log(f"[PRINTER] Slicing complete: {output_path}")
                 if progress_callback:
                     await progress_callback(100, "Slicing Complete")
                 return output_path
             else:
-                print(f"[PRINTER] Slicing failed: {result.stderr}")
+                self._log(f"[PRINTER] Slicing failed: {result.stderr}")
                 return None
                 
         except subprocess.TimeoutExpired:
-            print("[PRINTER] Slicing timeout (5 min exceeded)")
+            self._log("[PRINTER] Slicing timeout (5 min exceeded)")
             return None
         except Exception as e:
-            print(f"[PRINTER] Slicing error: {e}")
+            self._log(f"[PRINTER] Slicing error: {e}")
             return None
     
     async def upload_gcode(self, target: str, gcode_path: str, 
@@ -756,11 +761,11 @@ class PrinterAgent:
         """
         printer = self._resolve_printer(target)
         if not printer:
-            print(f"[PRINTER] Error: Printer not found: {target}")
+            self._log(f"[PRINTER] Error: Printer not found: {target}")
             return False
         
         if not os.path.exists(gcode_path):
-            print(f"[PRINTER] Error: G-code file not found: {gcode_path}")
+            self._log(f"[PRINTER] Error: G-code file not found: {gcode_path}")
             return False
         
         if printer.printer_type == PrinterType.OCTOPRINT:
@@ -791,13 +796,13 @@ class PrinterAgent:
                     
                     async with session.post(url, data=data, headers=headers) as resp:
                         if resp.status in (200, 201, 202, 204):
-                            print(f"[PRINTER] Uploaded {filename} to OctoPrint at {printer.host}")
+                            self._log(f"[PRINTER] Uploaded {filename} to OctoPrint at {printer.host}")
                             return True
                         else:
-                            print(f"[PRINTER] OctoPrint upload failed ({resp.status})")
+                            self._log(f"[PRINTER] OctoPrint upload failed ({resp.status})")
                             return False
         except Exception as e:
-            print(f"[PRINTER] OctoPrint upload error: {e}")
+            self._log(f"[PRINTER] OctoPrint upload error: {e}")
             return False
 
     async def _upload_moonraker(self, printer: Printer, gcode_path: str, 
@@ -816,7 +821,7 @@ class PrinterAgent:
                     
                     async with session.post(url, data=data) as resp:
                         if resp.status in (200, 201):
-                            print(f"[PRINTER] Uploaded {filename} to Moonraker at {printer.host}")
+                            self._log(f"[PRINTER] Uploaded {filename} to Moonraker at {printer.host}")
                             
                             if start_print:
                                 # Trigger print
@@ -824,23 +829,23 @@ class PrinterAgent:
                                 data_print = {"filename": filename}
                                 async with session.post(print_url, json=data_print) as resp_print:
                                     if resp_print.status == 200:
-                                        print(f"[PRINTER] Started print on Moonraker")
+                                        self._log(f"[PRINTER] Started print on Moonraker")
                                         return True
                                     else:
-                                        print(f"[PRINTER] Moonraker start print failed ({resp_print.status})")
+                                        self._log(f"[PRINTER] Moonraker start print failed ({resp_print.status})")
                                         return False
                             return True
                         else:
-                            print(f"[PRINTER] Moonraker upload failed ({resp.status}). Trying OctoPrint compatibility layer...")
+                            self._log(f"[PRINTER] Moonraker upload failed ({resp.status}). Trying OctoPrint compatibility layer...")
 
             # Fallback to OctoPrint API (as Moonraker usually supports it and Creality K1 definitely does)
             return await self._upload_octoprint(printer, gcode_path, start_print)
             
         except Exception as e:
-            print(f"[PRINTER] Moonraker upload error: {e}")
+            self._log(f"[PRINTER] Moonraker upload error: {e}")
             return False
         except Exception as e:
-            print(f"[PRINTER] Moonraker upload error: {e}")
+            self._log(f"[PRINTER] Moonraker upload error: {e}")
             return False
 
     async def get_print_status(self, target: str) -> Optional[PrintStatus]:
@@ -950,16 +955,16 @@ class PrinterAgent:
                         )
                     else:
                          if printer.host not in self._error_tracker:
-                            print(f"[PRINTER] Moonraker status failed ({resp.status})")
+                            self._log(f"[PRINTER] Moonraker status failed ({resp.status})")
                             self._error_tracker.add(printer.host)
                          return None
         except Exception as e:
             msg = str(e)
             if printer.host not in self._error_tracker:
                 if "404" in msg:
-                     print(f"[PRINTER] Moonraker status failed (404) at {url}")
+                     self._log(f"[PRINTER] Moonraker status failed (404) at {url}")
                 else:
-                     print(f"[PRINTER] Moonraker status failed: {e}")
+                     self._log(f"[PRINTER] Moonraker status failed: {e}")
                 self._error_tracker.add(printer.host)
             
             return PrintStatus(
@@ -986,7 +991,7 @@ class PrinterAgent:
         """
         Orchestrate the full printing workflow: Slice -> Upload -> Print.
         """
-        print(f"[PRINTER] Starting print job for {stl_path} on {printer_name}")
+        self._log(f"[PRINTER] Starting print job for {stl_path} on {printer_name}")
         
         # 1. Resolve Printer
         printer = self._resolve_printer(printer_name)

@@ -23,9 +23,14 @@ MODEL_ID = "gemini-2.5-computer-use-preview-10-2025"
 class WebAgent:
     def __init__(self):
         self.client = genai.Client(api_key=API_KEY)
+        self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
         self.browser = None
         self.context = None
         self.page = None
+
+    def _log(self, *args, **kwargs):
+        if self.include_raw:
+            print(*args, **kwargs)
 
     def denormalize_x(self, x: int, width: int) -> int:
         return int((x / 1000) * width)
@@ -42,15 +47,15 @@ class WebAgent:
             call_id = getattr(call, 'id', None)
             fn_name = call.name
             args = call.args
-            print(f"[ACTION] Action: {fn_name} {args}")
+            self._log(f"[ACTION] Action: {fn_name} {args}")
 
             # --- SAFETY CHECK ---
             requires_acknowledgement = False
             if "safety_decision" in args:
                  decision = args["safety_decision"]
                  if decision.get("decision") == "require_confirmation":
-                     print(f"   [SAFETY] Safety Alert: {decision.get('explanation')}")
-                     print("   -> Auto-acknowledging to proceed.")
+                     self._log(f"   [SAFETY] Safety Alert: {decision.get('explanation')}")
+                     self._log("   -> Auto-acknowledging to proceed.")
                      requires_acknowledgement = True
 
             result_data = {}
@@ -189,7 +194,8 @@ class WebAgent:
         update_callback: async function(screenshot_b64: str, logs: str)
         Returns the final response from the agent.
         """
-        print(f"[START] WebAgent started. Goal: {prompt}")
+        if self.include_raw:
+            print(f"[START] WebAgent started. Goal: {prompt}")
         final_response = "Agent finished without a final summary."
 
         async with async_playwright() as p:
@@ -236,7 +242,7 @@ class WebAgent:
             MAX_TURNS = 20
             
             for turn in range(MAX_TURNS):
-                print(f"\n--- Turn {turn + 1} ---")
+                self._log(f"\n--- Turn {turn + 1} ---")
                 
                 try:
                     response = await self.client.aio.models.generate_content(
@@ -256,7 +262,7 @@ class WebAgent:
                 
                 # Check for empty response
                 if not response.candidates:
-                    print("[WARN] Model returned no content.")
+                    self._log("[WARN] Model returned no content.")
                     break
                 
                 candidate = response.candidates[0]
@@ -270,10 +276,10 @@ class WebAgent:
                 
                 for part in model_content.parts:
                     if part.thought:
-                        print(f"[THOUGHT] Thought: {part.text}")
+                        self._log(f"[THOUGHT] Thought: {part.text}")
                         thought_text += f"[Thoughts] {part.text}\n"
                     elif part.text:
-                        print(f"[AGENT] Agent: {part.text}")
+                        self._log(f"[AGENT] Agent: {part.text}")
                         thought_text += f"[Agent] {part.text}\n"
                         agent_text = part.text
                     if part.function_call:
@@ -290,18 +296,18 @@ class WebAgent:
                 
                 if not function_calls:
                     if not has_tool_use:
-                        print("[DONE] Task finished details.")
+                        self._log("[DONE] Task finished details.")
                         if update_callback: await update_callback(None, "Task Finished")
                         break
                     else:
-                        print("...Thinking...")
+                        self._log("...Thinking...")
                         continue
 
                 # Execute Actions
                 results = await self.execute_function_calls(function_calls)
                 
                 # Capture new state
-                print("[SNAP] Capturing new state...")
+                self._log("[SNAP] Capturing new state...")
                 function_responses, screenshot_bytes = await self.get_function_responses(results)
                 
                 # Update frontend
@@ -316,7 +322,7 @@ class WebAgent:
                 chat_history.append(types.Content(role="user", parts=response_parts))
 
             await self.browser.close()
-            print("[CLOSE] Browser closed.")
+            self._log("[CLOSE] Browser closed.")
             return final_response
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ class CadAgent:
         self.model = "gemini-3-pro-preview"
         self.on_thought = on_thought  # Callback for streaming thoughts 
         self.on_status = on_status  # Callback for retry status info
+        self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
         
         self.system_instruction = """
 You are a Python-based 3D CAD Engineer using the `build123d` library.
@@ -60,6 +61,10 @@ export_stl(result_part, 'output.stl')
 ```
 """
 
+    def _log(self, *args, **kwargs):
+        if self.include_raw:
+            print(*args, **kwargs)
+
     async def generate_prototype(self, prompt: str, output_dir: Optional[str] = None):
         """
         Generates 3D geometry by asking Gemini for a script, then running it LOCALLY.
@@ -67,7 +72,7 @@ export_stl(result_part, 'output.stl')
             prompt: User's description of the model to generate.
             output_dir: Directory to save the script and STL. If None, uses temp dir.
         """
-        print(f"[CadAgent DEBUG] [START] Generation started for: '{prompt}'")
+        self._log(f"[CadAgent DEBUG] [START] Generation started for: '{prompt}'")
         
         try:
             # Use provided output_dir or fall back to temp
@@ -87,7 +92,7 @@ export_stl(result_part, 'output.stl')
             current_prompt = f"You are a build123d expert. Write a generic python script to create a 3D model of: {prompt}. Ensure you export to 'output.stl'. Unscaled."
             
             for attempt in range(max_retries):
-                print(f"[CadAgent DEBUG] Attempt {attempt + 1}/{max_retries}")
+                self._log(f"[CadAgent DEBUG] Attempt {attempt + 1}/{max_retries}")
                 
                 # Emit status update
                 if self.on_status:
@@ -124,7 +129,7 @@ export_stl(result_part, 'output.stl')
                                 raw_content += part.text
                 
                 if not raw_content:
-                    print("[CadAgent DEBUG] [ERR] Empty response from model.")
+                    self._log("[CadAgent DEBUG] [ERR] Empty response from model.")
                     return None
 
                 # 2. Extract Code Block
@@ -134,11 +139,11 @@ export_stl(result_part, 'output.stl')
                     code = code_match.group(1).strip()
                 else:
                     # Fallback: assume entire text is code if no blocks, or fail
-                    print("[CadAgent DEBUG] [WARN] No ```python block found. Trying heuristic...")
+                    self._log("[CadAgent DEBUG] [WARN] No ```python block found. Trying heuristic...")
                     if "import build123d" in raw_content:
                         code = raw_content
                     else:
-                        print("[CadAgent DEBUG] [ERR] Could not extract python code.")
+                        self._log("[CadAgent DEBUG] [ERR] Could not extract python code.")
                         return None
                 
                 # 3. Save to Local File in cad_outputs folder
@@ -150,7 +155,7 @@ export_stl(result_part, 'output.stl')
                     code_with_path = code.replace("output.stl", safe_output_path)
                     f.write(code_with_path)
                     
-                print(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
+                self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
                 # 4. Execute Locally
                 import subprocess
@@ -166,7 +171,7 @@ export_stl(result_part, 'output.stl')
                     )
                     stdout, stderr = proc.stdout, proc.stderr
                 except Exception as e:
-                     print(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
+                     self._log(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
                      proc = type('obj', (object,), {'returncode': 1})
                      stdout = ""
                      stderr = str(e)
@@ -176,7 +181,7 @@ export_stl(result_part, 'output.stl')
                     # Extract a concise error message for display
                     error_lines = error_msg.strip().split('\n')
                     short_error = error_lines[-1][:100] if error_lines else "Unknown error"
-                    print(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
+                    self._log(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
                     
                     # Emit retry status with error
                     if self.on_status:
@@ -198,11 +203,11 @@ Original request: {prompt}
 """
                     continue # Retry loop
                 
-                print(f"[CadAgent DEBUG] [OK] Script executed successfully.")
+                self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
                 # 5. Read Output
                 if os.path.exists(output_stl):
-                    print(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
+                    self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     with open(output_stl, "rb") as f:
                         stl_data = f.read()
                         
@@ -215,14 +220,14 @@ Original request: {prompt}
                         "file_path": output_stl
                     }
                 else:
-                     print(f"[CadAgent DEBUG] [ERR] '{output_stl}' was not generated.")
+                     self._log(f"[CadAgent DEBUG] [ERR] '{output_stl}' was not generated.")
                      # If script ran but no output, treat as failure and retry?
                      # Ideally yes.
                      current_prompt = f"The script executed successfully but 'output.stl' was not found. Ensure you call `export_stl(result_part, 'output.stl')` at the end."
                      continue
 
             # If loop finishes without success
-            print("[CadAgent DEBUG] [ERR] All attempts failed.")
+            self._log("[CadAgent DEBUG] [ERR] All attempts failed.")
             if self.on_status:
                 self.on_status({
                     "status": "failed",
@@ -233,9 +238,10 @@ Original request: {prompt}
             return None
 
         except Exception as e:
-            print(f"CadAgent Error: {e}")
-            import traceback
-            traceback.print_exc()
+            if include_raw:
+                print(f"CadAgent Error: {e}")
+                import traceback
+                traceback.print_exc()
             return None
 
     async def iterate_prototype(self, prompt: str, output_dir: Optional[str] = None):
@@ -245,7 +251,7 @@ Original request: {prompt}
             prompt: User's description of the changes to make.
             output_dir: Directory containing existing script and where to save new STL.
         """
-        print(f"[CadAgent DEBUG] [START] Iteration started for: '{prompt}'")
+        self._log(f"[CadAgent DEBUG] [START] Iteration started for: '{prompt}'")
         
         # Use provided output_dir or fall back to temp
         if output_dir:
@@ -282,7 +288,7 @@ Original request: {prompt}
                 existing_code
             )
         else:
-             print("[CadAgent DEBUG] [WARN] No existing script found. Falling back to fresh generation.")
+             self._log("[CadAgent DEBUG] [WARN] No existing script found. Falling back to fresh generation.")
              return await self.generate_prototype(prompt)
 
         try:
@@ -303,7 +309,7 @@ Ensure you still export to 'output.stl'.
 """
             
             for attempt in range(max_retries):
-                print(f"[CadAgent DEBUG] Iteration Attempt {attempt + 1}/{max_retries}")
+                self._log(f"[CadAgent DEBUG] Iteration Attempt {attempt + 1}/{max_retries}")
                 
                 # Emit status update
                 if self.on_status:
@@ -340,7 +346,7 @@ Ensure you still export to 'output.stl'.
                                 raw_content += part.text
                 
                 if not raw_content:
-                    print("[CadAgent DEBUG] [ERR] Empty response from model.")
+                    self._log("[CadAgent DEBUG] [ERR] Empty response from model.")
                     return None
 
                 # 2. Extract Code Block
@@ -350,11 +356,11 @@ Ensure you still export to 'output.stl'.
                     code = code_match.group(1).strip()
                 else:
                     # Fallback: assume entire text is code if no blocks, or fail
-                    print("[CadAgent DEBUG] [WARN] No ```python block found. Trying heuristic...")
+                    self._log("[CadAgent DEBUG] [WARN] No ```python block found. Trying heuristic...")
                     if "import build123d" in raw_content:
                         code = raw_content
                     else:
-                        print("[CadAgent DEBUG] [ERR] Could not extract python code.")
+                        self._log("[CadAgent DEBUG] [ERR] Could not extract python code.")
                         return None
                 
                 # 3. Save to Local File in cad_outputs folder
@@ -368,7 +374,7 @@ Ensure you still export to 'output.stl'.
                     code_with_path = code.replace("output.stl", safe_output_path)
                     f.write(code_with_path)
                     
-                print(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
+                self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
                 # 4. Execute Locally
                 import subprocess
@@ -385,14 +391,14 @@ Ensure you still export to 'output.stl'.
                     )
                     stdout, stderr = proc.stdout, proc.stderr
                 except Exception as e:
-                    print(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
+                    self._log(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
                     proc = type('obj', (object,), {'returncode': 1})()
                     stdout = ""
                     stderr = str(e)
                 
                 if proc.returncode != 0:
                     error_msg = stderr
-                    print(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
+                    self._log(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
                     
                     # Preparing feedback for next attempt
                     current_prompt = f"""
@@ -404,11 +410,11 @@ Ensure you still export to 'output.stl'.
 """
                     continue # Retry loop
                 
-                print(f"[CadAgent DEBUG] [OK] Script executed successfully.")
+                self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
                 # 5. Read Output
                 if os.path.exists(output_stl):
-                    print(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
+                    self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     with open(output_stl, "rb") as f:
                         stl_data = f.read()
                         
@@ -421,12 +427,12 @@ Ensure you still export to 'output.stl'.
                         "file_path": output_stl
                     }
                 else:
-                     print(f"[CadAgent DEBUG] [ERR] '{output_stl}' was not generated.")
+                     self._log(f"[CadAgent DEBUG] [ERR] '{output_stl}' was not generated.")
                      current_prompt = f"The script executed successfully but '{output_stl}' was not found. Ensure you call `export_stl(result_part, 'output.stl')` at the end."
                      continue
 
             # If loop finishes without success
-            print("[CadAgent DEBUG] [ERR] All attempts failed.")
+            self._log("[CadAgent DEBUG] [ERR] All attempts failed.")
             if self.on_status:
                 self.on_status({
                     "status": "failed",
@@ -437,8 +443,9 @@ Ensure you still export to 'output.stl'.
             return None
 
         except Exception as e:
-            print(f"CadAgent Error: {e}")
-            import traceback
-            traceback.print_exc()
+            if include_raw:
+                print(f"CadAgent Error: {e}")
+                import traceback
+                traceback.print_exc()
             return None
 

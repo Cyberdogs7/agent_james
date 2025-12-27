@@ -32,8 +32,10 @@ CHUNK_SIZE = 1024
 
 MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 DEFAULT_MODE = "camera"
+INCLUDE_RAW_LOGS = False
 
 load_dotenv()
+os.environ["INCLUDE_RAW_LOGS"] = str(INCLUDE_RAW_LOGS)
 client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
 
 # Function definitions
@@ -302,7 +304,8 @@ class AudioLoop:
         self._last_output_transcription = ""
 
     def update_permissions(self, new_perms):
-        print(f"[ADA DEBUG] [CONFIG] Updating tool permissions: {new_perms}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [CONFIG] Updating tool permissions: {new_perms}")
         self.permissions.update(new_perms)
 
     def set_paused(self, paused):
@@ -312,16 +315,20 @@ class AudioLoop:
         self.stop_event.set()
         
     def resolve_tool_confirmation(self, request_id, confirmed):
-        print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
         if request_id in self._pending_confirmations:
             future = self._pending_confirmations[request_id]
             if not future.done():
-                print(f"[ADA DEBUG] [RESOLVE] Future found and pending. Setting result to: {confirmed}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [RESOLVE] Future found and pending. Setting result to: {confirmed}")
                 future.set_result(confirmed)
             else:
-                 print(f"[ADA DEBUG] [WARN] Request {request_id} future already done. Result: {future.result()}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WARN] Request {request_id} future already done. Result: {future.result()}")
         else:
-            print(f"[ADA DEBUG] [WARN] Confirmation Request {request_id} not found in pending dict. Keys: {list(self._pending_confirmations.keys())}")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [WARN] Confirmation Request {request_id} not found in pending dict. Keys: {list(self._pending_confirmations.keys())}")
 
     def clear_audio_queue(self):
         """Clears the queue of pending audio chunks to stop playback immediately."""
@@ -331,9 +338,11 @@ class AudioLoop:
                 self.audio_in_queue.get_nowait()
                 count += 1
             if count > 0:
-                print(f"[ADA DEBUG] [AUDIO] Cleared {count} chunks from playback queue due to interruption.")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [AUDIO] Cleared {count} chunks from playback queue due to interruption.")
         except Exception as e:
-            print(f"[ADA DEBUG] [ERR] Failed to clear audio queue: {e}")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to clear audio queue: {e}")
 
     async def send_frame(self, frame_data):
         # Update the latest frame payload
@@ -358,7 +367,8 @@ class AudioLoop:
         resolved_input_device_index = None
         
         if self.input_device_name:
-            print(f"[ADA] Attempting to find input device matching: '{self.input_device_name}'")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA] Attempting to find input device matching: '{self.input_device_name}'")
             count = pya.get_device_count()
             best_match = None
             
@@ -369,7 +379,8 @@ class AudioLoop:
                         name = info.get('name', '')
                         # Simple case-insensitive check
                         if self.input_device_name.lower() in name.lower() or name.lower() in self.input_device_name.lower():
-                             print(f"   Candidate {i}: {name}")
+                             if INCLUDE_RAW_LOGS:
+                                 print(f"   Candidate {i}: {name}")
                              # Prioritize exact match or very close match if possible, but first match is okay for now
                              resolved_input_device_index = i
                              best_match = name
@@ -378,21 +389,26 @@ class AudioLoop:
                     continue
             
             if resolved_input_device_index is not None:
-                print(f"[ADA] Resolved input device '{self.input_device_name}' to index {resolved_input_device_index} ({best_match})")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA] Resolved input device '{self.input_device_name}' to index {resolved_input_device_index} ({best_match})")
             else:
-                print(f"[ADA] Could not find device matching '{self.input_device_name}'. Checking index...")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA] Could not find device matching '{self.input_device_name}'. Checking index...")
 
         # Fallback to index if Name lookup failed or wasn't provided
         if resolved_input_device_index is None and self.input_device_index is not None:
              try:
                  resolved_input_device_index = int(self.input_device_index)
-                 print(f"[ADA] Requesting Input Device Index: {resolved_input_device_index}")
+                 if INCLUDE_RAW_LOGS:
+                     print(f"[ADA] Requesting Input Device Index: {resolved_input_device_index}")
              except ValueError:
-                 print(f"[ADA] Invalid device index '{self.input_device_index}', reverting to default.")
+                 if INCLUDE_RAW_LOGS:
+                     print(f"[ADA] Invalid device index '{self.input_device_index}', reverting to default.")
                  resolved_input_device_index = None
 
         if resolved_input_device_index is None:
-             print("[ADA] Using Default Input Device")
+             if INCLUDE_RAW_LOGS:
+                 print("[ADA] Using Default Input Device")
 
         # Determine actual channels to use
         actual_input_device_index = resolved_input_device_index if resolved_input_device_index is not None else mic_info["index"]
@@ -412,7 +428,8 @@ class AudioLoop:
                 frames_per_buffer=CHUNK_SIZE,
             )
         except OSError:
-            print(f"[ADA] Failed to open stream with {CHANNELS} channels. Trying to detect supported channels...")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA] Failed to open stream with {CHANNELS} channels. Trying to detect supported channels...")
             try:
                 device_info = pya.get_device_info_by_index(actual_input_device_index)
                 max_channels = int(device_info.get('maxInputChannels', 0))
@@ -432,16 +449,19 @@ class AudioLoop:
                             frames_per_buffer=CHUNK_SIZE,
                         )
                         stream_channels = c
-                        print(f"[ADA] Successfully opened audio stream with {c} channels.")
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA] Successfully opened audio stream with {c} channels.")
                         break
                     except OSError:
                         continue
             except Exception as e:
-                print(f"[ADA] [ERR] Device info lookup failed: {e}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA] [ERR] Device info lookup failed: {e}")
 
         if not self.audio_stream:
-            print(f"[ADA] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
-            print("[ADA] [WARN] Audio features will be disabled. Please check microphone permissions.")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
+                print("[ADA] [WARN] Audio features will be disabled. Please check microphone permissions.")
             return
 
         if __debug__:
@@ -492,13 +512,15 @@ class AudioLoop:
                     if not self._is_speaking:
                         # NEW Speech Utterance Started
                         self._is_speaking = True
-                        print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Sending Video Frame.")
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Sending Video Frame.")
                         
                         # Send ONE frame
                         if self._latest_image_payload and self.out_queue:
                             await self.out_queue.put(self._latest_image_payload)
                         else:
-                            print(f"[ADA DEBUG] [VAD] No video frame available to send.")
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [VAD] No video frame available to send.")
                             
                 else:
                     # Silence
@@ -508,16 +530,19 @@ class AudioLoop:
                         
                         elif time.time() - self._silence_start_time > SILENCE_DURATION:
                             # Silence confirmed, reset state
-                            print(f"[ADA DEBUG] [VAD] Silence detected. Resetting speech state.")
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [VAD] Silence detected. Resetting speech state.")
                             self._is_speaking = False
                             self._silence_start_time = None
 
             except Exception as e:
-                print(f"Error reading audio: {e}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"Error reading audio: {e}")
                 await asyncio.sleep(0.1)
 
     async def handle_cad_request(self, prompt):
-        print(f"[ADA DEBUG] [CAD] Background Task Started: handle_cad_request('{prompt}')")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [CAD] Background Task Started: handle_cad_request('{prompt}')")
         if self.on_cad_status:
             self.on_cad_status("generating")
             
@@ -526,7 +551,8 @@ class AudioLoop:
             import datetime
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             new_project_name = f"Project_{timestamp}"
-            print(f"[ADA DEBUG] [CAD] Auto-creating project: {new_project_name}")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [CAD] Auto-creating project: {new_project_name}")
             
             success, msg = self.project_manager.create_project(new_project_name)
             if success:
@@ -537,8 +563,9 @@ class AudioLoop:
                     if self.on_project_update:
                          self.on_project_update(new_project_name)
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
-
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
+        
         # Get project cad folder path
         cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
         
@@ -546,13 +573,16 @@ class AudioLoop:
         cad_data = await self.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
         
         if cad_data:
-            print(f"[ADA DEBUG] [OK] CadAgent returned data successfully.")
-            print(f"[ADA DEBUG] [INFO] Data Check: {len(cad_data.get('vertices', []))} vertices, {len(cad_data.get('edges', []))} edges.")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OK] CadAgent returned data successfully.")
+                print(f"[ADA DEBUG] [INFO] Data Check: {len(cad_data.get('vertices', []))} vertices, {len(cad_data.get('edges', []))} edges.")
             
             if self.on_cad_data:
-                print(f"[ADA DEBUG] [SEND] Dispatching data to frontend callback...")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [SEND] Dispatching data to frontend callback...")
                 self.on_cad_data(cad_data)
-                print(f"[ADA DEBUG] [SENT] Dispatch complete.")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
             
             # Save to Project
             if 'file_path' in cad_data:
@@ -565,12 +595,15 @@ class AudioLoop:
             completion_msg = "System Notification: CAD generation is complete! The 3D model is now displayed for the user. Let them know it's ready."
             try:
                 await self.session.send(input=completion_msg, end_of_turn=True)
-                print(f"[ADA DEBUG] [NOTE] Sent completion notification to model.")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [NOTE] Sent completion notification to model.")
             except Exception as e:
-                 print(f"[ADA DEBUG] [ERR] Failed to send completion notification: {e}")
+                 if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Failed to send completion notification: {e}")
 
         else:
-            print(f"[ADA DEBUG] [ERR] CadAgent returned None.")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] CadAgent returned None.")
             # Optionally notify failure
             try:
                 await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
@@ -580,14 +613,16 @@ class AudioLoop:
 
 
     async def handle_write_file(self, path, content):
-        print(f"[ADA DEBUG] [FS] Writing file: '{path}'")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Writing file: '{path}'")
         
         # Auto-create project if stuck in temp
         if self.project_manager.current_project == "temp":
             import datetime
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             new_project_name = f"Project_{timestamp}"
-            print(f"[ADA DEBUG] [FS] Auto-creating project: {new_project_name}")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [FS] Auto-creating project: {new_project_name}")
             
             success, msg = self.project_manager.create_project(new_project_name)
             if success:
@@ -598,7 +633,8 @@ class AudioLoop:
                     if self.on_project_update:
                          self.on_project_update(new_project_name)
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
         
         # Force path to be relative to current project
         # If absolute path is provided, we try to strip it or just ignore it and use basename
@@ -616,7 +652,8 @@ class AudioLoop:
         if not os.path.isabs(path):
              final_path = current_project_path / path
         
-        print(f"[ADA DEBUG] [FS] Resolved path: '{final_path}'")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Resolved path: '{final_path}'")
 
         try:
             # Ensure parent exists
@@ -627,14 +664,17 @@ class AudioLoop:
         except Exception as e:
             result = f"Failed to write file '{path}': {str(e)}"
 
-        print(f"[ADA DEBUG] [FS] Result: {result}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Result: {result}")
         try:
              await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
         except Exception as e:
-             print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
+             if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
     async def handle_read_directory(self, path):
-        print(f"[ADA DEBUG] [FS] Reading directory: '{path}'")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Reading directory: '{path}'")
         try:
             if not os.path.exists(path):
                 result = f"Directory '{path}' does not exist."
@@ -644,14 +684,17 @@ class AudioLoop:
         except Exception as e:
             result = f"Failed to read directory '{path}': {str(e)}"
 
-        print(f"[ADA DEBUG] [FS] Result: {result}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Result: {result}")
         try:
              await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
         except Exception as e:
-             print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
+             if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
     async def handle_read_file(self, path):
-        print(f"[ADA DEBUG] [FS] Reading file: '{path}'")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Reading file: '{path}'")
         try:
             if not os.path.exists(path):
                 result = f"File '{path}' does not exist."
@@ -662,14 +705,17 @@ class AudioLoop:
         except Exception as e:
             result = f"Failed to read file '{path}': {str(e)}"
 
-        print(f"[ADA DEBUG] [FS] Result: {result}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FS] Result: {result}")
         try:
              await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
         except Exception as e:
-             print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
+             if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
     async def handle_web_agent_request(self, prompt):
-        print(f"[ADA DEBUG] [WEB] Web Agent Task: '{prompt}'")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [WEB] Background Task Started: handle_web_agent_request('{prompt}')")
         
         async def update_frontend(image_b64, log_text):
             if self.on_web_data:
@@ -677,18 +723,22 @@ class AudioLoop:
                  
         # Run the web agent and wait for it to return
         result = await self.web_agent.run_task(prompt, update_callback=update_frontend)
-        print(f"[ADA DEBUG] [WEB] Web Agent Task Returned: {result}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [WEB] Web Agent Task Returned: {result}")
         
         # Send the final result back to the main model
         try:
              await self.session.send(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
         except Exception as e:
-             print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
+             if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
     async def handle_jules_request(self, prompt, source=None):
-        print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
         if not source:
-            print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
+            if INCLUDE_RAW_LOGS:
+                print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
             
             async def fetch_sources_and_notify():
                 sources_response = await self.jules_agent.list_sources()
@@ -702,7 +752,8 @@ class AudioLoop:
                 try:
                     await self.session.send(input=msg, end_of_turn=True)
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to send jules sources notification: {e}")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send jules sources notification: {e}")
 
             asyncio.create_task(fetch_sources_and_notify())
             return "Fetching available Jules sources. I will notify you shortly."
@@ -710,26 +761,31 @@ class AudioLoop:
         async def run_jules_task():
             session = await self.jules_agent.create_session(prompt, source)
             if session:
-                print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
                 # poll_for_updates is already backgrounded in handle_jules_request's original version
                 # but we'll keep it consistent. Actually jules_agent.create_session might take time.
                 asyncio.create_task(self.jules_agent.poll_for_updates(session["name"]))
                 try:
                     await self.session.send(input=f"System Notification: Jules session created: {session['name']}", end_of_turn=True)
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
             else:
-                print("[ADA DEBUG] [JULES] Failed to create session.")
+                if INCLUDE_RAW_LOGS:
+                    print("[ADA DEBUG] [JULES] Failed to create session.")
                 try:
                     await self.session.send(input="System Notification: Failed to start Jules task.", end_of_turn=True)
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to send jules failure notification: {e}")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send jules failure notification: {e}")
 
         asyncio.create_task(run_jules_task())
         return "Jules task starting. I will notify you once the session is created."
 
     async def handle_jules_feedback(self, session_id, feedback):
-        print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
         response = await self.jules_agent.send_message(session_id, feedback)
         if response:
             return "Feedback sent successfully."
@@ -738,7 +794,8 @@ class AudioLoop:
 
 
     async def handle_list_jules_sources(self):
-        print("[ADA DEBUG] [JULES] Listing all sources")
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [JULES] Listing all sources")
         response = await self.jules_agent.list_sources()
         if response and "sources" in response:
             return response["sources"]
@@ -746,7 +803,8 @@ class AudioLoop:
             return "Failed to list Jules sources."
 
     async def handle_list_jules_activities(self, session_id):
-        print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
         response = await self.jules_agent.list_activities(session_id)
         if response and "activities" in response:
             return response["activities"]
@@ -757,12 +815,14 @@ class AudioLoop:
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
         try:
-            print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
             while True:
                 try:
                     turn = self.session.receive()
                 except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
                     raise e
 
                 async for response in turn:
@@ -774,13 +834,15 @@ class AudioLoop:
                             for part in parts:
                                 if hasattr(part, 'thought') and part.thought:
                                     thought_text = part.thought
-                                    print(f"[ADA DEBUG] [THOUGHT] {thought_text}")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [THOUGHT] {thought_text}")
                                     if self.on_cad_thought:
                                         self.on_cad_thought(thought_text)
                                 
                                 if hasattr(part, 'text') and part.text:
                                     text_content = part.text
-                                    print(f"[ADA DEBUG] [TEXT] {text_content}")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TEXT] {text_content}")
                                     if self.on_transcription:
                                         self.on_transcription({"sender": "ADA", "text": text_content})
                                     
@@ -867,9 +929,15 @@ class AudioLoop:
 
                     # 3. Handle Tool Calls
                     if response.tool_call:
-                        print("The tool was called")
+                        # print("The tool was called")
                         function_responses = []
                         for fc in response.tool_call.function_calls:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}")
+                            else:
+                                # Basic log as requested: tool, endpoint, status
+                                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200")
+
                             # Unified confirmation logic
                             destructive_keywords = ['delete', 'remove', 'wipe', 'destroy']
                             confirmation_required = any(keyword in fc.name.lower() for keyword in destructive_keywords)
@@ -879,7 +947,8 @@ class AudioLoop:
                                 if self.on_tool_confirmation:
                                     import uuid
                                     request_id = str(uuid.uuid4())
-                                    print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
                                     
                                     future = asyncio.Future()
                                     self._pending_confirmations[request_id] = future
@@ -895,13 +964,16 @@ class AudioLoop:
                                     finally:
                                         self._pending_confirmations.pop(request_id, None)
 
-                                    print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
                                 else:
-                                    print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
                                     confirmed = False
 
                             if not confirmed:
-                                print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
                                 function_response = types.FunctionResponse(
                                     id=fc.id,
                                     name=fc.name,
@@ -927,15 +999,17 @@ class AudioLoop:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "generate_cad":
-                                    print(f"\n[ADA DEBUG] --------------------------------------------------")
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
-                                    print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"\n[ADA DEBUG] --------------------------------------------------")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
+                                        print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
                                     
                                     asyncio.create_task(self.handle_cad_request(prompt))
                                     # No function response needed - model already acknowledged when user asked
                                 
                                 elif fc.name == "run_web_agent":
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
                                     asyncio.create_task(self.handle_web_agent_request(prompt))
                                     
                                     result_text = "Web Navigation started. Do not reply to this message."
@@ -946,11 +1020,13 @@ class AudioLoop:
                                             "result": result_text,
                                         }
                                     )
-                                    print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
                                     function_responses.append(function_response)
 
                                 elif fc.name == "run_jules_agent":
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
                                     source = fc.args.get("source")
                                     result = await self.handle_jules_request(prompt, source)
                                     function_response = types.FunctionResponse(
@@ -961,7 +1037,8 @@ class AudioLoop:
                                     function_responses.append(function_response)
 
                                 elif fc.name == "send_jules_feedback":
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
                                     session_id = fc.args.get("session_id")
                                     feedback = fc.args.get("feedback")
                                     result = await self.handle_jules_feedback(session_id, feedback)
@@ -974,7 +1051,8 @@ class AudioLoop:
 
 
                                 elif fc.name == "list_jules_sources":
-                                    print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
                                     result = await self.handle_list_jules_sources()
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
@@ -984,7 +1062,8 @@ class AudioLoop:
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_jules_activities":
-                                    print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
                                     session_id = fc.args.get("session_id")
                                     result = await self.handle_list_jules_activities(session_id)
                                     function_response = types.FunctionResponse(
@@ -997,7 +1076,8 @@ class AudioLoop:
                                 elif fc.name == "write_file":
                                     path = fc.args["path"]
                                     content = fc.args["content"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
                                     asyncio.create_task(self.handle_write_file(path, content))
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": "Writing file..."}
@@ -1006,7 +1086,8 @@ class AudioLoop:
 
                                 elif fc.name == "read_directory":
                                     path = fc.args["path"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'")
                                     asyncio.create_task(self.handle_read_directory(path))
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": "Reading directory..."}
@@ -1015,7 +1096,8 @@ class AudioLoop:
 
                                 elif fc.name == "read_file":
                                     path = fc.args["path"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'")
                                     asyncio.create_task(self.handle_read_file(path))
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": "Reading file..."}
@@ -1024,7 +1106,8 @@ class AudioLoop:
 
                                 elif fc.name == "create_project":
                                     name = fc.args["name"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'")
                                     success, msg = self.project_manager.create_project(name)
                                     if success:
                                         # Auto-switch to the newly created project
@@ -1039,25 +1122,29 @@ class AudioLoop:
 
                                 elif fc.name == "switch_project":
                                     name = fc.args["name"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'")
                                     success, msg = self.project_manager.switch_project(name)
                                     if success:
                                         if self.on_project_update:
                                             self.on_project_update(name)
                                         # Gather project context and send to AI (silently, no response expected)
                                         context = self.project_manager.get_project_context()
-                                        print(f"[ADA DEBUG] [PROJECT] Sending project context to AI ({len(context)} chars)")
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [PROJECT] Sending project context to AI ({len(context)} chars)")
                                         try:
                                             await self.session.send(input=f"System Notification: {msg}\n\n{context}", end_of_turn=False)
                                         except Exception as e:
-                                            print(f"[ADA DEBUG] [ERR] Failed to send project context: {e}")
+                                            if INCLUDE_RAW_LOGS:
+                                                print(f"[ADA DEBUG] [ERR] Failed to send project context: {e}")
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": msg}
                                     )
                                     function_responses.append(function_response)
                                 
                                 elif fc.name == "list_projects":
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'")
                                     projects = self.project_manager.list_projects()
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": f"Available projects: {', '.join(projects)}"}
@@ -1065,7 +1152,10 @@ class AudioLoop:
                                     function_responses.append(function_response)
 
                                 elif fc.name == "list_smart_devices":
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'")
+                                    # Use cached devices directly for speed
+                                    # devices_dict is {ip: SmartDevice}
                                     # Use cached devices directly for speed
                                     # devices_dict is {ip: SmartDevice}
                                     
@@ -1119,7 +1209,8 @@ class AudioLoop:
                                     brightness = fc.args.get("brightness")
                                     color = fc.args.get("color")
                                     
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
                                     
                                     result_msg = f"Action '{action}' on '{target}' failed."
                                     success = False
@@ -1193,7 +1284,8 @@ class AudioLoop:
                                     function_responses.append(function_response)
 
                                 elif fc.name == "discover_printers":
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
                                     printers = await self.printer_agent.discover_printers()
                                     # Format for model
                                     if printers:
@@ -1214,7 +1306,8 @@ class AudioLoop:
                                     printer = fc.args["printer"]
                                     profile = fc.args.get("profile")
                                     
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
                                     
                                     # Resolve 'current' to project STL
                                     if stl_path.lower() == "current":
@@ -1238,7 +1331,8 @@ class AudioLoop:
 
                                 elif fc.name == "get_print_status":
                                     printer = fc.args["printer"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
                                     
                                     status = await self.printer_agent.get_print_status(printer)
                                     if status:
@@ -1267,7 +1361,8 @@ class AudioLoop:
 
                                 elif fc.name == "iterate_cad":
                                     prompt = fc.args["prompt"]
-                                    print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
                                     
                                     # Emit status
                                     if self.on_cad_status:
@@ -1280,20 +1375,24 @@ class AudioLoop:
                                     cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
                                     
                                     if cad_data:
-                                        print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
                                         
                                         # Dispatch to frontend
                                         if self.on_cad_data:
-                                            print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
+                                            if INCLUDE_RAW_LOGS:
+                                                print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
                                             self.on_cad_data(cad_data)
-                                            print(f"[ADA DEBUG] [SENT] Dispatch complete.")
+                                            if INCLUDE_RAW_LOGS:
+                                                print(f"[ADA DEBUG] [SENT] Dispatch complete.")
                                         
                                         # Save to Project
                                         self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
                                         
                                         result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
                                     else:
-                                        print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
                                         result_str = f"Failed to iterate design with prompt: {prompt}"
                                     
                                     function_response = types.FunctionResponse(
@@ -1310,9 +1409,11 @@ class AudioLoop:
                     self.audio_in_queue.get_nowait()
         except Exception as e:
             if "1011" in str(e) or "CANCELLED" in str(e).upper():
-                print(f"[ADA DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
             else:
-                print(f"Error in receive_audio: {e}")
+                if INCLUDE_RAW_LOGS:
+                    print(f"Error in receive_audio: {e}")
             traceback.print_exc()
             # CRITICAL: Re-raise to crash the TaskGroup and trigger outer loop reconnect
             raise e
@@ -1371,7 +1472,8 @@ class AudioLoop:
         
         while not self.stop_event.is_set():
             try:
-                print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
                 async with (
                     client.aio.live.connect(model=MODEL, config=config) as session,
                     asyncio.TaskGroup() as tg,
@@ -1398,7 +1500,8 @@ class AudioLoop:
                     # Handle Startup vs Reconnect Logic
                     if not is_reconnect:
                         if start_message:
-                            print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
                             await self.session.send(input=start_message, end_of_turn=True)
                         
                         # Sync Project State
@@ -1406,9 +1509,10 @@ class AudioLoop:
                             self.on_project_update(self.project_manager.current_project)
                     
                     else:
-                        print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
-                        # Restore Context
-                        print(f"[ADA DEBUG] [RECONNECT] Fetching recent chat history to restore context...")
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
+                            # Restore Context
+                            print(f"[ADA DEBUG] [RECONNECT] Fetching recent chat history to restore context...")
                         history = self.project_manager.get_recent_chat_history(limit=10)
                         
                         context_msg = "System Notification: Connection was lost and just re-established. Here is the recent chat history to help you resume seamlessly:\n\n"
@@ -1419,7 +1523,8 @@ class AudioLoop:
                         
                         context_msg += "\nPlease acknowledge the reconnection to the user (e.g. 'I lost connection for a moment, but I'm back...') and resume what you were doing."
                         
-                        print(f"[ADA DEBUG] [RECONNECT] Sending restoration context to model...")
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [RECONNECT] Sending restoration context to model...")
                         await self.session.send(input=context_msg, end_of_turn=True)
 
                     # Reset retry delay on successful connection
@@ -1444,13 +1549,15 @@ class AudioLoop:
                     await self.stop_event.wait()
 
             except asyncio.CancelledError:
-                print(f"[ADA DEBUG] [STOP] Main loop cancelled.")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [STOP] Main loop cancelled.")
                 break
                 
             except Exception as e:
                 # This catches the ExceptionGroup from TaskGroup or direct exceptions
                 if self.stop_event.is_set():
-                    print(f"[ADA DEBUG] [INFO] Main loop stopping.")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [INFO] Main loop stopping.")
                     break
 
                 # Check for 429 error (Rate Limit) in Gemini API
@@ -1458,14 +1565,17 @@ class AudioLoop:
                 if "429" in error_msg:
                      print(f"Rate limited (429) for {service_info}. Retrying in {retry_delay} seconds...")
                 else:
-                    print(f"[ADA DEBUG] [ERR] Connection Error ({service_info}): {e}")
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Connection Error ({service_info}): {e}")
                     
                 # If we have an ExceptionGroup, try to log the sub-exceptions
                 if hasattr(e, 'exceptions'):
                     for idx, se in enumerate(e.exceptions):
-                        print(f"  Sub-exception {idx}: {se}")
+                        if INCLUDE_RAW_LOGS:
+                            print(f"  Sub-exception {idx}: {se}")
                 
-                print(f"[ADA DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 10) # Exponential backoff capped at 10s
                 is_reconnect = True # Next loop will be a reconnect

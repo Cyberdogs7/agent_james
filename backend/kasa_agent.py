@@ -1,15 +1,21 @@
 import asyncio
+import os
 from kasa import Discover, SmartDevice, SmartBulb, SmartPlug
 
 class KasaAgent:
     def __init__(self, known_devices=None):
         self.devices = {}
         self.known_devices_config = known_devices or []
+        self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
+
+    def _log(self, *args, **kwargs):
+        if self.include_raw:
+            print(*args, **kwargs)
 
     async def initialize(self):
         """Initializes devices from the saved configuration."""
         if self.known_devices_config:
-            print(f"[KasaAgent] Initializing {len(self.known_devices_config)} known devices...")
+            self._log(f"[KasaAgent] Initializing {len(self.known_devices_config)} known devices...")
             tasks = []
             for d in self.known_devices_config:
                 if not d: continue
@@ -32,18 +38,18 @@ class KasaAgent:
             if dev:
                 await dev.update()
                 self.devices[ip] = dev
-                print(f"[KasaAgent] Loaded known device: {dev.alias} ({ip})")
+                self._log(f"[KasaAgent] Loaded known device: {dev.alias} ({ip})")
             else:
-                 print(f"[KasaAgent] Could not connect to known device at {ip}")
+                 self._log(f"[KasaAgent] Could not connect to known device at {ip}")
         except Exception as e:
-            print(f"[KasaAgent] Error loading known device {ip}: {e}")
+            self._log(f"[KasaAgent] Error loading known device {ip}: {e}")
 
     async def discover_devices(self):
         """Discovers devices on the local network."""
-        print("Discovering Kasa devices (Broadcast)...")
+        self._log("Discovering Kasa devices (Broadcast)...")
         # Use explicit broadcast and slightly longer timeout for Windows reliability
         found_devices = await Discover.discover(target="255.255.255.255", timeout=5)
-        print(f"[KasaAgent] Raw discovery found {len(found_devices)} devices.")
+        self._log(f"[KasaAgent] Raw discovery found {len(found_devices)} devices.")
         
         # We don't wipe self.devices completely, we merge/update
         # But if a device is NOT found, we might want to keep it if it was known?
@@ -80,7 +86,7 @@ class KasaAgent:
             }
             device_list.append(device_info)
             
-        print(f"Total Kasa devices (found + cached): {len(device_list)}")
+        self._log(f"Total Kasa devices (found + cached): {len(device_list)}")
         return device_list
 
     def get_device_by_alias(self, alias):
