@@ -1029,10 +1029,10 @@ class AudioLoop:
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "run_web_agent", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "generate_cad":
+                                if fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
                                     if INCLUDE_RAW_LOGS:
                                         print(f"\n[ADA DEBUG] --------------------------------------------------")
                                         print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
