@@ -313,6 +313,8 @@ async def start_audio(sid, data=None):
         
         loop_task.add_done_callback(handle_loop_exit)
         
+        audio_loop.update_agent.sio = sio
+
         print("Emitting 'A.D.A Started'")
         await sio.emit('status', {'msg': 'A.D.A Started'})
 
@@ -439,7 +441,19 @@ async def shutdown(sid, data=None):
     print("[SERVER] Graceful shutdown complete. Terminating process...")
     
     # Force exit immediately - os._exit bypasses cleanup but ensures termination
-    os._exit(0)
+    if data and data.get("restart"):
+        print("[SERVER] Restarting application...")
+        import subprocess
+        subprocess.Popen("npm run dev", shell=True)
+        os._exit(0)
+    else:
+        os._exit(0)
+
+@sio.event
+async def restart_request(sid, data=None):
+    """Restart the application after an update."""
+    print("[SERVER] Restart request received.")
+    await shutdown(sid, {"restart": True})
 
 @sio.event
 async def user_input(sid, data):

@@ -242,12 +242,30 @@ delete_entry_tool = {
     }
 }
 
+check_for_updates_tool = {
+    "name": "check_for_updates",
+    "description": "Checks if a new version of the application is available from the GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+apply_update_tool = {
+    "name": "apply_update",
+    "description": "Downloads the latest version of the application from GitHub and restarts the application to apply the changes.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
 tools = [{'google_search': {}}, {"function_declarations": [
     generate_cad, run_web_agent, create_project_tool, switch_project_tool,
     list_projects_tool, list_smart_devices_tool, control_light_tool,
     discover_printers_tool, print_stl_tool, get_print_status_tool,
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
-    delete_entry_tool, modify_timer_tool
+    delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool
 ] + tools_list[0]['function_declarations'][1:]}]
 
 # --- CONFIG UPDATE: Enabled Transcription ---
@@ -280,6 +298,7 @@ from printer_agent import PrinterAgent
 from trello_agent import TrelloAgent
 from jules_agent import JulesAgent
 from timer_agent import TimerAgent
+from update_agent import UpdateAgent
 
 class AudioLoop:
     def __init__(self, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None):
@@ -331,6 +350,7 @@ class AudioLoop:
         self.trello_agent = TrelloAgent()
         self.jules_agent = JulesAgent()
         self.timer_agent = TimerAgent()
+        self.update_agent = UpdateAgent()
 
         # Dictionary to keep track of active polling tasks
         self.jules_polling_tasks = {}
@@ -1541,6 +1561,20 @@ class AudioLoop:
                                 elif fc.name == "delete_entry":
                                     name = fc.args["name"]
                                     result = self.timer_agent.delete_entry(name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "check_for_updates":
+                                    result = await self.update_agent.check_for_updates()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "apply_update":
+                                    result = await self.update_agent.apply_update()
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )
