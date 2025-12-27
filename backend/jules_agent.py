@@ -74,7 +74,7 @@ class JulesAgent:
                 }
             },
             "automationMode": "AUTO_CREATE_PR",
-            "title": "Jules Task"
+            "title": f"Jules: {prompt[:50]}"
         }
         session = await self._request("POST", f"{self.base_url}/sessions", tool_name="create_session", json=data)
         if session:
@@ -102,44 +102,44 @@ class JulesAgent:
         """Lists all activities for a session."""
         return await self._request("GET", f"{self.base_url}/{session_id}/activities", tool_name="list_activities")
 
-    async def poll_for_updates(self, session_id):
-        """Polls for updates on a session."""
+    async def poll_for_updates(self, session_id, stop_event):
+        """Polls for updates on a session until a stop event is set."""
         last_activity_count = 0
-        while True:
-            activities_response = await self.list_activities(session_id)
-            if activities_response and "activities" in activities_response:
-                activities = activities_response["activities"]
-                new_activities = activities[last_activity_count:]
-                for activity in new_activities:
-                    message = None
-                    if "agentMessage" in activity:
-                        content = activity["agentMessage"]["content"]
-                        if "feedback" in content.lower():
-                            message = f"Jules is asking for feedback on session {session_id}. Please use the send message functionality to respond."
-                        else:
-                            message = content
-                    elif "plan" in activity:
-                        message = "Jules has generated a plan."
-                    elif "sessionComplete" in activity:
-                        message = "Jules has completed the session."
+        self._log(f"[JULES_AGENT] Starting to poll for updates on session: {session_id}")
+        while not stop_event.is_set():
+            try:
+                activities_response = await self.list_activities(session_id)
+                if activities_response and "activities" in activities_response:
+                    activities = activities_response["activities"]
+                    new_activities = activities[last_activity_count:]
+                    for activity in new_activities:
+                        message = None
+                        if "agentMessage" in activity:
+                            content = activity["agentMessage"]["content"]
+                            if "feedback" in content.lower():
+                                message = f"Jules is asking for feedback on session {session_id}. Please use the send message functionality to respond."
+                            else:
+                                message = content
+                        elif "plan" in activity:
+                            message = "Jules has generated a plan."
+                        elif "sessionComplete" in activity:
+                            message = "Jules has completed the session."
+                            if message and self.session:
+                                await self.session.send(input=message, end_of_turn=False)
+                            self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
+                            stop_event.set()  # Signal to stop
+                            break  # Exit the inner for-loop
+
                         if message and self.session:
                             await self.session.send(input=message, end_of_turn=False)
-                        return  # Exit the polling loop
 
-                    if message and self.session:
-                        await self.session.send(input=message, end_of_turn=False)
+                    last_activity_count = len(activities)
 
-                last_activity_count = len(activities)
-            await asyncio.sleep(60)
+                if not stop_event.is_set():
+                    await asyncio.sleep(10) # Poll more frequently
 
-    async def start_persistent_polling(self):
-        """Starts a persistent polling loop to check for active sessions."""
-        while True:
-            sessions = await self.list_sessions()
-            if sessions and isinstance(sessions, list):
-                for session in sessions:
-                    async with self.sessions_lock:
-                        if session["name"] not in self.active_sessions:
-                            self.active_sessions.add(session["name"])
-                            asyncio.create_task(self.poll_for_updates(session["name"]))
-            await asyncio.sleep(600)
+            except Exception as e:
+                self._log(f"[JULES_AGENT] [ERR] Error during polling for {session_id}: {e}")
+                await asyncio.sleep(60) # Wait longer on error
+
+        self._log(f"[JULES_AGENT] Polling stopped for session: {session_id}")

@@ -264,6 +264,9 @@ class AudioLoop:
         self.trello_agent = TrelloAgent()
         self.jules_agent = JulesAgent()
 
+        # Dictionary to keep track of active polling tasks
+        self.jules_polling_tasks = {}
+
         self.send_text_task = None
         self.stop_event = asyncio.Event()
         
@@ -313,6 +316,18 @@ class AudioLoop:
 
     def stop(self):
         self.stop_event.set()
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [SHUTDOWN] Stopping all Jules polling tasks...")
+        for session_id, task_info in self.jules_polling_tasks.items():
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [SHUTDOWN] Signaling stop for session: {session_id}")
+            task_info["stop_event"].set()
+
+    def _cleanup_jules_task(self, session_id, task):
+        """Callback to remove a completed Jules polling task."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Cleaning up polling task for session: {session_id}")
+        self.jules_polling_tasks.pop(session_id, None)
         
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
@@ -761,13 +776,29 @@ class AudioLoop:
         async def run_jules_task():
             session = await self.jules_agent.create_session(prompt, source)
             if session:
+                session_id = session['name']
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [JULES] Session created: {session['name']}")
-                # poll_for_updates is already backgrounded in handle_jules_request's original version
-                # but we'll keep it consistent. Actually jules_agent.create_session might take time.
-                asyncio.create_task(self.jules_agent.poll_for_updates(session["name"]))
+                    print(f"[ADA DEBUG] [JULES] Session created: {session_id}")
+
+                # Create a stop event for this specific session's polling task
+                stop_event = asyncio.Event()
+
+                # Start the non-blocking polling task
+                polling_task = asyncio.create_task(
+                    self.jules_agent.poll_for_updates(session_id, stop_event)
+                )
+
+                # Store the task and stop event so we can manage it later if needed
+                self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
+
+                # Add a callback to clean up the task from the dictionary once it's done
+                polling_task.add_done_callback(
+                    lambda task: self._cleanup_jules_task(session_id, task)
+                )
+
                 try:
-                    await self.session.send(input=f"System Notification: Jules session created: {session['name']}", end_of_turn=True)
+                    title = session.get('title', session_id)
+                    await self.session.send(input=f"System Notification: Jules session created: '{title}'", end_of_turn=True)
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
                         print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
@@ -1495,7 +1526,6 @@ class AudioLoop:
 
                     tg.create_task(self.receive_audio())
                     tg.create_task(self.play_audio())
-                    tg.create_task(self.jules_agent.start_persistent_polling())
 
                     # Handle Startup vs Reconnect Logic
                     if not is_reconnect:

@@ -171,12 +171,12 @@ async def test_poll_for_updates_flow(jules_agent):
         # Set up the side effect to cycle through our responses
         mock_list_activities.side_effect = mock_activities_responses
 
-        # We can now await the polling function directly, and it will complete quickly
-        try:
-            await jules_agent.poll_for_updates(session_id)
-        except StopAsyncIteration:
-            # This is expected when the side_effect is exhausted
-            pass
+        # Create a stop event to control the polling loop
+        stop_event = asyncio.Event()
+
+        # We can now await the polling function directly. It should stop on its own
+        # when it receives the sessionComplete message.
+        await jules_agent.poll_for_updates(session_id, stop_event)
 
         # Check calls to ada_session.send
         send_calls = jules_agent.session.send.call_args_list
@@ -192,34 +192,3 @@ async def test_poll_for_updates_flow(jules_agent):
         assert "Jules has completed the session." in send_calls[2].kwargs["input"]
 
 
-@pytest.mark.asyncio
-async def test_start_persistent_polling(jules_agent):
-    """Test that persistent polling discovers new sessions and starts polling them."""
-
-    # Mock list_sessions to return a new session on the first call
-    mock_list_sessions_responses = [
-        [{"name": "sessions/new_session_1", "state": "ACTIVE"}],
-        # Return an empty list on subsequent calls to stop the loop for the test
-        []
-    ]
-
-    with patch.object(jules_agent, "list_sessions", new_callable=AsyncMock) as mock_list_sessions, \
-         patch.object(jules_agent, "poll_for_updates", new_callable=AsyncMock) as mock_poll:
-
-        mock_list_sessions.side_effect = mock_list_sessions_responses
-
-        # We need to run the task and cancel it after it has had a chance to run
-        persistent_poll_task = asyncio.create_task(jules_agent.start_persistent_polling())
-
-        await asyncio.sleep(0.1) # Let it run once
-
-        # Check that poll_for_updates was called for the new session
-        mock_poll.assert_called_once_with("sessions/new_session_1")
-        assert "sessions/new_session_1" in jules_agent.active_sessions
-
-        # Stop the task
-        persistent_poll_task.cancel()
-        try:
-            await persistent_poll_task
-        except asyncio.CancelledError:
-            pass
