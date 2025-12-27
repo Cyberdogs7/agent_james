@@ -65,14 +65,22 @@ class JulesAgent:
 
     async def create_session(self, prompt, source):
         """Creates a new session in the Jules API."""
-        data = {
-            "prompt": prompt,
-            "sourceContext": {
-                "source": source,
-                "githubRepoContext": {
+        source_context = {}
+        if source:
+            if source.startswith("sources/"):
+                source_context["source"] = source
+            elif source.startswith("github/"):
+                source_context["source"] = f"sources/{source}"
+            else:
+                # If it doesn't look like a resource name, assume it's a repo reference
+                source_context["githubRepoContext"] = {
+                    "repo": source,
                     "startingBranch": "main"
                 }
-            },
+        
+        data = {
+            "prompt": prompt,
+            "sourceContext": source_context,
             "automationMode": "AUTO_CREATE_PR",
             "title": f"Jules: {prompt[:50]}"
         }

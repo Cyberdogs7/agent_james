@@ -38,7 +38,27 @@ async def test_create_session_success(jules_agent):
         mock_request.assert_called_once()
         call_args = mock_request.call_args.kwargs
         assert call_args["json"]["prompt"] == prompt
+        assert call_args["json"]["sourceContext"]["githubRepoContext"]["repo"] == source
         assert call_args["json"]["sourceContext"]["githubRepoContext"]["startingBranch"] == "main"
+        assert "source" not in call_args["json"]["sourceContext"]
+
+
+@pytest.mark.asyncio
+async def test_create_session_with_github_source_prefix(jules_agent):
+    """Test creating a Jules session with a 'github/' prefix which should get 'sources/' added."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"name": "sessions/test_session_id", "state": "CREATING"}
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient.request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
+        prompt = "test prompt"
+        source = "github/Cyberdogs7/agent_james"
+        await jules_agent.create_session(prompt, source)
+
+        call_args = mock_request.call_args.kwargs
+        assert call_args["json"]["sourceContext"]["source"] == "sources/github/Cyberdogs7/agent_james"
+        assert "githubRepoContext" not in call_args["json"]["sourceContext"]
 
 
 @pytest.mark.asyncio
