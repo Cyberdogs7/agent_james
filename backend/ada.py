@@ -76,6 +76,20 @@ create_project_tool = {
     }
 }
 
+modify_timer_tool = {
+    "name": "modify_timer",
+    "description": "Modifies an existing timer or reminder.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the timer or reminder to modify."},
+            "new_duration": {"type": "INTEGER", "description": "The new duration of the timer in seconds."},
+            "new_timestamp": {"type": "STRING", "description": "The new time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."}
+        },
+        "required": ["name"]
+    }
+}
+
 switch_project_tool = {
     "name": "switch_project",
     "description": "Switches the current active project context.",
@@ -181,7 +195,78 @@ iterate_cad_tool = {
     "behavior": "NON_BLOCKING"
 }
 
-tools = [{'google_search': {}}, {"function_declarations": [generate_cad, run_web_agent, create_project_tool, switch_project_tool, list_projects_tool, list_smart_devices_tool, control_light_tool, discover_printers_tool, print_stl_tool, get_print_status_tool, iterate_cad_tool] + tools_list[0]['function_declarations'][1:]}]
+set_timer_tool = {
+    "name": "set_timer",
+    "description": "Sets a timer for a specified duration.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "duration": {"type": "INTEGER", "description": "The duration of the timer in seconds."},
+            "name": {"type": "STRING", "description": "The name of the timer."}
+        },
+        "required": ["duration", "name"]
+    }
+}
+
+set_reminder_tool = {
+    "name": "set_reminder",
+    "description": "Sets a reminder for a specific time.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "timestamp": {"type": "STRING", "description": "The time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."},
+            "name": {"type": "STRING", "description": "The name of the reminder."}
+        },
+        "required": ["timestamp", "name"]
+    }
+}
+
+list_timers_tool = {
+    "name": "list_timers",
+    "description": "Lists all active timers and reminders.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+delete_entry_tool = {
+    "name": "delete_entry",
+    "description": "Deletes a timer or reminder by name.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the timer or reminder to delete."}
+        },
+        "required": ["name"]
+    }
+}
+
+check_for_updates_tool = {
+    "name": "check_for_updates",
+    "description": "Checks if a new version of the application is available from the GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+apply_update_tool = {
+    "name": "apply_update",
+    "description": "Downloads the latest version of the application from GitHub and restarts the application to apply the changes.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+tools = [{'google_search': {}}, {"function_declarations": [
+    generate_cad, run_web_agent, create_project_tool, switch_project_tool,
+    list_projects_tool, list_smart_devices_tool, control_light_tool,
+    discover_printers_tool, print_stl_tool, get_print_status_tool,
+    iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
+    delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool
+] + tools_list[0]['function_declarations'][1:]}]
 
 # --- CONFIG UPDATE: Enabled Transcription ---
 config = types.LiveConnectConfig(
@@ -212,6 +297,8 @@ from kasa_agent import KasaAgent
 from printer_agent import PrinterAgent
 from trello_agent import TrelloAgent
 from jules_agent import JulesAgent
+from timer_agent import TimerAgent
+from update_agent import UpdateAgent
 
 class AudioLoop:
     def __init__(self, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None):
@@ -262,6 +349,8 @@ class AudioLoop:
         self.printer_agent = PrinterAgent()
         self.trello_agent = TrelloAgent()
         self.jules_agent = JulesAgent()
+        self.timer_agent = TimerAgent()
+        self.update_agent = UpdateAgent()
 
         # Dictionary to keep track of active polling tasks
         self.jules_polling_tasks = {}
@@ -1066,7 +1155,7 @@ class AudioLoop:
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
@@ -1481,6 +1570,63 @@ class AudioLoop:
                                         id=fc.id, name=fc.name, response={"result": result_str}
                                     )
                                     function_responses.append(function_response)
+
+                                elif fc.name == "set_timer":
+                                    duration = fc.args["duration"]
+                                    name = fc.args["name"]
+                                    result = await self.timer_agent.set_timer(duration, name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "modify_timer":
+                                    name = fc.args["name"]
+                                    new_duration = fc.args.get("new_duration")
+                                    new_timestamp = fc.args.get("new_timestamp")
+                                    result = await self.timer_agent.modify_timer(name, new_duration, new_timestamp)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "set_reminder":
+                                    timestamp = fc.args["timestamp"]
+                                    name = fc.args["name"]
+                                    result = await self.timer_agent.set_reminder(timestamp, name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_timers":
+                                    result = self.timer_agent.list_timers()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "delete_entry":
+                                    name = fc.args["name"]
+                                    result = self.timer_agent.delete_entry(name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "check_for_updates":
+                                    result = await self.update_agent.check_for_updates()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "apply_update":
+                                    result = await self.update_agent.apply_update()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
                         if function_responses:
                             if INCLUDE_RAW_LOGS:
                                 print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
@@ -1564,6 +1710,7 @@ class AudioLoop:
                 ):
                     self.session = session
                     self.jules_agent.session = session
+                    self.timer_agent.session = session
 
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=10)
