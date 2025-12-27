@@ -74,7 +74,7 @@ class JulesAgent:
                 }
             },
             "automationMode": "AUTO_CREATE_PR",
-            "title": "Jules Task"
+            "title": f"Jules: {prompt[:50]}"
         }
         session = await self._request("POST", f"{self.base_url}/sessions", tool_name="create_session", json=data)
         if session:

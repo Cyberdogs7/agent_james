@@ -316,6 +316,18 @@ class AudioLoop:
 
     def stop(self):
         self.stop_event.set()
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [SHUTDOWN] Stopping all Jules polling tasks...")
+        for session_id, task_info in self.jules_polling_tasks.items():
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [SHUTDOWN] Signaling stop for session: {session_id}")
+            task_info["stop_event"].set()
+
+    def _cleanup_jules_task(self, session_id, task):
+        """Callback to remove a completed Jules polling task."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Cleaning up polling task for session: {session_id}")
+        self.jules_polling_tasks.pop(session_id, None)
         
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
@@ -779,8 +791,14 @@ class AudioLoop:
                 # Store the task and stop event so we can manage it later if needed
                 self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
 
+                # Add a callback to clean up the task from the dictionary once it's done
+                polling_task.add_done_callback(
+                    lambda task: self._cleanup_jules_task(session_id, task)
+                )
+
                 try:
-                    await self.session.send(input=f"System Notification: Jules session created: {session_id}", end_of_turn=True)
+                    title = session.get('title', session_id)
+                    await self.session.send(input=f"System Notification: Jules session created: '{title}'", end_of_turn=True)
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
                         print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
