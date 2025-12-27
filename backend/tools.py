@@ -62,6 +62,15 @@ list_jules_sources_tool = {
     }
 }
 
+list_jules_sessions_tool = {
+    "name": "list_jules_sessions",
+    "description": "Lists all Jules sessions saved in the current project's local memory.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
 list_jules_activities_tool = {
     "name": "list_jules_activities",
     "description": "Lists all activities for a specific Jules session.",
@@ -450,5 +459,6 @@ tools_list = [{"function_declarations": [
     run_jules_agent_tool,
     send_jules_feedback_tool,
     list_jules_sources_tool,
+    list_jules_sessions_tool,
     list_jules_activities_tool
 ] + list(trello_tools.values())}]

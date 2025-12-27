@@ -800,6 +800,10 @@ class AudioLoop:
                 # Store the task and stop event so we can manage it later if needed
                 self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
 
+                # Save session to local memory
+                title = session.get('title', f"Jules: {prompt[:50]}")
+                self.project_manager.save_jules_session(session_id, title)
+
                 # Add a callback to clean up the task from the dictionary once it's done
                 polling_task.add_done_callback(
                     lambda task: self._cleanup_jules_task(session_id, task)
@@ -826,6 +830,20 @@ class AudioLoop:
     async def handle_jules_feedback(self, session_id, feedback):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
+        
+        # Start polling if not already active for this session
+        if session_id not in self.jules_polling_tasks:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
+            stop_event = asyncio.Event()
+            polling_task = asyncio.create_task(
+                self.jules_agent.poll_for_updates(session_id, stop_event)
+            )
+            self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
+            polling_task.add_done_callback(
+                lambda task: self._cleanup_jules_task(session_id, task)
+            )
+
         response = await self.jules_agent.send_message(session_id, feedback)
         if response:
             return "Feedback sent successfully."
@@ -841,6 +859,15 @@ class AudioLoop:
             return response["sources"]
         else:
             return "Failed to list Jules sources."
+
+    async def handle_list_jules_sessions(self):
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [JULES] Listing saved sessions from local memory")
+        sessions = self.project_manager.get_jules_sessions()
+        if sessions:
+            return sessions
+        else:
+            return "No Jules sessions found in local memory for this project."
 
     async def handle_list_jules_activities(self, session_id):
         if INCLUDE_RAW_LOGS:
@@ -1098,6 +1125,17 @@ class AudioLoop:
                                     if INCLUDE_RAW_LOGS:
                                         print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
                                     result = await self.handle_list_jules_sources()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_jules_sessions":
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
+                                    result = await self.handle_list_jules_sessions()
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,

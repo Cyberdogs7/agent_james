@@ -164,3 +164,41 @@ class ProjectManager:
             print(f"[ProjectManager] [ERR] Failed to read chat history: {e}")
             return []
 
+    def save_jules_session(self, session_id: str, title: str):
+        """Saves Jules session information to local memory."""
+        sessions_file = self.get_current_project_path() / "jules_sessions.json"
+        sessions = []
+        if sessions_file.exists():
+            try:
+                with open(sessions_file, "r", encoding="utf-8") as f:
+                    sessions = json.load(f)
+            except Exception as e:
+                print(f"[ProjectManager] [ERR] Failed to read jules sessions: {e}")
+
+        # Check if session already exists
+        for s in sessions:
+            if s['id'] == session_id:
+                s['title'] = title
+                break
+        else:
+            sessions.append({"id": session_id, "title": title, "timestamp": time.time()})
+
+        try:
+            with open(sessions_file, "w", encoding="utf-8") as f:
+                json.dump(sessions, f, indent=4)
+            print(f"[ProjectManager] Saved Jules session: {title} ({session_id})")
+        except Exception as e:
+            print(f"[ProjectManager] [ERR] Failed to save jules session: {e}")
+
+    def get_jules_sessions(self):
+        """Returns the list of saved Jules sessions for the current project."""
+        sessions_file = self.get_current_project_path() / "jules_sessions.json"
+        if not sessions_file.exists():
+            return []
+        try:
+            with open(sessions_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[ProjectManager] [ERR] Failed to read jules sessions: {e}")
+            return []
+
