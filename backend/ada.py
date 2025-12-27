@@ -350,7 +350,12 @@ class AudioLoop:
         self.trello_agent = TrelloAgent()
         self.jules_agent = JulesAgent()
         self.timer_agent = TimerAgent()
-        self.update_agent = UpdateAgent()
+        
+        def handle_update_log(message):
+            # Always print to console from the main thread context
+            print(f"[ADA DEBUG] {message}", flush=True)
+
+        self.update_agent = UpdateAgent(on_log=handle_update_log)
 
         # Dictionary to keep track of active polling tasks
         self.jules_polling_tasks = {}
@@ -1155,7 +1160,7 @@ class AudioLoop:
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
@@ -1615,14 +1620,28 @@ class AudioLoop:
                                     function_responses.append(function_response)
 
                                 elif fc.name == "check_for_updates":
-                                    result = await self.update_agent.check_for_updates()
+                                    try:
+                                        print(f"[ADA DEBUG] [TOOL] check_for_updates was called. INCLUDE_RAW_LOGS={INCLUDE_RAW_LOGS}", flush=True)
+                                        result = await self.update_agent.check_for_updates()
+                                        print(f"[ADA DEBUG] [TOOL] check_for_updates result: {result}", flush=True)
+                                    except Exception as update_err:
+                                        print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
+                                        traceback.print_exc()
+                                        result = f"Error checking for updates: {str(update_err)}"
+                                    
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )
                                     function_responses.append(function_response)
 
                                 elif fc.name == "apply_update":
-                                    result = await self.update_agent.apply_update()
+                                    try:
+                                        result = await self.update_agent.apply_update()
+                                    except Exception as update_err:
+                                        print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
+                                        traceback.print_exc()
+                                        result = f"Error applying update: {str(update_err)}"
+                                        
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )
