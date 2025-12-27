@@ -15,32 +15,60 @@ class UpdateAgent:
     def _run_git_command(self, command):
         """Runs a git command and returns its output."""
         try:
+            # Get the project root (one level up from backend)
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             result = subprocess.run(
                 command,
                 capture_output=True,
                 text=True,
                 check=True,
-                cwd=os.path.dirname(os.path.abspath(__file__))
+                cwd=project_root
             )
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            self._log(f"[UPDATE_AGENT] Error running git command: {e}")
+            self._log(f"[UPDATE_AGENT] Error running git command {command}: {e}")
             self._log(f"[UPDATE_AGENT] Stderr: {e.stderr}")
             return None
 
     async def check_for_updates(self):
         """Checks for updates from the GitHub repository."""
         self._log("[UPDATE_AGENT] Fetching remote updates...")
-        await asyncio.to_thread(self._run_git_command, ["git", "fetch"])
+        fetch_result = await asyncio.to_thread(self._run_git_command, ["git", "fetch", "--all"])
+        
+        if fetch_result is None:
+             return "Unable to fetch updates from the remote repository."
 
         self._log("[UPDATE_AGENT] Checking for differences...")
+        
+        # Get current branch name
+        current_branch = await asyncio.to_thread(self._run_git_command, ["git", "rev-parse", "--abbrev-ref", "HEAD"])
+        if not current_branch:
+            return "Unable to determine current branch."
+
         local_hash = await asyncio.to_thread(self._run_git_command, ["git", "rev-parse", "HEAD"])
-        remote_hash = await asyncio.to_thread(self._run_git_command, ["git", "rev-parse", "origin/main"])
+        
+        # Try to find the upstream branch
+        remote_branch = await asyncio.to_thread(self._run_git_command, ["git", "rev-parse", "--abbrev-ref", "@{u}"])
+        
+        remote_hash = None
+        if not remote_branch:
+            # Fallback to origin/master or origin/main if upstream is not set
+            self._log(f"[UPDATE_AGENT] Upstream not set for branch {current_branch}, trying defaults...")
+            for fallback in ["origin/master", "origin/main"]:
+                remote_hash = await asyncio.to_thread(self._run_git_command, ["git", "rev-parse", fallback])
+                if remote_hash:
+                    remote_branch = fallback
+                    break
+        else:
+            remote_hash = await asyncio.to_thread(self._run_git_command, ["git", "rev-parse", remote_branch])
+
+        if not remote_hash:
+            return "Unable to determine remote version."
 
         if local_hash == remote_hash:
             return "You are already on the latest version."
         else:
-            return "A new version is available. You can apply the update now."
+            return f"A new version is available on {remote_branch}. You can apply the update now."
 
     async def apply_update(self):
         """Applies the latest updates and prepares for restart."""

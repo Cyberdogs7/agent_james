@@ -3,7 +3,9 @@ import datetime
 import time
 import json
 import os
-from pyo import *
+import math
+import struct
+import pyaudio
 
 class TimerAgent:
     def __init__(self, session=None, storage_file="timers.json"):
@@ -11,17 +13,37 @@ class TimerAgent:
         self.storage_file = storage_file
         self.active_timers = {}
         self.active_reminders = {}
-        self._server = Server().boot()
+        self._pyaudio_instance = pyaudio.PyAudio()
         self._load_from_disk()
 
     def _play_notification_sound(self):
-        self._server.start()
-        # A simple notification sound
-        env = Adsr(attack=0.01, decay=0.2, sustain=0, release=0.1, dur=0.31)
-        sig = Sine(freq=[440, 880], mul=env*0.5).out()
-        env.play()
-        time.sleep(0.5)
-        self._server.stop()
+        # A simple notification sound using pyaudio
+        try:
+            sample_rate = 44100
+            duration = 0.5
+            frequency = 440.0
+            
+            # Generate a simple sine wave
+            num_samples = int(sample_rate * duration)
+            samples = []
+            for i in range(num_samples):
+                sample = math.sin(2 * math.pi * frequency * i / sample_rate)
+                samples.append(int(sample * 32767))
+            
+            # Pack into binary data
+            data = struct.pack('<' + ('h' * len(samples)), *samples)
+            
+            stream = self._pyaudio_instance.open(
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=sample_rate,
+                output=True
+            )
+            stream.write(data)
+            stream.stop_stream()
+            stream.close()
+        except Exception as e:
+            print(f"Error playing notification sound: {e}")
 
     def _save_to_disk(self):
         timers_to_save = {
