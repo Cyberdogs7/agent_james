@@ -2,6 +2,7 @@ import asyncio
 import os
 import httpx
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -122,6 +123,7 @@ class JulesAgent:
     async def poll_for_updates(self, session_id, stop_event):
         """Polls for updates on a session until a stop event is set."""
         last_activity_count = 0
+        last_activity_time = datetime.now()
         self._log(f"[JULES_AGENT] Starting to poll for updates on session: {session_id}")
         while not stop_event.is_set():
             try:
@@ -129,38 +131,44 @@ class JulesAgent:
                 if activities_response and "activities" in activities_response:
                     activities = activities_response["activities"]
                     new_activities = activities[last_activity_count:]
-                    messages_to_send = []
-                    session_completed = False
 
-                    for activity in new_activities:
-                        message = None
-                        if "agentMessage" in activity:
-                            content = activity["agentMessage"]["content"]
-                            if "feedback" in content.lower():
-                                message = f"Jules is asking for feedback on session {session_id}. Please use the send message functionality to respond."
-                            else:
-                                message = content
-                        elif "plan" in activity:
-                            message = "Jules has generated a plan."
-                        elif "sessionComplete" in activity:
-                            message = "Jules has completed the session."
-                            session_completed = True
+                    if new_activities:
+                        last_activity_time = datetime.now()  # Reset timer on new activity
+                        messages_to_send = []
+                        session_completed = False
 
-                        if message:
-                            messages_to_send.append(message)
+                        for activity in new_activities:
+                            message = None
+                            if "agentMessage" in activity:
+                                content = activity["agentMessage"]["content"]
+                                if "feedback" in content.lower():
+                                    message = f"Jules is asking for feedback on session {session_id}. Please use the send message functionality to respond."
+                                else:
+                                    message = content
+                            elif "plan" in activity:
+                                message = "Jules has generated a plan."
+                            elif "sessionComplete" in activity:
+                                message = "Jules has completed the session."
+                                session_completed = True
 
-                    if messages_to_send and self.session:
-                        # Join all messages into a single string
-                        combined_message = "\n".join(messages_to_send)
-                        # Let the model know these are system notifications
-                        final_message = f"Jules session update:\n{combined_message}"
-                        await self.session.send(input=final_message, end_of_turn=False)
+                            if message:
+                                messages_to_send.append(message)
 
-                    if session_completed:
-                        self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
-                        stop_event.set()
+                        if messages_to_send and self.session:
+                            combined_message = "\n".join(messages_to_send)
+                            final_message = f"Jules session update:\n{combined_message}"
+                            await self.session.send(input=final_message, end_of_turn=False)
 
-                    last_activity_count = len(activities)
+                        if session_completed:
+                            self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
+                            stop_event.set()
+
+                        last_activity_count = len(activities)
+                    else:
+                        # No new activity, check for timeout
+                        if datetime.now() - last_activity_time > timedelta(minutes=20):
+                            self._log(f"[JULES_AGENT] Session {session_id} timed out due to inactivity after 20 minutes. Stopping polling.")
+                            stop_event.set()
 
                 if not stop_event.is_set():
                     await asyncio.sleep(10) # Poll more frequently
