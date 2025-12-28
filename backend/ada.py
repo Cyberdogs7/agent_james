@@ -268,27 +268,6 @@ tools = [{'google_search': {}}, {"function_declarations": [
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool
 ] + tools_list[0]['function_declarations'][1:]}]
 
-# --- CONFIG UPDATE: Enabled Transcription ---
-config = types.LiveConnectConfig(
-    response_modalities=["AUDIO"],
-    # We switch these from [] to {} to enable them with default settings
-    output_audio_transcription={}, 
-    input_audio_transcription={},
-    system_instruction="Your name is James and you speak with a british accent at all times.. "
-        "You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. "
-        "Your creator is Chad, and you address him as 'Sir'. "
-        "When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. "
-        "You are a professional assistant.",
-    tools=tools,
-    speech_config=types.SpeechConfig(
-        voice_config=types.VoiceConfig(
-            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                voice_name="Sadaltager"
-            )
-        )
-    )
-)
-
 pya = pyaudio.PyAudio()
 
 from cad_agent import CadAgent
@@ -348,7 +327,6 @@ class AudioLoop:
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.printer_agent = PrinterAgent()
         self.trello_agent = TrelloAgent()
-        self.jules_agent = JulesAgent()
         self.timer_agent = TimerAgent()
         
         def handle_update_log(message):
@@ -854,12 +832,17 @@ class AudioLoop:
     async def handle_jules_request(self, prompt, source=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
+
+        project_config = self.project_manager.get_project_config()
+        api_key = project_config.get("jules_api_key")
+        jules_agent = JulesAgent(session=self.session, api_key=api_key)
+
         if not source:
             if INCLUDE_RAW_LOGS:
                 print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
             
             async def fetch_sources_and_notify():
-                sources_response = await self.jules_agent.list_sources()
+                sources_response = await jules_agent.list_sources()
                 if sources_response and "sources" in sources_response:
                     sources = [s["name"] for s in sources_response["sources"]]
                     sources_str = "\n".join(sources)
@@ -877,28 +860,19 @@ class AudioLoop:
             return "Fetching available Jules sources. I will notify you shortly."
 
         async def run_jules_task():
-            session = await self.jules_agent.create_session(prompt, source)
+            session = await jules_agent.create_session(prompt, source)
             if session:
                 session_id = session['name']
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [JULES] Session created: {session_id}")
 
-                # Create a stop event for this specific session's polling task
                 stop_event = asyncio.Event()
-
-                # Start the non-blocking polling task
                 polling_task = asyncio.create_task(
-                    self.jules_agent.poll_for_updates(session_id, stop_event)
+                    jules_agent.poll_for_updates(session_id, stop_event)
                 )
-
-                # Store the task and stop event so we can manage it later if needed
                 self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
-
-                # Save session to local memory
                 title = session.get('title', f"Jules: {prompt[:50]}")
                 self.project_manager.save_jules_session(session_id, title)
-
-                # Add a callback to clean up the task from the dictionary once it's done
                 polling_task.add_done_callback(
                     lambda task: self._cleanup_jules_task(session_id, task)
                 )
@@ -925,30 +899,35 @@ class AudioLoop:
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
         
-        # Start polling if not already active for this session
+        project_config = self.project_manager.get_project_config()
+        api_key = project_config.get("jules_api_key")
+        jules_agent = JulesAgent(session=self.session, api_key=api_key)
+
         if session_id not in self.jules_polling_tasks:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
             stop_event = asyncio.Event()
             polling_task = asyncio.create_task(
-                self.jules_agent.poll_for_updates(session_id, stop_event)
+                jules_agent.poll_for_updates(session_id, stop_event)
             )
             self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
             polling_task.add_done_callback(
                 lambda task: self._cleanup_jules_task(session_id, task)
             )
 
-        response = await self.jules_agent.send_message(session_id, feedback)
+        response = await jules_agent.send_message(session_id, feedback)
         if response:
             return "Feedback sent successfully."
         else:
             return "Failed to send feedback."
 
-
     async def handle_list_jules_sources(self):
         if INCLUDE_RAW_LOGS:
             print("[ADA DEBUG] [JULES] Listing all sources")
-        response = await self.jules_agent.list_sources()
+        project_config = self.project_manager.get_project_config()
+        api_key = project_config.get("jules_api_key")
+        jules_agent = JulesAgent(api_key=api_key)
+        response = await jules_agent.list_sources()
         if response and "sources" in response:
             return response["sources"]
         else:
@@ -966,11 +945,33 @@ class AudioLoop:
     async def handle_list_jules_activities(self, session_id):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
-        response = await self.jules_agent.list_activities(session_id)
+        project_config = self.project_manager.get_project_config()
+        api_key = project_config.get("jules_api_key")
+        jules_agent = JulesAgent(api_key=api_key)
+        response = await jules_agent.list_activities(session_id)
         if response and "activities" in response:
             return response["activities"]
         else:
             return "Failed to list Jules activities."
+
+    def _get_live_connect_config(self):
+        project_config = self.project_manager.get_project_config()
+        system_prompt = project_config.get("system_prompt", "You are a helpful assistant.")
+
+        return types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            output_audio_transcription={},
+            input_audio_transcription={},
+            system_instruction=system_prompt,
+            tools=tools,
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                        voice_name="Sadaltager"
+                    )
+                )
+            )
+        )
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
@@ -1723,12 +1724,14 @@ class AudioLoop:
             try:
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
+
+                config = self._get_live_connect_config()
+
                 async with (
                     client.aio.live.connect(model=MODEL, config=config) as session,
                     asyncio.TaskGroup() as tg,
                 ):
                     self.session = session
-                    self.jules_agent.session = session
                     self.timer_agent.session = session
 
                     self.audio_in_queue = asyncio.Queue()
