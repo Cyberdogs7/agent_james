@@ -129,6 +129,9 @@ class JulesAgent:
                 if activities_response and "activities" in activities_response:
                     activities = activities_response["activities"]
                     new_activities = activities[last_activity_count:]
+                    messages_to_send = []
+                    session_completed = False
+
                     for activity in new_activities:
                         message = None
                         if "agentMessage" in activity:
@@ -141,14 +144,21 @@ class JulesAgent:
                             message = "Jules has generated a plan."
                         elif "sessionComplete" in activity:
                             message = "Jules has completed the session."
-                            if message and self.session:
-                                await self.session.send(input=message, end_of_turn=False)
-                            self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
-                            stop_event.set()  # Signal to stop
-                            break  # Exit the inner for-loop
+                            session_completed = True
 
-                        if message and self.session:
-                            await self.session.send(input=message, end_of_turn=False)
+                        if message:
+                            messages_to_send.append(message)
+
+                    if messages_to_send and self.session:
+                        # Join all messages into a single string
+                        combined_message = "\n".join(messages_to_send)
+                        # Let the model know these are system notifications
+                        final_message = f"Jules session update:\n{combined_message}"
+                        await self.session.send(input=final_message, end_of_turn=False)
+
+                    if session_completed:
+                        self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
+                        stop_event.set()
 
                     last_activity_count = len(activities)
 
