@@ -71,15 +71,15 @@ class JulesAgent:
         if source:
             if source.startswith("sources/"):
                 source_context["source"] = source
-                source_context["githubRepoContext"] = {"startingBranch": "main"}
+                source_context["githubRepoContext"] = {"startingBranch": "master"}
             elif source.startswith("github/"):
                 source_context["source"] = f"sources/{source}"
-                source_context["githubRepoContext"] = {"startingBranch": "main"}
+                source_context["githubRepoContext"] = {"startingBranch": "master"}
             else:
                 # If it doesn't look like a resource name, assume it's a repo reference
                 source_context["githubRepoContext"] = {
                     "repo": source,
-                    "startingBranch": "main"
+                    "startingBranch": "master"
                 }
         
         # Sanitize title: remove newlines and limit length
