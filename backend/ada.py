@@ -822,26 +822,41 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
-    async def handle_get_weather(self, latitude, longitude):
+    async def handle_get_weather(self, location):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEATHER] Getting weather for lat: {latitude}, lon: {longitude}")
-
-        url = "https://api.open-meteo.com/v1/forecast"
-        params = {
-            "latitude": latitude,
-            "longitude": longitude,
-            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
-            "timezone": "auto"
-        }
+            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}'")
 
         try:
+            # Step 1: Geocoding
             async with httpx.AsyncClient() as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                data = response.json()
+                geo_response = await client.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params={"name": location, "count": 1}
+                )
+                geo_response.raise_for_status()
+                geo_data = geo_response.json()
+                if not geo_data.get("results"):
+                    return f"Could not find location: {location}"
 
-                # Process the data to a more usable format
-                daily_data = data['daily']
+                lat = geo_data["results"][0]["latitude"]
+                lon = geo_data["results"][0]["longitude"]
+
+            # Step 2: Weather Forecast
+            async with httpx.AsyncClient() as client:
+                forecast_response = await client.get(
+                    "https://api.open-meteo.com/v1/forecast",
+                    params={
+                        "latitude": lat,
+                        "longitude": lon,
+                        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
+                        "timezone": "auto"
+                    }
+                )
+                forecast_response.raise_for_status()
+                weather_data = forecast_response.json()
+
+                # Process the data
+                daily_data = weather_data['daily']
                 forecast = []
                 for i in range(len(daily_data['time'])):
                     forecast.append({
@@ -852,10 +867,11 @@ class AudioLoop:
                         "precipitation": daily_data['precipitation_sum'][i]
                     })
                 return forecast
+
         except httpx.HTTPStatusError as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] HTTP error fetching weather: {e}")
-            return f"Error fetching weather data: {e.response.status_code}"
+                print(f"[ADA DEBUG] [ERR] HTTP error in weather tool: {e}")
+            return f"Error processing weather request: {e.response.status_code}"
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to get weather: {e}")
@@ -1040,7 +1056,19 @@ class AudioLoop:
 
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
-        system_prompt = project_config.get("system_prompt", "You are a helpful assistant.")
+        system_prompt = project_config.get("system_prompt", """You are a helpful assistant.
+
+Follow these rules when using tools:
+1.  When the user asks for a visual, like the weather, you **must** use two tools in sequence.
+2.  First, call the tool to get the data (e.g., `get_weather`).
+3.  Second, call the `display_content` tool immediately after, using the output from the first tool as the `data` argument.
+
+**Example:**
+User: "What's the weather in London?"
+1.  Call `get_weather(location='London')`.
+2.  Receive the forecast data.
+3.  Immediately call `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
+""")
         voice_name = project_config.get("voice_name", "Sadaltager")
 
         if INCLUDE_RAW_LOGS:
@@ -1255,9 +1283,8 @@ class AudioLoop:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "get_weather":
-                                    latitude = fc.args["latitude"]
-                                    longitude = fc.args["longitude"]
-                                    result = await self.handle_get_weather(latitude, longitude)
+                                    location = fc.args["location"]
+                                    result = await self.handle_get_weather(location)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
