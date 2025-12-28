@@ -975,6 +975,23 @@ async def update_settings(sid, data):
     # Broadcast new full settings
     await sio.emit('settings', SETTINGS)
 
+@sio.event
+async def get_project_config(sid):
+    if audio_loop and audio_loop.project_manager:
+        config = audio_loop.project_manager.get_project_config()
+        await sio.emit('project_config', config)
+
+@sio.event
+async def update_project_config(sid, data):
+    if audio_loop and audio_loop.project_manager:
+        success, msg = audio_loop.project_manager.update_project_config(data)
+        if success:
+            await sio.emit('status', {'msg': 'Project config updated'})
+            # Re-emit the updated config to all clients
+            config = audio_loop.project_manager.get_project_config()
+            await sio.emit('project_config', config)
+        else:
+            await sio.emit('error', {'msg': msg})
 
 # Deprecated/Mapped for compatibility if frontend still uses specific events
 @sio.event
