@@ -1720,142 +1720,118 @@ class AudioLoop:
     async def get_screen(self):
          pass
 
+    async def _session_runner(self, start_message=None, is_reconnect=False):
+        """Handles a single connection and run-loop of the voice agent."""
+        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
+        try:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
+
+            config = self._get_live_connect_config()
+
+            async with (
+                client.aio.live.connect(model=MODEL, config=config) as session,
+                asyncio.TaskGroup() as tg,
+            ):
+                self.session = session
+                self.timer_agent.session = session
+
+                self.audio_in_queue = asyncio.Queue()
+                self.out_queue = asyncio.Queue(maxsize=10)
+
+                tg.create_task(self.send_realtime())
+                tg.create_task(self.listen_audio())
+
+                if self.video_mode == "camera":
+                    tg.create_task(self.get_frames())
+                elif self.video_mode == "screen":
+                    tg.create_task(self.get_screen())
+
+                tg.create_task(self.receive_audio())
+                tg.create_task(self.play_audio())
+
+                if not is_reconnect:
+                    if start_message:
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
+                        await self.session.send(input=start_message, end_of_turn=True)
+                    
+                    if self.on_project_update and self.project_manager:
+                        self.on_project_update(self.project_manager.current_project)
+                else:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
+
+                self._last_input_transcription = ""
+                self._last_output_transcription = ""
+                self.chat_buffer = {"sender": None, "text": ""}
+
+                stop_task = asyncio.create_task(self.stop_event.wait())
+                reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
+
+                done, pending = await asyncio.wait(
+                    [stop_task, reconnect_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+
+                for task in pending:
+                    task.cancel()
+
+                if reconnect_task in done:
+                    if INCLUDE_RAW_LOGS:
+                        print("[ADA DEBUG] [RECONNECT] Reconnect event received in session runner. Ending session...")
+                    self._reconnect_needed.clear()
+                    return True # Signal for reconnect
+
+        except (Exception, asyncio.CancelledError) as e:
+            if self.stop_event.is_set():
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [INFO] Session runner stopping.")
+                return False
+
+            error_msg = str(e)
+            if "429" in error_msg:
+                 print(f"Rate limited (429) for {service_info}.")
+            else:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Connection Error in session runner ({service_info}): {e}")
+
+            if hasattr(e, 'exceptions'):
+                for idx, se in enumerate(e.exceptions):
+                    if INCLUDE_RAW_LOGS:
+                        print(f"  Sub-exception {idx}: {se}")
+
+            return True
+        finally:
+            if hasattr(self, 'audio_stream') and self.audio_stream:
+                try:
+                    self.audio_stream.close()
+                except:
+                    pass
+
+        return False
+
     async def run(self, start_message=None):
         retry_delay = 1
         is_reconnect = False
-        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
-        
+
         while not self.stop_event.is_set():
-            try:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
+            should_reconnect = await self._session_runner(start_message, is_reconnect)
 
-                config = self._get_live_connect_config()
-
-                async with (
-                    client.aio.live.connect(model=MODEL, config=config) as session,
-                    asyncio.TaskGroup() as tg,
-                ):
-                    self.session = session
-                    self.timer_agent.session = session
-
-                    self.audio_in_queue = asyncio.Queue()
-                    self.out_queue = asyncio.Queue(maxsize=10)
-
-                    tg.create_task(self.send_realtime())
-                    tg.create_task(self.listen_audio())
-                    # tg.create_task(self._process_video_queue()) # Removed in favor of VAD
-
-                    if self.video_mode == "camera":
-                        tg.create_task(self.get_frames())
-                    elif self.video_mode == "screen":
-                        tg.create_task(self.get_screen())
-
-                    tg.create_task(self.receive_audio())
-                    tg.create_task(self.play_audio())
-
-                    # Handle Startup vs Reconnect Logic
-                    if not is_reconnect:
-                        if start_message:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
-                            await self.session.send(input=start_message, end_of_turn=True)
-                        
-                        # Sync Project State
-                        if self.on_project_update and self.project_manager:
-                            self.on_project_update(self.project_manager.current_project)
-                    
-                    else:
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
-                        # On a deliberate reconnect (like project switching), we don't want to restore
-                        # the old chat history as it confuses the context for the new system prompt.
-                        # A true connection drop might benefit from this, but for now, the clean
-                        # slate is more important.
-                        pass
-
-                    # Reset retry delay on successful connection
-                    retry_delay = 1
-                    
-                    # Reset state that shouldn't persist across sessions if they fail early
-                    self._last_input_transcription = ""
-                    self._last_output_transcription = ""
-                    self.chat_buffer = {"sender": None, "text": ""}
-                    
-                    # Wait until stop event, or until the session task group exits (which happens on error)
-                    # Actually, the TaskGroup context manager will exit if any tasks fail/cancel.
-                    # We need to keep this block alive.
-                    # The original code just waited on stop_event, but that doesn't account for session death.
-                    # We should rely on the TaskGroup raising an exception when subtasks fail (like receive_audio).
-                    
-                    # However, since receive_audio is a task in the group, if it crashes (connection closed), 
-                    # the group will cancel others and exit. We catch that exit below.
-                    
-                    # We can await stop_event, but if the connection dies, receive_audio crashes -> group closes -> we exit `async with` -> restart loop.
-                    # To ensure we don't block indefinitely if connection dies silently (unlikely with receive_audio), we just wait.
-
-                    # Wait for either stop or reconnect signal
-                    stop_task = asyncio.create_task(self.stop_event.wait())
-                    reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
-
-                    done, pending = await asyncio.wait(
-                        [stop_task, reconnect_task],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
-
-                    # Cancel the pending task to avoid it lingering
-                    for task in pending:
-                        task.cancel()
-
-                    # If reconnect was the reason for waking, clear the flag and continue the outer loop
-                    if reconnect_task in done:
-                        if INCLUDE_RAW_LOGS:
-                            print("[ADA DEBUG] [RECONNECT] Reconnect event received in main loop. Restarting connection...")
-                        self._reconnect_needed.clear()
-                        # Setting is_reconnect ensures we restore context on the new connection
-                        is_reconnect = True
-                        # Continue will break out of the `async with client.aio...` block and start a new connection
-                        continue
-
-            except asyncio.CancelledError:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [STOP] Main loop cancelled.")
+            if not should_reconnect:
                 break
-                
-            except Exception as e:
-                # This catches the ExceptionGroup from TaskGroup or direct exceptions
-                if self.stop_event.is_set():
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [INFO] Main loop stopping.")
-                    break
 
-                # Check for 429 error (Rate Limit) in Gemini API
-                error_msg = str(e)
-                if "429" in error_msg:
-                     print(f"Rate limited (429) for {service_info}. Retrying in {retry_delay} seconds...")
-                else:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Connection Error ({service_info}): {e}")
-                    
-                # If we have an ExceptionGroup, try to log the sub-exceptions
-                if hasattr(e, 'exceptions'):
-                    for idx, se in enumerate(e.exceptions):
-                        if INCLUDE_RAW_LOGS:
-                            print(f"  Sub-exception {idx}: {se}")
-                
+            is_reconnect = True
+            start_message = None
+
+            if not self.stop_event.is_set():
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 10) # Exponential backoff capped at 10s
-                is_reconnect = True # Next loop will be a reconnect
-                
-            finally:
-                # Cleanup before retry
-                if hasattr(self, 'audio_stream') and self.audio_stream:
-                    try:
-                        self.audio_stream.close()
-                    except: 
-                        pass
+                retry_delay = min(retry_delay * 2, 10)
+
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [INFO] Main run loop has exited.")
 
 def get_input_devices():
     p = pyaudio.PyAudio()
