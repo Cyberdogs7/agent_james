@@ -573,23 +573,8 @@ function App() {
         socket.on('restart_request', (data) => {
             console.log('Restart request received from backend:', data);
             addMessage('System', 'Update applied. Restarting application...');
-            
-            // Give the user a moment to see the message
-            setTimeout(() => {
-                // If in Electron, use IPC to relaunch
-                if (window.process && (window.process.type === 'renderer' || window.require)) {
-                    try {
-                        const { ipcRenderer } = window.require('electron');
-                        ipcRenderer.send('relaunch-app');
-                    } catch (e) {
-                        console.error("Failed to send relaunch-app via IPC:", e);
-                        socket.emit('restart_request', { restart: true });
-                    }
-                } else {
-                    // Fallback for browser (though not officially supported)
-                    socket.emit('restart_request', { restart: true });
-                }
-            }, 2000);
+            // Emit back to server to trigger shutdown with restart: true
+            socket.emit('restart_request', { restart: true });
         });
 
 
@@ -684,7 +669,6 @@ function App() {
             socket.off('printer_list');
             socket.off('slicing_progress');
             socket.off('print_status_update');
-            socket.off('restart_request');
             socket.off('error');
 
             stopMicVisualizer();

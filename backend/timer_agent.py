@@ -5,12 +5,7 @@ import json
 import os
 import math
 import struct
-try:
-    import pyaudio
-    HAS_PYAUDIO = True
-except ImportError:
-    pyaudio = None
-    HAS_PYAUDIO = False
+import pyaudio
 
 class TimerAgent:
     def __init__(self, session=None, storage_file="timers.json"):
@@ -18,17 +13,11 @@ class TimerAgent:
         self.storage_file = storage_file
         self.active_timers = {}
         self.active_reminders = {}
-        if HAS_PYAUDIO:
-            self._pyaudio_instance = pyaudio.PyAudio()
-        else:
-            self._pyaudio_instance = None
+        self._pyaudio_instance = pyaudio.PyAudio()
         self._load_from_disk()
 
     def _play_notification_sound(self):
         # A simple notification sound using pyaudio
-        if not HAS_PYAUDIO:
-            print("pyaudio not available, skipping notification sound.")
-            return
         try:
             sample_rate = 44100
             duration = 0.5
