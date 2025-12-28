@@ -155,9 +155,18 @@ class JulesAgent:
                                 messages_to_send.append(message)
 
                         if messages_to_send and self.session:
-                            combined_message = "\n".join(messages_to_send)
-                            final_message = f"Jules session update:\n{combined_message}"
-                            await self.session.send(input=final_message, end_of_turn=False)
+                            try:
+                                combined_message = "\n".join(messages_to_send)
+                                final_message = f"Jules session update:\n{combined_message}"
+                                # Add a timeout to the send operation
+                                await asyncio.wait_for(
+                                    self.session.send(input=final_message, end_of_turn=False),
+                                    timeout=10.0
+                                )
+                            except asyncio.TimeoutError:
+                                self._log(f"[JULES_AGENT] [ERR] Timeout sending message to session {session_id}.")
+                            except Exception as e:
+                                self._log(f"[JULES_AGENT] [ERR] Failed to send message for session {session_id}: {e}")
 
                         if session_completed:
                             self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
