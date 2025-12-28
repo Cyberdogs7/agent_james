@@ -463,8 +463,8 @@ tools_list = [{"function_declarations": [
     list_jules_activities_tool
 ] + list(trello_tools.values()) + [
     {
-        "name": "search_images",
-        "description": "Searches for images and GIFs.",
+        "name": "search_gifs",
+        "description": "Searches for GIFs.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -508,16 +508,20 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "get_weather",
-        "description": "Gets the weather for a location.",
+        "description": "Gets the weather forecast for a given latitude and longitude.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "location": {
-                    "type": "STRING",
-                    "description": "The location to get the weather for."
+                "latitude": {
+                    "type": "NUMBER",
+                    "description": "The latitude for the weather forecast."
+                },
+                "longitude": {
+                    "type": "NUMBER",
+                    "description": "The longitude for the weather forecast."
                 }
             },
-            "required": ["location"]
+            "required": ["latitude", "longitude"]
         }
     }
 ]}]
