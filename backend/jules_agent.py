@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class JulesAgent:
-    def __init__(self, session=None):
-        self.api_key = os.getenv("JULES_API_KEY")
+    def __init__(self, session=None, api_key=None):
+        self.api_key = api_key or os.getenv("JULES_API_KEY")
         self.base_url = "https://jules.googleapis.com/v1alpha"
         self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key})
         self.session_id = None
@@ -71,15 +71,15 @@ class JulesAgent:
         if source:
             if source.startswith("sources/"):
                 source_context["source"] = source
-                source_context["githubRepoContext"] = {"startingBranch": "master"}
+                source_context["githubRepoContext"] = {"startingBranch": "main"}
             elif source.startswith("github/"):
                 source_context["source"] = f"sources/{source}"
-                source_context["githubRepoContext"] = {"startingBranch": "master"}
+                source_context["githubRepoContext"] = {"startingBranch": "main"}
             else:
                 # If it doesn't look like a resource name, assume it's a repo reference
                 source_context["githubRepoContext"] = {
                     "repo": source,
-                    "startingBranch": "master"
+                    "startingBranch": "main"
                 }
         
         # Sanitize title: remove newlines and limit length

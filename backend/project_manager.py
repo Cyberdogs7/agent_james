@@ -33,9 +33,43 @@ class ProjectManager:
             project_path.mkdir()
             (project_path / "cad").mkdir()
             (project_path / "browser").mkdir()
+            self._create_default_config(project_path)
             print(f"[ProjectManager] Created project: {safe_name}")
             return True, f"Project '{safe_name}' created."
         return False, f"Project '{safe_name}' already exists."
+
+    def _create_default_config(self, project_path):
+        """Creates a default config.json file in the project directory."""
+        config_path = project_path / "config.json"
+        DEFAULT_CONFIG = {
+            "system_prompt": "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant.",
+            "jules_api_key": ""
+        }
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=4)
+
+    def get_project_config(self):
+        """Reads and returns the config for the current project."""
+        config_path = self.get_current_project_path() / "config.json"
+        if not config_path.exists():
+            return {}
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+
+    def update_project_config(self, new_config: dict):
+        """Updates and saves the config for the current project."""
+        config_path = self.get_current_project_path() / "config.json"
+        current_config = self.get_project_config()
+        current_config.update(new_config)
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(current_config, f, indent=4)
+            return True, "Configuration updated successfully."
+        except Exception as e:
+            return False, f"Failed to update configuration: {e}"
 
     def switch_project(self, name: str):
         """Switches the active project context."""
