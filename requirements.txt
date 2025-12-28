@@ -23,3 +23,5 @@ mediapipe
 # CAD Generation
 build123d
 requests
+giphy_client
+pytest

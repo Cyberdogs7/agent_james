@@ -461,4 +461,63 @@ tools_list = [{"function_declarations": [
     list_jules_sources_tool,
     list_jules_sessions_tool,
     list_jules_activities_tool
-] + list(trello_tools.values())}]
+] + list(trello_tools.values()) + [
+    {
+        "name": "search_images",
+        "description": "Searches for images and GIFs.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "The search query."
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "display_content",
+        "description": "Displays content on the screen.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "content_type": {
+                    "type": "STRING",
+                    "description": "The type of content to display. Can be 'image', 'widget', or 'clear'."
+                },
+                "url": {
+                    "type": "STRING",
+                    "description": "The URL of the image to display."
+                },
+                "widget_type": {
+                    "type": "STRING",
+                    "description": "The type of widget to display. Can be 'weather'."
+                },
+                "data": {
+                    "type": "OBJECT",
+                    "description": "The data for the widget."
+                },
+                "duration": {
+                    "type": "INTEGER",
+                    "description": "The duration to display the content in seconds."
+                }
+            },
+            "required": ["content_type"]
+        }
+    },
+    {
+        "name": "get_weather",
+        "description": "Gets the weather for a location.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "location": {
+                    "type": "STRING",
+                    "description": "The location to get the weather for."
+                }
+            },
+            "required": ["location"]
+        }
+    }
+]}]
