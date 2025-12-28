@@ -25,6 +25,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import ada
 from authenticator import FaceAuthenticator
 from kasa_agent import KasaAgent
+from project_manager import ProjectManager
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -56,6 +57,11 @@ loop_task = None
 authenticator = None
 kasa_agent = KasaAgent()
 SETTINGS_FILE = "settings.json"
+
+# Determine project root and initialize ProjectManager
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+project_manager = ProjectManager(project_root)
 
 DEFAULT_SETTINGS = {
     "face_auth_enabled": False, # Default OFF as requested
@@ -286,7 +292,8 @@ async def start_audio(sid, data=None):
 
             input_device_index=device_index,
             input_device_name=device_name,
-            kasa_agent=kasa_agent
+            kasa_agent=kasa_agent,
+            project_manager=project_manager
         )
         print("AudioLoop initialized successfully.")
 
@@ -1007,8 +1014,42 @@ async def update_project_config(sid, data):
         if success:
             await sio.emit('status', {'msg': 'Project config updated'})
             # Re-emit the updated config to all clients
-            config = audio_loop.project_manager.get_project_config()
+            config = project_manager.get_project_config()
             await sio.emit('project_config', config)
+
+            # Check if system prompt or voice changed, and if so, reconnect
+            if 'system_prompt' in data or 'voice_name' in data:
+                if audio_loop:
+                    print("[SERVER] System prompt or voice changed, reconnecting audio loop...")
+                    audio_loop.reconnect()
+        else:
+            await sio.emit('error', {'msg': msg})
+
+@sio.event
+async def switch_project(sid, data):
+    project_name = data.get('project_name')
+    if project_name:
+        success, msg = project_manager.switch_project(project_name)
+        if success:
+            await sio.emit('project_update', {'project': project_name})
+            await sio.emit('status', {'msg': f"Switched to project: {project_name}"})
+            if audio_loop:
+                audio_loop.reconnect()
+        else:
+            await sio.emit('error', {'msg': msg})
+
+@sio.event
+async def create_project(sid, data):
+    project_name = data.get('project_name')
+    if project_name:
+        success, msg = project_manager.create_project(project_name)
+        if success:
+            # Switch to the new project automatically
+            project_manager.switch_project(project_name)
+            await sio.emit('project_update', {'project': project_name})
+            await sio.emit('status', {'msg': f"Created and switched to project: {project_name}"})
+            if audio_loop:
+                audio_loop.reconnect()
         else:
             await sio.emit('error', {'msg': msg})
 
