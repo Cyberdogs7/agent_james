@@ -444,26 +444,7 @@ async def shutdown(sid, data=None):
     if data and data.get("restart"):
         print("[SERVER] Restarting application...")
         import subprocess
-        # Use sys.executable to restart the backend with the same python interpreter
-        # and use Popen with a new process group to ensure it survives our exit
-        try:
-            # Re-run the same command that started this script
-            # sys.executable is the path to python.exe
-            # sys.argv[0] is server.py
-            # We want to make sure we are in the right directory
-            backend_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(backend_dir)
-            
-            if sys.platform == 'win32':
-                # On Windows, we can use start to launch a new console window or just spawn it detached
-                # npm run dev is what the original code used, maybe it's preferred to restart EVERYTHING
-                # Let's try to stick to what the user had but make it more robust
-                subprocess.Popen("npm run dev", shell=True, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
-            else:
-                subprocess.Popen("npm run dev", shell=True, cwd=project_root)
-        except Exception as e:
-            print(f"[SERVER] Failed to restart: {e}")
-        
+        subprocess.Popen("npm run dev", shell=True)
         os._exit(0)
     else:
         os._exit(0)
