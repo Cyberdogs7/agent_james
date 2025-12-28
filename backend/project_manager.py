@@ -13,6 +13,14 @@ class ProjectManager:
         # Ensure projects root exists
         if not self.projects_dir.exists():
             self.projects_dir.mkdir(parents=True)
+
+        # Ensure all existing projects have a config file
+        for project_dir in self.projects_dir.iterdir():
+            if project_dir.is_dir():
+                config_path = project_dir / "config.json"
+                if not config_path.exists():
+                    print(f"[ProjectManager] Creating default config for existing project: {project_dir.name}")
+                    self._create_default_config(project_dir)
             
         # Clear temp project on startup if it exists
         temp_path = self.projects_dir / "temp"
