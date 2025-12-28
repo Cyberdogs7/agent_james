@@ -1763,21 +1763,11 @@ class AudioLoop:
                     else:
                         if INCLUDE_RAW_LOGS:
                             print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
-                            # Restore Context
-                            print(f"[ADA DEBUG] [RECONNECT] Fetching recent chat history to restore context...")
-                        history = self.project_manager.get_recent_chat_history(limit=10)
-                        
-                        context_msg = "System Notification: Connection was lost and just re-established. Here is the recent chat history to help you resume seamlessly:\n\n"
-                        for entry in history:
-                            sender = entry.get('sender', 'Unknown')
-                            text = entry.get('text', '')
-                            context_msg += f"[{sender}]: {text}\n"
-                        
-                        context_msg += "\nPlease acknowledge the reconnection to the user (e.g. 'I lost connection for a moment, but I'm back...') and resume what you were doing."
-                        
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Sending restoration context to model...")
-                        await self.session.send(input=context_msg, end_of_turn=True)
+                        # On a deliberate reconnect (like project switching), we don't want to restore
+                        # the old chat history as it confuses the context for the new system prompt.
+                        # A true connection drop might benefit from this, but for now, the clean
+                        # slate is more important.
+                        pass
 
                     # Reset retry delay on successful connection
                     retry_delay = 1
