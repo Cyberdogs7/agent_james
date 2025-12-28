@@ -478,29 +478,29 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "display_content",
-        "description": "Displays content on the screen.",
+        "description": "Displays content on the screen, such as images or widgets.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "content_type": {
                     "type": "STRING",
-                    "description": "The type of content to display. Can be 'image', 'widget', or 'clear'."
+                    "description": "Use 'image' for URLs, 'widget' for data, or 'clear' to hide content."
                 },
                 "url": {
                     "type": "STRING",
-                    "description": "The URL of the image to display."
+                    "description": "The URL of an image."
                 },
                 "widget_type": {
                     "type": "STRING",
-                    "description": "The type of widget to display. Can be 'weather'."
+                    "description": "The kind of widget, e.g., 'weather'."
                 },
                 "data": {
                     "type": "OBJECT",
-                    "description": "The data for the widget."
+                    "description": "JSON data for the widget, usually from another tool."
                 },
                 "duration": {
                     "type": "INTEGER",
-                    "description": "The duration to display the content in seconds."
+                    "description": "Optional duration in seconds. Defaults to a short period."
                 }
             },
             "required": ["content_type"]
@@ -508,20 +508,16 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "get_weather",
-        "description": "Gets the weather forecast for a given latitude and longitude.",
+        "description": "Gets the 7-day weather forecast for a given location.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "latitude": {
-                    "type": "NUMBER",
-                    "description": "The latitude for the weather forecast."
-                },
-                "longitude": {
-                    "type": "NUMBER",
-                    "description": "The longitude for the weather forecast."
+                "location": {
+                    "type": "STRING",
+                    "description": "The city and state, e.g. San Francisco, CA"
                 }
             },
-            "required": ["latitude", "longitude"]
+            "required": ["location"]
         }
     }
 ]}]
