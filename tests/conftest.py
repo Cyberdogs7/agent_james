@@ -1,56 +1,28 @@
-"""
-Pytest configuration and shared fixtures for ada_v2 tests.
-"""
 import pytest
-import sys
+import asyncio
 import os
-import json
-from pathlib import Path
 
-# Add backend to path
-BACKEND_DIR = Path(__file__).parent.parent / "backend"
-sys.path.insert(0, str(BACKEND_DIR))
-
-# Settings file path
-SETTINGS_FILE = BACKEND_DIR / "settings.json"
-
+@pytest.fixture(autouse=True)
+def mock_api_keys(monkeypatch):
+    """Mocks API keys for tests."""
+    monkeypatch.setenv("GEMINI_API_KEY", "mock-api-key")
 
 @pytest.fixture(scope="session")
-def settings():
-    """Load settings.json for device configurations."""
-    if SETTINGS_FILE.exists():
-        with open(SETTINGS_FILE, "r") as f:
-            return json.load(f)
-    return {}
+def event_loop():
+    """Create an instance of the default event loop for each test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
+# If you need to change the scope of the event_loop fixture, you can do so.
+# For example, to have a new event loop for each function:
+# @pytest.fixture(scope="function")
+# def event_loop(request):
+#     """Create an instance of the default event loop for each test function."""
+#     loop = asyncio.get_event_loop_policy().new_event_loop()
+#     yield loop
+#     loop.close()
 
-@pytest.fixture(scope="session")
-def kasa_devices(settings):
-    """Get Kasa devices from settings."""
-    return settings.get("kasa_devices", [])
-
-
-@pytest.fixture(scope="session")
-def printers(settings):
-    """Get printers from settings."""
-    return settings.get("printers", [])
-
-
-@pytest.fixture
-def temp_dir(tmp_path):
-    """Provide a temporary directory for file operations."""
-    return tmp_path
-
-
-@pytest.fixture
-def sample_stl_content():
-    """Sample minimal STL file content for testing."""
-    return """solid test
-  facet normal 0 0 1
-    outer loop
-      vertex 0 0 0
-      vertex 1 0 0
-      vertex 0.5 1 0
-    endloop
-  endfacet
-endsolid test"""
+@pytest.fixture(scope="session", autouse=True)
+def default_asyncio_loop_scope():
+    return "session"
