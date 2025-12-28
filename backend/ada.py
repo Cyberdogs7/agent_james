@@ -967,6 +967,11 @@ class AudioLoop:
         system_prompt = project_config.get("system_prompt", "You are a helpful assistant.")
         voice_name = project_config.get("voice_name", "Sadaltager")
 
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [CONFIG] Using Project: '{self.project_manager.current_project}'")
+            print(f"[ADA DEBUG] [CONFIG] Using System Prompt: '{system_prompt[:80]}...'")
+            print(f"[ADA DEBUG] [CONFIG] Using Voice: '{voice_name}'")
+
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
@@ -1723,65 +1728,96 @@ class AudioLoop:
     async def _session_runner(self, start_message=None, is_reconnect=False):
         """Handles a single connection and run-loop of the voice agent."""
         service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [SESSION] Starting session runner. Reconnect: {is_reconnect}")
         try:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
 
             config = self._get_live_connect_config()
 
-            async with (
-                client.aio.live.connect(model=MODEL, config=config) as session,
-                asyncio.TaskGroup() as tg,
-            ):
-                self.session = session
-                self.timer_agent.session = session
+            tasks = []
+            async with client.aio.live.connect(model=MODEL, config=config) as session:
+                try:
+                    self.session = session
+                    self.timer_agent.session = session
 
-                self.audio_in_queue = asyncio.Queue()
-                self.out_queue = asyncio.Queue(maxsize=10)
+                    self.audio_in_queue = asyncio.Queue()
+                    self.out_queue = asyncio.Queue(maxsize=10)
 
-                tg.create_task(self.send_realtime())
-                tg.create_task(self.listen_audio())
+                    tasks.append(asyncio.create_task(self.send_realtime()))
+                    tasks.append(asyncio.create_task(self.listen_audio()))
 
-                if self.video_mode == "camera":
-                    tg.create_task(self.get_frames())
-                elif self.video_mode == "screen":
-                    tg.create_task(self.get_screen())
+                    if self.video_mode == "camera":
+                        tasks.append(asyncio.create_task(self.get_frames()))
+                    elif self.video_mode == "screen":
+                        tasks.append(asyncio.create_task(self.get_screen()))
 
-                tg.create_task(self.receive_audio())
-                tg.create_task(self.play_audio())
+                    tasks.append(asyncio.create_task(self.receive_audio()))
+                    tasks.append(asyncio.create_task(self.play_audio()))
 
-                if not is_reconnect:
-                    if start_message:
+                    if not is_reconnect:
+                        if start_message:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
+                            await self.session.send(input=start_message, end_of_turn=True)
+
+                        if self.on_project_update and self.project_manager:
+                            self.on_project_update(self.project_manager.current_project)
+                    else:
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
-                        await self.session.send(input=start_message, end_of_turn=True)
-                    
-                    if self.on_project_update and self.project_manager:
-                        self.on_project_update(self.project_manager.current_project)
-                else:
+                            print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
+
+                    self._last_input_transcription = ""
+                    self._last_output_transcription = ""
+                    self.chat_buffer = {"sender": None, "text": ""}
+
+                    stop_task = asyncio.create_task(self.stop_event.wait())
+                    reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
+
+                    wait_tasks = tasks + [stop_task, reconnect_task]
+                    done, pending = await asyncio.wait(
+                        wait_tasks,
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+
+                    # If a signal task is done, cancel the other signal task.
+                    if stop_task in done:
+                        reconnect_task.cancel()
+                    elif reconnect_task in done:
+                        stop_task.cancel()
+                    else:
+                        # A worker task finished (likely crashed). Log and trigger reconnect.
+                        if INCLUDE_RAW_LOGS:
+                            print("[ADA DEBUG] [ERR] A worker task exited unexpectedly. Triggering reconnect.")
+                        # Attempt to find the crashed task and log its exception
+                        for done_task in done:
+                            try:
+                                if done_task.exception():
+                                    print(f"[ADA DEBUG] [ERR] Task exception: {done_task.exception()}")
+                            except asyncio.InvalidStateError:
+                                pass # No exception
+                        reconnect_task.cancel()
+                        stop_task.cancel()
+                        self._reconnect_needed.clear()
+                        return True
+
+                    if reconnect_task in done:
+                        if INCLUDE_RAW_LOGS:
+                            print("[ADA DEBUG] [RECONNECT] Reconnect event received. Ending session...")
+                        self._reconnect_needed.clear()
+                        return True # Signal for reconnect
+
+                finally:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
-
-                self._last_input_transcription = ""
-                self._last_output_transcription = ""
-                self.chat_buffer = {"sender": None, "text": ""}
-
-                stop_task = asyncio.create_task(self.stop_event.wait())
-                reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
-
-                done, pending = await asyncio.wait(
-                    [stop_task, reconnect_task],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
-
-                for task in pending:
-                    task.cancel()
-
-                if reconnect_task in done:
+                        print(f"[ADA DEBUG] [SESSION] Tearing down {len(tasks)} session tasks...")
+                    for task in tasks:
+                        task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
                     if INCLUDE_RAW_LOGS:
-                        print("[ADA DEBUG] [RECONNECT] Reconnect event received in session runner. Ending session...")
-                    self._reconnect_needed.clear()
-                    return True # Signal for reconnect
+                        print("[ADA DEBUG] [SESSION] All session tasks cancelled.")
+                    # Add small delay as requested
+                    await asyncio.sleep(0.1)
 
         except (Exception, asyncio.CancelledError) as e:
             if self.stop_event.is_set():
@@ -1803,6 +1839,8 @@ class AudioLoop:
 
             return True
         finally:
+            if INCLUDE_RAW_LOGS:
+                print("[ADA DEBUG] [SESSION] Session runner cleanup.")
             if hasattr(self, 'audio_stream') and self.audio_stream:
                 try:
                     self.audio_stream.close()
@@ -1816,9 +1854,13 @@ class AudioLoop:
         is_reconnect = False
 
         while not self.stop_event.is_set():
+            if INCLUDE_RAW_LOGS:
+                print("[ADA DEBUG] [RUN] Main loop is running. Starting session runner.")
             should_reconnect = await self._session_runner(start_message, is_reconnect)
 
             if not should_reconnect:
+                if INCLUDE_RAW_LOGS:
+                    print("[ADA DEBUG] [RUN] Session runner requested no reconnect. Exiting main loop.")
                 break
 
             is_reconnect = True
