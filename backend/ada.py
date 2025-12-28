@@ -340,8 +340,7 @@ class AudioLoop:
 
         self.send_text_task = None
         self.stop_event = asyncio.Event()
-        
-        self.stop_event = asyncio.Event()
+        self._reconnect_needed = asyncio.Event()
         
         self.permissions = {} # Default Empty (Will treat unset as True)
         self._pending_confirmations = {}
@@ -393,6 +392,12 @@ class AudioLoop:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [SHUTDOWN] Signaling stop for session: {session_id}")
             task_info["stop_event"].set()
+
+    def reconnect(self):
+        """Signals the main loop to reconnect."""
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
+        self._reconnect_needed.set()
 
     def _cleanup_jules_task(self, session_id, task):
         """Callback to remove a completed Jules polling task."""
@@ -1305,15 +1310,10 @@ class AudioLoop:
                                     if success:
                                         if self.on_project_update:
                                             self.on_project_update(name)
-                                        # Gather project context and send to AI (silently, no response expected)
-                                        context = self.project_manager.get_project_context()
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [PROJECT] Sending project context to AI ({len(context)} chars)")
-                                        try:
-                                            await self.session.send(input=f"System Notification: {msg}\n\n{context}", end_of_turn=False)
-                                        except Exception as e:
-                                            if INCLUDE_RAW_LOGS:
-                                                print(f"[ADA DEBUG] [ERR] Failed to send project context: {e}")
+
+                                        # Trigger a reconnect to load the new project's system prompt
+                                        self.reconnect()
+
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": msg}
                                     )
@@ -1798,7 +1798,29 @@ class AudioLoop:
                     
                     # We can await stop_event, but if the connection dies, receive_audio crashes -> group closes -> we exit `async with` -> restart loop.
                     # To ensure we don't block indefinitely if connection dies silently (unlikely with receive_audio), we just wait.
-                    await self.stop_event.wait()
+
+                    # Wait for either stop or reconnect signal
+                    stop_task = asyncio.create_task(self.stop_event.wait())
+                    reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
+
+                    done, pending = await asyncio.wait(
+                        [stop_task, reconnect_task],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+
+                    # Cancel the pending task to avoid it lingering
+                    for task in pending:
+                        task.cancel()
+
+                    # If reconnect was the reason for waking, clear the flag and continue the outer loop
+                    if reconnect_task in done:
+                        if INCLUDE_RAW_LOGS:
+                            print("[ADA DEBUG] [RECONNECT] Reconnect event received in main loop. Restarting connection...")
+                        self._reconnect_needed.clear()
+                        # Setting is_reconnect ensures we restore context on the new connection
+                        is_reconnect = True
+                        # Continue will break out of the `async with client.aio...` block and start a new connection
+                        continue
 
             except asyncio.CancelledError:
                 if INCLUDE_RAW_LOGS:
