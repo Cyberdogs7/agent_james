@@ -962,6 +962,7 @@ class AudioLoop:
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
         system_prompt = project_config.get("system_prompt", "You are a helpful assistant.")
+        voice_name = project_config.get("voice_name", "Sadaltager")
 
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
@@ -972,7 +973,7 @@ class AudioLoop:
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name="Sadaltager"
+                        voice_name=voice_name
                     )
                 )
             )
