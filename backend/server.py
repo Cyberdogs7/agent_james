@@ -274,6 +274,10 @@ async def start_audio(sid, data=None):
         print(f"Sending Error to frontend: {msg}")
         asyncio.create_task(sio.emit('error', {'msg': msg}))
 
+    def on_display_content(data):
+        print(f"Sending display content to frontend: {data}")
+        asyncio.create_task(sio.emit('display_content', data))
+
     # Initialize ADA
     try:
         print(f"Initializing AudioLoop with device_index={device_index}")
@@ -289,6 +293,7 @@ async def start_audio(sid, data=None):
             on_project_update=on_project_update,
             on_device_update=on_device_update,
             on_error=on_error,
+            on_display_content=on_display_content,
 
             input_device_index=device_index,
             input_device_name=device_name,

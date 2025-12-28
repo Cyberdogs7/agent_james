@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import io from 'socket.io-client';
 
-import Visualizer from './components/Visualizer';
+import DisplayArea from './components/DisplayArea';
 import TopAudioBar from './components/TopAudioBar';
 import CadWindow from './components/CadWindow';
 import BrowserWindow from './components/BrowserWindow';
@@ -1503,13 +1503,12 @@ function App() {
                     onMouseDown={(e) => handleMouseDown(e, 'visualizer')}
                 >
                     <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay z-10"></div>
-                    <div className="relative z-20">
-                        <Visualizer
+                    <div className="relative z-20 w-full h-full">
+                        <DisplayArea
+                            socket={socket}
                             audioData={aiAudioData}
                             isListening={isConnected && !isMuted}
                             intensity={audioAmp}
-                            width={elementSizes.visualizer.w}
-                            height={elementSizes.visualizer.h}
                         />
                     </div>
                     {isModularMode && <div className={`absolute top-2 right-2 text-xs font-bold tracking-widest z-20 ${activeDragElement === 'visualizer' ? 'text-green-500' : 'text-yellow-500/50'}`}>VISUALIZER</div>}
