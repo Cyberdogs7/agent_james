@@ -1012,37 +1012,6 @@ async def update_project_config(sid, data):
         else:
             await sio.emit('error', {'msg': msg})
 
-@sio.event
-async def switch_project(sid, data):
-    # data: { "name": "project_name" }
-    project_name = data.get('name')
-    print(f"Received switch_project request for: '{project_name}'")
-
-    if not audio_loop or not audio_loop.project_manager:
-        await sio.emit('error', {'msg': "Project Manager not available"})
-        return
-
-    if not project_name:
-        await sio.emit('error', {'msg': "No project name provided"})
-        return
-
-    try:
-        success, msg = audio_loop.project_manager.switch_project(project_name)
-        if success:
-            # Notify frontend of the project change
-            if audio_loop.on_project_update:
-                audio_loop.on_project_update(project_name)
-
-            # Trigger reconnect to load new system prompt
-            audio_loop.reconnect()
-            await sio.emit('status', {'msg': f"Switched to project: {project_name}"})
-        else:
-            await sio.emit('error', {'msg': msg})
-
-    except Exception as e:
-        print(f"Error switching project: {e}")
-        await sio.emit('error', {'msg': f"Project Switch Error: {str(e)}"})
-
 # Deprecated/Mapped for compatibility if frontend still uses specific events
 @sio.event
 async def get_tool_permissions(sid):
