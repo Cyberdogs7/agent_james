@@ -570,6 +570,13 @@ function App() {
             }
         });
 
+        socket.on('restart_request', (data) => {
+            console.log('Restart request received from backend:', data);
+            addMessage('System', 'Update applied. Restarting application...');
+            // Emit back to server to trigger shutdown with restart: true
+            socket.emit('restart_request', { restart: true });
+        });
+
 
 
         // Get All Media Devices (Microphones, Speakers, Webcams)

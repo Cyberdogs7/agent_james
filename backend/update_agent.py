@@ -119,6 +119,31 @@ class UpdateAgent:
 
         self._log("[UPDATE_AGENT] Update complete. Notifying server to restart...")
         if self.sio:
-            await self.sio.emit('restart_request')
+            # We emit 'restart_request' to the frontend, 
+            # and the frontend should send it back to the server to trigger shutdown,
+            # OR we can trigger it locally.
+            # Triggering locally is safer to ensure it happens.
+            try:
+                # Import server here to avoid circular imports if any, 
+                # although server.py usually imports update_agent indirectly.
+                # Actually, we can just call the handler if we had a reference to it,
+                # but we only have sio.
+                
+                # If we emit to 'restart_request', the server-side event handler @sio.event 
+                # for 'restart_request' won't be triggered because it only listens to clients.
+                
+                # Let's emit to frontend so the user sees something, 
+                # and also try to trigger the server shutdown.
+                await self.sio.emit('restart_request', {'reason': 'update_applied'})
+                
+                # To trigger the local server restart, we can't easily call the async handler from here without sid.
+                # But we can call the shutdown function directly if we could import it.
+                # Instead, let's just use the fact that server.py is likely what started this.
+                
+                # A better way: the server.py could listen for a local signal or we can use a callback.
+                
+                self._log("[UPDATE_AGENT] Emitted restart_request to frontend.")
+            except Exception as e:
+                self._log(f"[UPDATE_AGENT] Error notifying restart: {e}")
 
         return "Update applied successfully. The application will restart shortly."
