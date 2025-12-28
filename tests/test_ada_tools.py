@@ -186,18 +186,20 @@ class TestFileOperations:
 
 class TestLiveConnectConfig:
     """Test Gemini Live Connect configuration."""
-    
-    def test_config_exists(self):
-        """Test config is defined."""
-        from ada import config
-        assert config is not None
-        print("LiveConnectConfig exists")
-    
-    def test_config_has_audio_modality(self):
-        """Test config includes audio modality."""
-        from ada import config
-        assert 'AUDIO' in config.response_modalities
-        print("Audio modality configured")
+
+    def test_config_generation(self):
+        """Test that the LiveConnectConfig is generated correctly."""
+        from ada import AudioLoop
+        from google.genai import types
+
+        # Instantiate AudioLoop to access the config generation method
+        audio_loop = AudioLoop()
+        config = audio_loop._get_live_connect_config()
+
+        assert config is not None, "Config object should not be None"
+        assert isinstance(config, types.LiveConnectConfig), "Config should be a LiveConnectConfig instance"
+        assert 'AUDIO' in config.response_modalities, "Response modalities should include AUDIO"
+        print("LiveConnectConfig generated successfully with correct modality")
 
 
 class TestToolPermissions:
