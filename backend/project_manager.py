@@ -52,7 +52,7 @@ class ProjectManager:
         DEFAULT_CONFIG = {
             "system_prompt": "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant.",
             "jules_api_key": "",
-            "voice_name": "Epsilon"
+            "voice_name": "Sadaltager"
         }
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4)
