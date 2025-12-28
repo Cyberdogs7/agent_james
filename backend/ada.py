@@ -979,562 +979,6 @@ class AudioLoop:
             )
         )
 
-    async def _handle_tool_calls(self, tool_call):
-        "Handles the tool call part of a response."
-        # print("The tool was called")
-        function_responses = []
-        for fc in tool_call.function_calls:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
-            else:
-                # Basic log as requested: tool, endpoint, status
-                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
-
-            # Unified confirmation logic
-            destructive_keywords = ['delete', 'remove', 'wipe', 'destroy']
-            confirmation_required = any(keyword in fc.name.lower() for keyword in destructive_keywords)
-
-            confirmed = True
-            if confirmation_required:
-                if self.on_tool_confirmation:
-                    import uuid
-                    request_id = str(uuid.uuid4())
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
-
-                    future = asyncio.Future()
-                    self._pending_confirmations[request_id] = future
-
-                    self.on_tool_confirmation({
-                        "id": request_id,
-                        "tool": fc.name,
-                        "args": fc.args
-                    })
-
-                    try:
-                        confirmed = await future
-                    finally:
-                        self._pending_confirmations.pop(request_id, None)
-
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
-                else:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
-                    confirmed = False
-
-            if not confirmed:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
-                function_response = types.FunctionResponse(
-                    id=fc.id,
-                    name=fc.name,
-                    response={
-                        "result": "User denied the request to use this tool.",
-                    }
-                )
-                function_responses.append(function_response)
-                continue
-
-            # If confirmed, proceed with execution
-            if fc.name.startswith("trello_"):
-                tool_name = fc.name.replace("trello_", "")
-                trello_func = getattr(self.trello_agent, tool_name)
-                result = trello_func(**fc.args)
-                function_response = types.FunctionResponse(
-                    id=fc.id,
-                    name=fc.name,
-                    response={"result": result}
-                )
-                function_responses.append(function_response)
-            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update"]:
-                prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
-
-                if fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"\n[ADA DEBUG] --------------------------------------------------")
-                        print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
-                        print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
-
-                    asyncio.create_task(self.handle_cad_request(prompt))
-                    # No function response needed - model already acknowledged when user asked
-
-                elif fc.name == "run_web_agent":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
-                    asyncio.create_task(self.handle_web_agent_request(prompt))
-
-                    result_text = "Web Navigation started. Do not reply to this message."
-                    function_response = types.FunctionResponse(
-                        id=fc.id,
-                        name=fc.name,
-                        response={
-                            "result": result_text,
-                        }
-                    )
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
-                    function_responses.append(function_response)
-
-                elif fc.name == "run_jules_agent":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
-                    source = fc.args.get("source")
-                    result = await self.handle_jules_request(prompt, source)
-                    function_response = types.FunctionResponse(
-                        id=fc.id,
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "send_jules_feedback":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
-                    session_id = fc.args.get("session_id")
-                    feedback = fc.args.get("feedback")
-                    result = await self.handle_jules_feedback(session_id, feedback)
-                    function_response = types.FunctionResponse(
-                        id=fc.id,
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                    function_responses.append(function_response)
-
-
-                elif fc.name == "list_jules_sources":
-                    if INCLUDE_RAW_LOGS:
-                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
-                    result = await self.handle_list_jules_sources()
-                    function_response = types.FunctionResponse(
-                        id=fc.id,
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "list_jules_sessions":
-                    if INCLUDE_RAW_LOGS:
-                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
-                    result = await self.handle_list_jules_sessions()
-                    function_response = types.FunctionResponse(
-                        id=fc.id,
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "list_jules_activities":
-                    if INCLUDE_RAW_LOGS:
-                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
-                    session_id = fc.args.get("session_id")
-                    result = await self.handle_list_jules_activities(session_id)
-                    function_response = types.FunctionResponse(
-                        id=fc.id,
-                        name=fc.name,
-                        response={"result": result},
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "write_file":
-                    path = fc.args["path"]
-                    content = fc.args["content"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
-                    asyncio.create_task(self.handle_write_file(path, content))
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": "Writing file..."}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "read_directory":
-                    path = fc.args["path"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'", flush=True)
-                    asyncio.create_task(self.handle_read_directory(path))
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": "Reading directory..."}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "read_file":
-                    path = fc.args["path"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'", flush=True)
-                    asyncio.create_task(self.handle_read_file(path))
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": "Reading file..."}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "create_project":
-                    name = fc.args["name"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
-                    success, msg = self.project_manager.create_project(name)
-                    if success:
-                        # Auto-switch to the newly created project
-                        self.project_manager.switch_project(name)
-                        msg += f" Switched to '{name}'."
-                        if self.on_project_update:
-                            self.on_project_update(name)
-                        # Trigger a reconnect to load the new project's system prompt
-                        self.reconnect()
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": msg}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "switch_project":
-                    name = fc.args["name"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
-                    success, msg = self.project_manager.switch_project(name)
-                    if success:
-                        if self.on_project_update:
-                            self.on_project_update(name)
-
-                        # Trigger a reconnect to load the new project's system prompt
-                        self.reconnect()
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": msg}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "list_projects":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
-                    projects = self.project_manager.list_projects()
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": f"Available projects: {', '.join(projects)}"}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "list_smart_devices":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
-                    # Use cached devices directly for speed
-                    # devices_dict is {ip: SmartDevice}
-                    # Use cached devices directly for speed
-                    # devices_dict is {ip: SmartDevice}
-
-                    dev_summaries = []
-                    frontend_list = []
-
-                    for ip, d in self.kasa_agent.devices.items():
-                        dev_type = "unknown"
-                        if d.is_bulb: dev_type = "bulb"
-                        elif d.is_plug: dev_type = "plug"
-                        elif d.is_strip: dev_type = "strip"
-                        elif d.is_dimmer: dev_type = "dimmer"
-
-                        # Format for Model
-                        info = f"{d.alias} (IP: {ip}, Type: {dev_type})"
-                        if d.is_on:
-                            info += " [ON]"
-                        else:
-                            info += " [OFF]"
-                        dev_summaries.append(info)
-
-                        # Format for Frontend
-                        frontend_list.append({
-                            "ip": ip,
-                            "alias": d.alias,
-                            "model": d.model,
-                            "type": dev_type,
-                            "is_on": d.is_on,
-                            "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
-                            "hsv": d.hsv if d.is_bulb and d.is_color else None,
-                            "has_color": d.is_color if d.is_bulb else False,
-                            "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
-                        })
-
-                    result_str = "No devices found in cache."
-                    if dev_summaries:
-                        result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
-
-                    # Trigger frontend update
-                    if self.on_device_update:
-                        self.on_device_update(frontend_list)
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result_str}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "control_light":
-                    target = fc.args["target"]
-                    action = fc.args["action"]
-                    brightness = fc.args.get("brightness")
-                    color = fc.args.get("color")
-
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
-
-                    result_msg = f"Action '{action}' on '{target}' failed."
-                    success = False
-
-                    if action == "turn_on":
-                        success = await self.kasa_agent.turn_on(target)
-                        if success:
-                            result_msg = f"Turned ON '{target}'."
-                    elif action == "turn_off":
-                        success = await self.kasa_agent.turn_off(target)
-                        if success:
-                            result_msg = f"Turned OFF '{target}'."
-                    elif action == "set":
-                        success = True
-                        result_msg = f"Updated '{target}':"
-
-                    # Apply extra attributes if 'set' or if we just turned it on and want to set them too
-                    if success or action == "set":
-                        if brightness is not None:
-                            sb = await self.kasa_agent.set_brightness(target, brightness)
-                            if sb:
-                                result_msg += f" Set brightness to {brightness}."
-                        if color is not None:
-                            sc = await self.kasa_agent.set_color(target, color)
-                            if sc:
-                                result_msg += f" Set color to {color}."
-
-                    # Notify Frontend of State Change
-                    if success:
-                        # We don't need full discovery, just refresh known state or push update
-                        # But for simplicity, let's get the standard list representation
-                        # KasaAgent updates its internal state on control, so we can rebuild the list
-
-                        # Quick rebuild of list from internal dict
-                        updated_list = []
-                        for ip, dev in self.kasa_agent.devices.items():
-                            # We need to ensure we have the correct dict structure expected by frontend
-                            # We duplicate logic from KasaAgent.discover_devices a bit, but that's okay for now or we can add a helper
-                            # Ideally KasaAgent has a 'get_devices_list()' method.
-                            # Use the cached objects in self.kasa_agent.devices
-
-                            dev_type = "unknown"
-                            if dev.is_bulb: dev_type = "bulb"
-                            elif dev.is_plug: dev_type = "plug"
-                            elif dev.is_strip: dev_type = "strip"
-                            elif dev.is_dimmer: dev_type = "dimmer"
-
-                            d_info = {
-                                "ip": ip,
-                                "alias": dev.alias,
-                                "model": dev.model,
-                                "type": dev_type,
-                                "is_on": dev.is_on,
-                                "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
-                                "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
-                                "has_color": dev.is_color if dev.is_bulb else False,
-                                "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
-                            }
-                            updated_list.append(d_info)
-
-                        if self.on_device_update:
-                            self.on_device_update(updated_list)
-                    else:
-                        # Report Error
-                        if self.on_error:
-                            self.on_error(result_msg)
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result_msg}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "discover_printers":
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
-                    printers = await self.printer_agent.discover_printers()
-                    # Format for model
-                    if printers:
-                        printer_list = []
-                        for p in printers:
-                            printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
-                        result_str = "Found Printers:\n" + "\n".join(printer_list)
-                    else:
-                        result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result_str}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "print_stl":
-                    stl_path = fc.args["stl_path"]
-                    printer = fc.args["printer"]
-                    profile = fc.args.get("profile")
-
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
-
-                    # Resolve 'current' to project STL
-                    if stl_path.lower() == "current":
-                        stl_path = "output.stl" # Let printer agent resolve it in root_path
-
-                    # Get current project path
-                    project_path = str(self.project_manager.get_current_project_path())
-
-                    result = await self.printer_agent.print_stl(
-                        stl_path,
-                        printer,
-                        profile,
-                        root_path=project_path
-                    )
-                    result_str = result.get("message", "Unknown result")
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result_str}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "get_print_status":
-                    printer = fc.args["printer"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
-
-                    status = await self.printer_agent.get_print_status(printer)
-                    if status:
-                        result_str = f"Printer: {status.printer}\n"
-                        result_str += f"State: {status.state}\n"
-                        result_str += f"Progress: {status.progress_percent:.1f}%\n"
-                        if status.time_remaining:
-                            result_str += f"Time Remaining: {status.time_remaining}\n"
-                        if status.time_elapsed:
-                            result_str += f"Time Elapsed: {status.time_elapsed}\n"
-                        if status.filename:
-                            result_str += f"File: {status.filename}\n"
-                        if status.temperatures:
-                            temps = status.temperatures
-                            if "hotend" in temps:
-                                result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
-                            if "bed" in temps:
-                                result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
-                    else:
-                        result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result_str}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "iterate_cad":
-                    prompt = fc.args["prompt"]
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
-
-                    # Emit status
-                    if self.on_cad_status:
-                        self.on_cad_status("generating")
-
-                    # Get project cad folder path
-                    cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
-
-                    # Call CadAgent to iterate on the design
-                    cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
-
-                    if cad_data:
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
-
-                        # Dispatch to frontend
-                        if self.on_cad_data:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
-                            self.on_cad_data(cad_data)
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [SENT] Dispatch complete.")
-
-                        # Save to Project
-                        self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
-
-                        result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
-                    else:
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
-                        result_str = f"Failed to iterate design with prompt: {prompt}"
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result_str}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "set_timer":
-                    duration = fc.args["duration"]
-                    name = fc.args["name"]
-                    result = await self.timer_agent.set_timer(duration, name)
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "modify_timer":
-                    name = fc.args["name"]
-                    new_duration = fc.args.get("new_duration")
-                    new_timestamp = fc.args.get("new_timestamp")
-                    result = await self.timer_agent.modify_timer(name, new_duration, new_timestamp)
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "set_reminder":
-                    timestamp = fc.args["timestamp"]
-                    name = fc.args["name"]
-                    result = await self.timer_agent.set_reminder(timestamp, name)
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "list_timers":
-                    result = self.timer_agent.list_timers()
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "delete_entry":
-                    name = fc.args["name"]
-                    result = self.timer_agent.delete_entry(name)
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "check_for_updates":
-                    try:
-                        print(f"[ADA DEBUG] [TOOL] check_for_updates was called. INCLUDE_RAW_LOGS={INCLUDE_RAW_LOGS}", flush=True)
-                        result = await self.update_agent.check_for_updates()
-                        print(f"[ADA DEBUG] [TOOL] check_for_updates result: {result}", flush=True)
-                    except Exception as update_err:
-                        print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
-                        traceback.print_exc()
-                        result = f"Error checking for updates: {str(update_err)}"
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-
-                elif fc.name == "apply_update":
-                    try:
-                        result = await self.update_agent.apply_update()
-                    except Exception as update_err:
-                        print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
-                        traceback.print_exc()
-                        result = f"Error applying update: {str(update_err)}"
-
-                    function_response = types.FunctionResponse(
-                        id=fc.id, name=fc.name, response={"result": result}
-                    )
-                    function_responses.append(function_response)
-        if function_responses:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
-            await self.session.send_tool_response(function_responses=function_responses)
-
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
@@ -1657,7 +1101,558 @@ class AudioLoop:
 
                     # 3. Handle Tool Calls
                     if response.tool_call:
-                        await self._handle_tool_calls(response.tool_call)
+                        # print("The tool was called")
+                        function_responses = []
+                        for fc in response.tool_call.function_calls:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
+                            else:
+                                # Basic log as requested: tool, endpoint, status
+                                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
+
+                            # Unified confirmation logic
+                            destructive_keywords = ['delete', 'remove', 'wipe', 'destroy']
+                            confirmation_required = any(keyword in fc.name.lower() for keyword in destructive_keywords)
+
+                            confirmed = True
+                            if confirmation_required:
+                                if self.on_tool_confirmation:
+                                    import uuid
+                                    request_id = str(uuid.uuid4())
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
+
+                                    future = asyncio.Future()
+                                    self._pending_confirmations[request_id] = future
+
+                                    self.on_tool_confirmation({
+                                        "id": request_id,
+                                        "tool": fc.name,
+                                        "args": fc.args
+                                    })
+
+                                    try:
+                                        confirmed = await future
+                                    finally:
+                                        self._pending_confirmations.pop(request_id, None)
+
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
+                                else:
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
+                                    confirmed = False
+
+                            if not confirmed:
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
+                                function_response = types.FunctionResponse(
+                                    id=fc.id,
+                                    name=fc.name,
+                                    response={
+                                        "result": "User denied the request to use this tool.",
+                                    }
+                                )
+                                function_responses.append(function_response)
+                                continue
+
+                            # If confirmed, proceed with execution
+                            if fc.name.startswith("trello_"):
+                                tool_name = fc.name.replace("trello_", "")
+                                trello_func = getattr(self.trello_agent, tool_name)
+                                result = trello_func(**fc.args)
+                                function_response = types.FunctionResponse(
+                                    id=fc.id,
+                                    name=fc.name,
+                                    response={"result": result}
+                                )
+                                function_responses.append(function_response)
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update"]:
+                                prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
+
+                                if fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"\n[ADA DEBUG] --------------------------------------------------")
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
+                                        print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
+
+                                    asyncio.create_task(self.handle_cad_request(prompt))
+                                    # No function response needed - model already acknowledged when user asked
+
+                                elif fc.name == "run_web_agent":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
+                                    asyncio.create_task(self.handle_web_agent_request(prompt))
+
+                                    result_text = "Web Navigation started. Do not reply to this message."
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={
+                                            "result": result_text,
+                                        }
+                                    )
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "run_jules_agent":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
+                                    source = fc.args.get("source")
+                                    result = await self.handle_jules_request(prompt, source)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "send_jules_feedback":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
+                                    session_id = fc.args.get("session_id")
+                                    feedback = fc.args.get("feedback")
+                                    result = await self.handle_jules_feedback(session_id, feedback)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+
+                                elif fc.name == "list_jules_sources":
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
+                                    result = await self.handle_list_jules_sources()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_jules_sessions":
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
+                                    result = await self.handle_list_jules_sessions()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_jules_activities":
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
+                                    session_id = fc.args.get("session_id")
+                                    result = await self.handle_list_jules_activities(session_id)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "write_file":
+                                    path = fc.args["path"]
+                                    content = fc.args["content"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
+                                    asyncio.create_task(self.handle_write_file(path, content))
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": "Writing file..."}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "read_directory":
+                                    path = fc.args["path"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'", flush=True)
+                                    asyncio.create_task(self.handle_read_directory(path))
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": "Reading directory..."}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "read_file":
+                                    path = fc.args["path"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'", flush=True)
+                                    asyncio.create_task(self.handle_read_file(path))
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": "Reading file..."}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "create_project":
+                                    name = fc.args["name"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
+                                    success, msg = self.project_manager.create_project(name)
+                                    if success:
+                                        # Auto-switch to the newly created project
+                                        self.project_manager.switch_project(name)
+                                        msg += f" Switched to '{name}'."
+                                        if self.on_project_update:
+                                            self.on_project_update(name)
+                                        self.reconnect()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "switch_project":
+                                    name = fc.args["name"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
+                                    success, msg = self.project_manager.switch_project(name)
+                                    if success:
+                                        if self.on_project_update:
+                                            self.on_project_update(name)
+
+                                        # Trigger a reconnect to load the new project's system prompt
+                                        self.reconnect()
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_projects":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
+                                    projects = self.project_manager.list_projects()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": f"Available projects: {', '.join(projects)}"}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_smart_devices":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
+                                    # Use cached devices directly for speed
+                                    # devices_dict is {ip: SmartDevice}
+                                    # Use cached devices directly for speed
+                                    # devices_dict is {ip: SmartDevice}
+
+                                    dev_summaries = []
+                                    frontend_list = []
+
+                                    for ip, d in self.kasa_agent.devices.items():
+                                        dev_type = "unknown"
+                                        if d.is_bulb: dev_type = "bulb"
+                                        elif d.is_plug: dev_type = "plug"
+                                        elif d.is_strip: dev_type = "strip"
+                                        elif d.is_dimmer: dev_type = "dimmer"
+
+                                        # Format for Model
+                                        info = f"{d.alias} (IP: {ip}, Type: {dev_type})"
+                                        if d.is_on:
+                                            info += " [ON]"
+                                        else:
+                                            info += " [OFF]"
+                                        dev_summaries.append(info)
+
+                                        # Format for Frontend
+                                        frontend_list.append({
+                                            "ip": ip,
+                                            "alias": d.alias,
+                                            "model": d.model,
+                                            "type": dev_type,
+                                            "is_on": d.is_on,
+                                            "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
+                                            "hsv": d.hsv if d.is_bulb and d.is_color else None,
+                                            "has_color": d.is_color if d.is_bulb else False,
+                                            "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
+                                        })
+
+                                    result_str = "No devices found in cache."
+                                    if dev_summaries:
+                                        result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
+
+                                    # Trigger frontend update
+                                    if self.on_device_update:
+                                        self.on_device_update(frontend_list)
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "control_light":
+                                    target = fc.args["target"]
+                                    action = fc.args["action"]
+                                    brightness = fc.args.get("brightness")
+                                    color = fc.args.get("color")
+
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
+
+                                    result_msg = f"Action '{action}' on '{target}' failed."
+                                    success = False
+
+                                    if action == "turn_on":
+                                        success = await self.kasa_agent.turn_on(target)
+                                        if success:
+                                            result_msg = f"Turned ON '{target}'."
+                                    elif action == "turn_off":
+                                        success = await self.kasa_agent.turn_off(target)
+                                        if success:
+                                            result_msg = f"Turned OFF '{target}'."
+                                    elif action == "set":
+                                        success = True
+                                        result_msg = f"Updated '{target}':"
+
+                                    # Apply extra attributes if 'set' or if we just turned it on and want to set them too
+                                    if success or action == "set":
+                                        if brightness is not None:
+                                            sb = await self.kasa_agent.set_brightness(target, brightness)
+                                            if sb:
+                                                result_msg += f" Set brightness to {brightness}."
+                                        if color is not None:
+                                            sc = await self.kasa_agent.set_color(target, color)
+                                            if sc:
+                                                result_msg += f" Set color to {color}."
+
+                                    # Notify Frontend of State Change
+                                    if success:
+                                        # We don't need full discovery, just refresh known state or push update
+                                        # But for simplicity, let's get the standard list representation
+                                        # KasaAgent updates its internal state on control, so we can rebuild the list
+
+                                        # Quick rebuild of list from internal dict
+                                        updated_list = []
+                                        for ip, dev in self.kasa_agent.devices.items():
+                                            # We need to ensure we have the correct dict structure expected by frontend
+                                            # We duplicate logic from KasaAgent.discover_devices a bit, but that's okay for now or we can add a helper
+                                            # Ideally KasaAgent has a 'get_devices_list()' method.
+                                            # Use the cached objects in self.kasa_agent.devices
+
+                                            dev_type = "unknown"
+                                            if dev.is_bulb: dev_type = "bulb"
+                                            elif dev.is_plug: dev_type = "plug"
+                                            elif dev.is_strip: dev_type = "strip"
+                                            elif dev.is_dimmer: dev_type = "dimmer"
+
+                                            d_info = {
+                                                "ip": ip,
+                                                "alias": dev.alias,
+                                                "model": dev.model,
+                                                "type": dev_type,
+                                                "is_on": dev.is_on,
+                                                "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
+                                                "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
+                                                "has_color": dev.is_color if dev.is_bulb else False,
+                                                "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
+                                            }
+                                            updated_list.append(d_info)
+
+                                        if self.on_device_update:
+                                            self.on_device_update(updated_list)
+                                    else:
+                                        # Report Error
+                                        if self.on_error:
+                                            self.on_error(result_msg)
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result_msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "discover_printers":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
+                                    printers = await self.printer_agent.discover_printers()
+                                    # Format for model
+                                    if printers:
+                                        printer_list = []
+                                        for p in printers:
+                                            printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
+                                        result_str = "Found Printers:\n" + "\n".join(printer_list)
+                                    else:
+                                        result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "print_stl":
+                                    stl_path = fc.args["stl_path"]
+                                    printer = fc.args["printer"]
+                                    profile = fc.args.get("profile")
+
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
+
+                                    # Resolve 'current' to project STL
+                                    if stl_path.lower() == "current":
+                                        stl_path = "output.stl" # Let printer agent resolve it in root_path
+
+                                    # Get current project path
+                                    project_path = str(self.project_manager.get_current_project_path())
+
+                                    result = await self.printer_agent.print_stl(
+                                        stl_path,
+                                        printer,
+                                        profile,
+                                        root_path=project_path
+                                    )
+                                    result_str = result.get("message", "Unknown result")
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "get_print_status":
+                                    printer = fc.args["printer"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
+
+                                    status = await self.printer_agent.get_print_status(printer)
+                                    if status:
+                                        result_str = f"Printer: {status.printer}\n"
+                                        result_str += f"State: {status.state}\n"
+                                        result_str += f"Progress: {status.progress_percent:.1f}%\n"
+                                        if status.time_remaining:
+                                            result_str += f"Time Remaining: {status.time_remaining}\n"
+                                        if status.time_elapsed:
+                                            result_str += f"Time Elapsed: {status.time_elapsed}\n"
+                                        if status.filename:
+                                            result_str += f"File: {status.filename}\n"
+                                        if status.temperatures:
+                                            temps = status.temperatures
+                                            if "hotend" in temps:
+                                                result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
+                                            if "bed" in temps:
+                                                result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
+                                    else:
+                                        result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "iterate_cad":
+                                    prompt = fc.args["prompt"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
+
+                                    # Emit status
+                                    if self.on_cad_status:
+                                        self.on_cad_status("generating")
+
+                                    # Get project cad folder path
+                                    cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
+
+                                    # Call CadAgent to iterate on the design
+                                    cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
+
+                                    if cad_data:
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
+
+                                        # Dispatch to frontend
+                                        if self.on_cad_data:
+                                            if INCLUDE_RAW_LOGS:
+                                                print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
+                                            self.on_cad_data(cad_data)
+                                            if INCLUDE_RAW_LOGS:
+                                                print(f"[ADA DEBUG] [SENT] Dispatch complete.")
+
+                                        # Save to Project
+                                        self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
+
+                                        result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
+                                    else:
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
+                                        result_str = f"Failed to iterate design with prompt: {prompt}"
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "set_timer":
+                                    duration = fc.args["duration"]
+                                    name = fc.args["name"]
+                                    result = await self.timer_agent.set_timer(duration, name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "modify_timer":
+                                    name = fc.args["name"]
+                                    new_duration = fc.args.get("new_duration")
+                                    new_timestamp = fc.args.get("new_timestamp")
+                                    result = await self.timer_agent.modify_timer(name, new_duration, new_timestamp)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "set_reminder":
+                                    timestamp = fc.args["timestamp"]
+                                    name = fc.args["name"]
+                                    result = await self.timer_agent.set_reminder(timestamp, name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "list_timers":
+                                    result = self.timer_agent.list_timers()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "delete_entry":
+                                    name = fc.args["name"]
+                                    result = self.timer_agent.delete_entry(name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "check_for_updates":
+                                    try:
+                                        print(f"[ADA DEBUG] [TOOL] check_for_updates was called. INCLUDE_RAW_LOGS={INCLUDE_RAW_LOGS}", flush=True)
+                                        result = await self.update_agent.check_for_updates()
+                                        print(f"[ADA DEBUG] [TOOL] check_for_updates result: {result}", flush=True)
+                                    except Exception as update_err:
+                                        print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
+                                        traceback.print_exc()
+                                        result = f"Error checking for updates: {str(update_err)}"
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "apply_update":
+                                    try:
+                                        result = await self.update_agent.apply_update()
+                                    except Exception as update_err:
+                                        print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
+                                        traceback.print_exc()
+                                        result = f"Error applying update: {str(update_err)}"
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+                        if function_responses:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
+                            await self.session.send_tool_response(function_responses=function_responses)
                 
                 # Turn/Response Loop Finished
                 self.flush_chat()
