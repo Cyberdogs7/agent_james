@@ -280,7 +280,7 @@ from timer_agent import TimerAgent
 from update_agent import UpdateAgent
 
 class AudioLoop:
-    def __init__(self, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None):
+    def __init__(self, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None):
         self.video_mode = video_mode
         self.on_audio_data = on_audio_data
         self.on_video_frame = on_video_frame
@@ -352,13 +352,16 @@ class AudioLoop:
         self._silence_start_time = None
         
         # Initialize ProjectManager
-        from project_manager import ProjectManager
-        # Assuming we are running from backend/ or root? 
-        # Using abspath of current file to find root
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        # If ada.py is in backend/, project root is one up
-        project_root = os.path.dirname(current_dir)
-        self.project_manager = ProjectManager(project_root)
+        if project_manager:
+            self.project_manager = project_manager
+        else:
+            from project_manager import ProjectManager
+            # Assuming we are running from backend/ or root?
+            # Using abspath of current file to find root
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            # If ada.py is in backend/, project root is one up
+            project_root = os.path.dirname(current_dir)
+            self.project_manager = ProjectManager(project_root)
         
         # Sync Initial Project State
         if self.on_project_update:
