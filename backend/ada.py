@@ -13,6 +13,7 @@ import argparse
 import math
 import struct
 import time
+import httpx
 from giphy_client.apis.default_api import DefaultApi
 from giphy_client.api_client import ApiClient
 
@@ -821,19 +822,48 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
-    async def handle_get_weather(self, location):
+    async def handle_get_weather(self, latitude, longitude):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}'")
-        # For now, return static data
-        return {
-            "temperature": "75",
-            "condition": "Sunny",
-            "location": location
+            print(f"[ADA DEBUG] [WEATHER] Getting weather for lat: {latitude}, lon: {longitude}")
+
+        url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
+            "timezone": "auto"
         }
 
-    async def handle_search_images(self, query):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                data = response.json()
+
+                # Process the data to a more usable format
+                daily_data = data['daily']
+                forecast = []
+                for i in range(len(daily_data['time'])):
+                    forecast.append({
+                        "date": daily_data['time'][i],
+                        "weather_code": daily_data['weather_code'][i],
+                        "temp_max": daily_data['temperature_2m_max'][i],
+                        "temp_min": daily_data['temperature_2m_min'][i],
+                        "precipitation": daily_data['precipitation_sum'][i]
+                    })
+                return forecast
+        except httpx.HTTPStatusError as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] HTTP error fetching weather: {e}")
+            return f"Error fetching weather data: {e.response.status_code}"
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to get weather: {e}")
+            return "Failed to get weather data."
+
+    async def handle_search_gifs(self, query):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [IMAGE] Searching for images with query: '{query}'")
+            print(f"[ADA DEBUG] [GIF] Searching for GIFs with query: '{query}'")
         try:
             # Use Giphy's search endpoint
             response = self.giphy_client.gifs_search_get(os.getenv("GIPHY_API_KEY"), query, limit=5)
@@ -1221,21 +1251,22 @@ class AudioLoop:
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_images", "display_content", "get_weather"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "get_weather":
-                                    location = fc.args["location"]
-                                    result = await self.handle_get_weather(location)
+                                    latitude = fc.args["latitude"]
+                                    longitude = fc.args["longitude"]
+                                    result = await self.handle_get_weather(latitude, longitude)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
                                         response={"result": result},
                                     )
                                     function_responses.append(function_response)
-                                elif fc.name == "search_images":
+                                elif fc.name == "search_gifs":
                                     query = fc.args["query"]
-                                    result = await self.handle_search_images(query)
+                                    result = await self.handle_search_gifs(query)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
