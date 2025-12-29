@@ -25,3 +25,4 @@ build123d
 requests
 giphy_client
 pytest
+httpx
