@@ -831,15 +831,24 @@ class AudioLoop:
             async with httpx.AsyncClient() as client:
                 geo_response = await client.get(
                     "https://geocoding-api.open-meteo.com/v1/search",
-                    params={"name": location, "count": 1}
+                    params={"name": location, "count": 15}
                 )
                 geo_response.raise_for_status()
                 geo_data = geo_response.json()
-                if not geo_data.get("results"):
+                results = geo_data.get("results")
+
+                if not results:
                     return f"Could not find location: {location}"
 
-                lat = geo_data["results"][0]["latitude"]
-                lon = geo_data["results"][0]["longitude"]
+                if len(results) > 1:
+                    locations = [
+                        f"{i+1}. {r.get('name', 'N/A')}, {r.get('admin1', 'N/A')}, {r.get('country', 'N/A')}"
+                        for i, r in enumerate(results)
+                    ]
+                    return f"Multiple locations found. Please be more specific:\n" + "\n".join(locations)
+
+                lat = results[0]["latitude"]
+                lon = results[0]["longitude"]
 
             # Step 2: Weather Forecast
             async with httpx.AsyncClient() as client:
@@ -1061,9 +1070,16 @@ class AudioLoop:
 Follow these rules when using tools:
 1.  When the user asks for a visual, like the weather, you **must** use two tools in sequence.
 2.  First, call the tool to get the data (e.g., `get_weather`).
-3.  Second, call the `display_content` tool immediately after, using the output from the first tool as the `data` argument.
+3.  If `get_weather` returns a list of locations, present this list to the user and ask for clarification. Do not proceed to the next step.
+4.  If `get_weather` returns weather data, call the `display_content` tool immediately after, using the output from the first tool as the `data` argument.
 
-**Example:**
+**Example 1: Ambiguous Location**
+User: "What's the weather in Paris?"
+1.  Call `get_weather(location='Paris')`.
+2.  Receive a list of locations like "1. Paris, France; 2. Paris, Texas".
+3.  Respond to the user: "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
+
+**Example 2: Unambiguous Location**
 User: "What's the weather in London?"
 1.  Call `get_weather(location='London')`.
 2.  Receive the forecast data.
