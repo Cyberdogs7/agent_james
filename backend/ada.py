@@ -913,24 +913,27 @@ class AudioLoop:
                 forecast_response.raise_for_status()
                 weather_data = forecast_response.json()
 
-                # The old widget expects a simple daily forecast structure.
-                # If only the default daily data was requested, we format it for the widget.
-                # Otherwise, we return the full JSON for the model to interpret.
-                if params.get("daily") == "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum" and not hourly:
-                    daily_data = weather_data.get('daily', {})
-                    if 'time' in daily_data:
-                        forecast = []
-                        for i in range(len(daily_data['time'])):
-                            forecast.append({
-                                "date": daily_data['time'][i],
-                                "weather_code": daily_data.get('weather_code', [])[i],
-                                "temp_max": daily_data.get('temperature_2m_max', [])[i],
-                                "temp_min": daily_data.get('temperature_2m_min', [])[i],
-                                "precipitation": daily_data.get('precipitation_sum', [])[i]
-                            })
-                        return forecast
-                    else:
-                        return weather_data
+                # The widget expects a simple daily forecast structure.
+                # If daily data is present, format it for the widget.
+                # Otherwise, return the full JSON for the model to interpret.
+                daily_data = weather_data.get('daily', {})
+                if 'time' in daily_data and daily_data['time']:
+                    forecast = []
+                    num_days = len(daily_data['time'])
+                    weather_codes = daily_data.get('weather_code', [None] * num_days)
+                    temp_maxes = daily_data.get('temperature_2m_max', [None] * num_days)
+                    temp_mins = daily_data.get('temperature_2m_min', [None] * num_days)
+                    precipitations = daily_data.get('precipitation_sum', [None] * num_days)
+
+                    for i in range(num_days):
+                        forecast.append({
+                            "date": daily_data['time'][i],
+                            "weather_code": weather_codes[i],
+                            "temp_max": temp_maxes[i],
+                            "temp_min": temp_mins[i],
+                            "precipitation": precipitations[i]
+                        })
+                    return forecast
                 else:
                     return weather_data
 
