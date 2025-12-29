@@ -831,12 +831,23 @@ class AudioLoop:
             async with httpx.AsyncClient() as client:
                 params = {"name": location, "count": 15, "language": "en", "format": "json"}
                 url = "https://geocoding-api.open-meteo.com/v1/search"
+
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WEATHER] Requesting Geocoding URL: {url} with params: {params}")
+
                 geo_response = await client.get(url, params=params)
+
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WEATHER] Geocoding Response Status: {geo_response.status_code}")
+                    print(f"[ADA DEBUG] [WEATHER] Geocoding Response Text: {geo_response.text}")
+
                 geo_response.raise_for_status()
                 geo_data = geo_response.json()
                 results = geo_data.get("results")
 
                 if not results:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [WEATHER] Geocoding returned no results. Raw response: {geo_response.text}")
                     return f"Could not find location: {location}"
 
                 if len(results) > 1:
