@@ -822,9 +822,9 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
-    async def handle_get_weather(self, location):
+    async def handle_get_weather(self, location, forecast_days=7, past_days=0, hourly=None, daily=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}'")
+            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}' with params: forecast_days={forecast_days}, past_days={past_days}, hourly={hourly}, daily={daily}")
 
         try:
             # Step 1: Geocoding
@@ -851,31 +851,53 @@ class AudioLoop:
                 lon = results[0]["longitude"]
 
             # Step 2: Weather Forecast
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "timezone": "auto"
+            }
+            if forecast_days is not None:
+                params["forecast_days"] = forecast_days
+            if past_days is not None:
+                params["past_days"] = past_days
+            if hourly:
+                params["hourly"] = ",".join(hourly)
+            if daily:
+                params["daily"] = ",".join(daily)
+
+            # Add default daily if nothing is specified
+            if not hourly and not daily:
+                params["daily"] = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
+
+
             async with httpx.AsyncClient() as client:
                 forecast_response = await client.get(
                     "https://api.open-meteo.com/v1/forecast",
-                    params={
-                        "latitude": lat,
-                        "longitude": lon,
-                        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
-                        "timezone": "auto"
-                    }
+                    params=params
                 )
                 forecast_response.raise_for_status()
                 weather_data = forecast_response.json()
 
-                # Process the data
-                daily_data = weather_data['daily']
-                forecast = []
-                for i in range(len(daily_data['time'])):
-                    forecast.append({
-                        "date": daily_data['time'][i],
-                        "weather_code": daily_data['weather_code'][i],
-                        "temp_max": daily_data['temperature_2m_max'][i],
-                        "temp_min": daily_data['temperature_2m_min'][i],
-                        "precipitation": daily_data['precipitation_sum'][i]
-                    })
-                return forecast
+                # The old widget expects a simple daily forecast structure.
+                # If only the default daily data was requested, we format it for the widget.
+                # Otherwise, we return the full JSON for the model to interpret.
+                if params.get("daily") == "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum" and not hourly:
+                    daily_data = weather_data.get('daily', {})
+                    if 'time' in daily_data:
+                        forecast = []
+                        for i in range(len(daily_data['time'])):
+                            forecast.append({
+                                "date": daily_data['time'][i],
+                                "weather_code": daily_data.get('weather_code', [])[i],
+                                "temp_max": daily_data.get('temperature_2m_max', [])[i],
+                                "temp_min": daily_data.get('temperature_2m_min', [])[i],
+                                "precipitation": daily_data.get('precipitation_sum', [])[i]
+                            })
+                        return forecast
+                    else:
+                        return weather_data
+                else:
+                    return weather_data
 
         except httpx.HTTPStatusError as e:
             if INCLUDE_RAW_LOGS:
@@ -884,6 +906,7 @@ class AudioLoop:
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to get weather: {e}")
+                traceback.print_exc()
             return "Failed to get weather data."
 
     async def handle_search_gifs(self, query):
@@ -1067,23 +1090,27 @@ class AudioLoop:
         project_config = self.project_manager.get_project_config()
         system_prompt = project_config.get("system_prompt", """You are a helpful assistant.
 
-Follow these rules when using tools:
-1.  When the user asks for a visual, like the weather, you **must** use two tools in sequence.
-2.  First, call the tool to get the data (e.g., `get_weather`).
-3.  If `get_weather` returns a list of locations, present this list to the user and ask for clarification. Do not proceed to the next step.
-4.  If `get_weather` returns weather data, call the `display_content` tool immediately after, using the output from the first tool as the `data` argument.
+**Primary Directive: Use Tools for Visuals**
+When the user asks for any information that can be displayed visually, you **must** use the available tools to show it. This includes weather, images, etc. Speaking the information is secondary to displaying it.
+
+**Weather Request Workflow:**
+1.  When the user asks about the weather, your primary goal is to display the weather widget.
+2.  Call `get_weather` to get the necessary data.
+3.  If the location is ambiguous, `get_weather` will return a numbered list. You must ask the user for clarification.
+4.  If you receive weather data, you **must** immediately call `display_content` to show the widget. You can then also speak the forecast.
 
 **Example 1: Ambiguous Location**
 User: "What's the weather in Paris?"
 1.  Call `get_weather(location='Paris')`.
-2.  Receive a list of locations like "1. Paris, France; 2. Paris, Texas".
-3.  Respond to the user: "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
+2.  Receive: "1. Paris, France; 2. Paris, Texas".
+3.  Respond: "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
 
 **Example 2: Unambiguous Location**
 User: "What's the weather in London?"
 1.  Call `get_weather(location='London')`.
-2.  Receive the forecast data.
-3.  Immediately call `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
+2.  Receive forecast data.
+3.  Call `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
+4.  (Optional) Respond: "Here is the weather for London."
 """)
         voice_name = project_config.get("voice_name", "Sadaltager")
 
