@@ -508,13 +508,35 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "get_weather",
-        "description": "Fetches 7-day weather forecast data for a location to be displayed as a widget. Always use this tool when the user asks for the weather.",
+        "description": "Fetches weather forecast data for a given location. Can retrieve future forecasts (up to 16 days), historical data (up to 92 days), and specific hourly or daily weather variables (e.g., temperature_2m_max, wind_speed_10m, uv_index). Always use this tool when the user asks for the weather.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "location": {
                     "type": "STRING",
-                    "description": "The city and state, e.g. San Francisco, CA"
+                    "description": "The city and state, e.g., San Francisco, CA"
+                },
+                "forecast_days": {
+                    "type": "INTEGER",
+                    "description": "The number of days to forecast (0-16). Defaults to 7."
+                },
+                "past_days": {
+                    "type": "INTEGER",
+                    "description": "The number of past days to retrieve data for (0-92)."
+                },
+                "hourly": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING"
+                    },
+                    "description": "A list of hourly weather variables to retrieve (e.g., 'temperature_2m', 'precipitation_probability')."
+                },
+                "daily": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING"
+                    },
+                    "description": "A list of daily aggregate weather variables to retrieve (e.g., 'temperature_2m_max', 'uv_index_max')."
                 }
             },
             "required": ["location"]

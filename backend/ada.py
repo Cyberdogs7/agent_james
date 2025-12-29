@@ -822,9 +822,9 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
-    async def handle_get_weather(self, location):
+    async def handle_get_weather(self, location, forecast_days=7, past_days=0, hourly=None, daily=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}'")
+            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}' with params: forecast_days={forecast_days}, past_days={past_days}, hourly={hourly}, daily={daily}")
 
         try:
             # Step 1: Geocoding
@@ -851,31 +851,53 @@ class AudioLoop:
                 lon = results[0]["longitude"]
 
             # Step 2: Weather Forecast
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "timezone": "auto"
+            }
+            if forecast_days is not None:
+                params["forecast_days"] = forecast_days
+            if past_days is not None:
+                params["past_days"] = past_days
+            if hourly:
+                params["hourly"] = ",".join(hourly)
+            if daily:
+                params["daily"] = ",".join(daily)
+
+            # Add default daily if nothing is specified
+            if not hourly and not daily:
+                params["daily"] = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
+
+
             async with httpx.AsyncClient() as client:
                 forecast_response = await client.get(
                     "https://api.open-meteo.com/v1/forecast",
-                    params={
-                        "latitude": lat,
-                        "longitude": lon,
-                        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
-                        "timezone": "auto"
-                    }
+                    params=params
                 )
                 forecast_response.raise_for_status()
                 weather_data = forecast_response.json()
 
-                # Process the data
-                daily_data = weather_data['daily']
-                forecast = []
-                for i in range(len(daily_data['time'])):
-                    forecast.append({
-                        "date": daily_data['time'][i],
-                        "weather_code": daily_data['weather_code'][i],
-                        "temp_max": daily_data['temperature_2m_max'][i],
-                        "temp_min": daily_data['temperature_2m_min'][i],
-                        "precipitation": daily_data['precipitation_sum'][i]
-                    })
-                return forecast
+                # The old widget expects a simple daily forecast structure.
+                # If only the default daily data was requested, we format it for the widget.
+                # Otherwise, we return the full JSON for the model to interpret.
+                if params.get("daily") == "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum" and not hourly:
+                    daily_data = weather_data.get('daily', {})
+                    if 'time' in daily_data:
+                        forecast = []
+                        for i in range(len(daily_data['time'])):
+                            forecast.append({
+                                "date": daily_data['time'][i],
+                                "weather_code": daily_data.get('weather_code', [])[i],
+                                "temp_max": daily_data.get('temperature_2m_max', [])[i],
+                                "temp_min": daily_data.get('temperature_2m_min', [])[i],
+                                "precipitation": daily_data.get('precipitation_sum', [])[i]
+                            })
+                        return forecast
+                    else:
+                        return weather_data
+                else:
+                    return weather_data
 
         except httpx.HTTPStatusError as e:
             if INCLUDE_RAW_LOGS:
@@ -884,6 +906,7 @@ class AudioLoop:
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to get weather: {e}")
+                traceback.print_exc()
             return "Failed to get weather data."
 
     async def handle_search_gifs(self, query):
