@@ -829,10 +829,9 @@ class AudioLoop:
         try:
             # Step 1: Geocoding
             async with httpx.AsyncClient() as client:
-                geo_response = await client.get(
-                    "https://geocoding-api.open-meteo.com/v1/search",
-                    params={"name": location, "count": 15}
-                )
+                params = {"name": location, "count": 15, "language": "en", "format": "json"}
+                url = "https://geocoding-api.open-meteo.com/v1/search"
+                geo_response = await client.get(url, params=params)
                 geo_response.raise_for_status()
                 geo_data = geo_response.json()
                 results = geo_data.get("results")
@@ -1924,7 +1923,10 @@ User: "What's the weather in London?"
                     self.out_queue = asyncio.Queue(maxsize=10)
 
                     tasks.append(asyncio.create_task(self.send_realtime()))
-                    tasks.append(asyncio.create_task(self.listen_audio()))
+                    # Run listen_audio as a separate, non-critical background task
+                    # This prevents the main session from crashing if audio input fails (e.g., in a headless environment)
+                    audio_input_task = asyncio.create_task(self.listen_audio())
+                    tasks.append(audio_input_task) # Still track it for cleanup
 
                     if self.video_mode == "camera":
                         tasks.append(asyncio.create_task(self.get_frames()))
