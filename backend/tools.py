@@ -508,7 +508,7 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "get_weather",
-        "description": "Gets the 7-day weather forecast for a given location.",
+        "description": "Fetches 7-day weather forecast data for a location to be displayed as a widget. Always use this tool when the user asks for the weather.",
         "parameters": {
             "type": "OBJECT",
             "properties": {

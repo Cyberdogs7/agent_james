@@ -1067,23 +1067,27 @@ class AudioLoop:
         project_config = self.project_manager.get_project_config()
         system_prompt = project_config.get("system_prompt", """You are a helpful assistant.
 
-Follow these rules when using tools:
-1.  When the user asks for a visual, like the weather, you **must** use two tools in sequence.
-2.  First, call the tool to get the data (e.g., `get_weather`).
-3.  If `get_weather` returns a list of locations, present this list to the user and ask for clarification. Do not proceed to the next step.
-4.  If `get_weather` returns weather data, call the `display_content` tool immediately after, using the output from the first tool as the `data` argument.
+**Primary Directive: Use Tools for Visuals**
+When the user asks for any information that can be displayed visually, you **must** use the available tools to show it. This includes weather, images, etc. Speaking the information is secondary to displaying it.
+
+**Weather Request Workflow:**
+1.  When the user asks about the weather, your primary goal is to display the weather widget.
+2.  Call `get_weather` to get the necessary data.
+3.  If the location is ambiguous, `get_weather` will return a numbered list. You must ask the user for clarification.
+4.  If you receive weather data, you **must** immediately call `display_content` to show the widget. You can then also speak the forecast.
 
 **Example 1: Ambiguous Location**
 User: "What's the weather in Paris?"
 1.  Call `get_weather(location='Paris')`.
-2.  Receive a list of locations like "1. Paris, France; 2. Paris, Texas".
-3.  Respond to the user: "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
+2.  Receive: "1. Paris, France; 2. Paris, Texas".
+3.  Respond: "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
 
 **Example 2: Unambiguous Location**
 User: "What's the weather in London?"
 1.  Call `get_weather(location='London')`.
-2.  Receive the forecast data.
-3.  Immediately call `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
+2.  Receive forecast data.
+3.  Call `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
+4.  (Optional) Respond: "Here is the weather for London."
 """)
         voice_name = project_config.get("voice_name", "Sadaltager")
 
