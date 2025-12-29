@@ -828,8 +828,11 @@ class AudioLoop:
 
         try:
             # Step 1: Geocoding
+            # Strip state/country info, as the API prefers just the city name
+            city = location.split(',')[0].strip()
+
             async with httpx.AsyncClient() as client:
-                params = {"name": location, "count": 15, "language": "en", "format": "json"}
+                params = {"name": city, "count": 15, "language": "en", "format": "json"}
                 url = "https://geocoding-api.open-meteo.com/v1/search"
 
                 if INCLUDE_RAW_LOGS:
