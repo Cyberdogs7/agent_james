@@ -828,8 +828,10 @@ class AudioLoop:
 
         try:
             # Step 1: Geocoding
-            # Strip state/country info, as the API prefers just the city name
-            city = location.split(',')[0].strip()
+            parts = [p.strip() for p in location.split(',')]
+            city = parts[0]
+            state = parts[1] if len(parts) > 1 else None
+            country = parts[2] if len(parts) > 2 else None
 
             async with httpx.AsyncClient() as client:
                 params = {"name": city, "count": 15, "language": "en", "format": "json"}
@@ -853,6 +855,26 @@ class AudioLoop:
                         print(f"[ADA DEBUG] [WEATHER] Geocoding returned no results. Raw response: {geo_response.text}")
                     return f"Could not find location: {location}"
 
+                # Step 2: Filter results if state/country was provided
+                if state or country:
+                    filtered_results = []
+                    for r in results:
+                        match = True
+                        # State/Admin1 must match if provided
+                        if state and not (r.get('admin1') and state.lower() in r.get('admin1').lower()):
+                            match = False
+                        # Country must match if provided
+                        if country and not (r.get('country') and country.lower() in r.get('country').lower()):
+                            match = False
+
+                        if match:
+                            filtered_results.append(r)
+
+                    # If we found any matches, use the filtered list. Otherwise, stick with the original broad list.
+                    if filtered_results:
+                        results = filtered_results
+
+                # Step 3: Handle ambiguity
                 if len(results) > 1:
                     locations = [
                         f"{i+1}. {r.get('name', 'N/A')}, {r.get('admin1', 'N/A')}, {r.get('country', 'N/A')}"
