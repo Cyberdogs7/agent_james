@@ -968,16 +968,32 @@ class AudioLoop:
     async def handle_display_content(self, content_type, url=None, widget_type=None, data=None, duration=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [DISPLAY] Displaying content: {content_type}")
-            # Diagnostic logging
-            if widget_type == 'weather':
-                print(f"[ADA DEBUG] [WEATHER WIDGET] Data type: {type(data)}")
-                print(f"[ADA DEBUG] [WEATHER WIDGET] Data content: {data}")
+
+        # If data is a string, assume it's JSON and parse it.
+        # This handles the case where the model passes the result of one tool (get_weather)
+        # as a stringified argument to another tool (display_content).
+        parsed_data = data
+        if isinstance(data, str):
+            try:
+                parsed_data = json.loads(data)
+            except json.JSONDecodeError:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WARN] Could not decode JSON string for display content: {data}")
+                pass # Leave it as a string if it's not valid JSON
+
+        # New check: If the parsed data is a dict with a 'forecast' key, extract the forecast list.
+        # This handles the model wrapping the data in an object.
+        if widget_type == 'weather' and isinstance(parsed_data, dict) and 'forecast' in parsed_data:
+             if INCLUDE_RAW_LOGS:
+                print("[ADA DEBUG] [WEATHER WIDGET] Detected 'forecast' key in data. Extracting the list.")
+             parsed_data = parsed_data['forecast']
+
         if self.on_display_content:
             self.on_display_content({
                 "content_type": content_type,
                 "url": url,
                 "widget_type": widget_type,
-                "data": data,
+                "data": parsed_data,
                 "duration": duration
             })
             return "Content displayed."
