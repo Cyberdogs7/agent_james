@@ -286,7 +286,7 @@ from timer_agent import TimerAgent
 from update_agent import UpdateAgent
 
 class AudioLoop:
-    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
+    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, restart_handler=None):
         self.sio = sio
         self.video_mode = video_mode
         self.on_audio_data = on_audio_data
@@ -295,7 +295,7 @@ class AudioLoop:
         self.on_web_data = on_web_data
         self.on_display_content = on_display_content
         self.on_transcription = on_transcription
-        self.on_tool_confirmation = on_tool_confirmation 
+        self.on_tool_confirmation = on_tool_confirmation
         self.on_cad_status = on_cad_status
         self.on_cad_thought = on_cad_thought
         self.on_project_update = on_project_update
@@ -371,6 +371,7 @@ class AudioLoop:
             # If ada.py is in backend/, project root is one up
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
+        self.restart_handler = restart_handler
         
         # Sync Initial Project State
         if self.on_project_update:
@@ -1005,6 +1006,18 @@ class AudioLoop:
         else:
             return "No display content handler registered."
 
+    async def handle_restart_application(self):
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [RESTART] Handling agent restart request...")
+        if self.restart_handler:
+            # Use asyncio.create_task to avoid blocking the tool response
+            asyncio.create_task(self.restart_handler())
+            return "Restart initiated."
+        else:
+            if self.on_error:
+                self.on_error("Restart handler not configured.")
+            return "Cannot restart: handler not available."
+
     async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [WEB] Background Task Started: handle_web_agent_request('{prompt}')")
@@ -1396,10 +1409,18 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "set_time_format":
+                                if fc.name == "restart_application":
+                                    result = await self.handle_restart_application()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "set_time_format":
                                     time_format = fc.args["format"]
                                     success, msg = self.project_manager.set_time_format(time_format)
                                     function_response = types.FunctionResponse(
