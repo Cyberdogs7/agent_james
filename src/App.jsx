@@ -66,6 +66,7 @@ function App() {
     const [activePrintStatus, setActivePrintStatus] = useState(null); // {printer, progress_percent, time_elapsed, state}
     const [printerCount, setPrinterCount] = useState(0); // Count of connected printers
     const [currentTime, setCurrentTime] = useState(new Date()); // Live clock
+    const [timers, setTimers] = useState([]); // Timers and Reminders
 
 
     // RESTORED STATE
@@ -577,6 +578,10 @@ function App() {
             socket.emit('restart_request', { restart: true });
         });
 
+        // Listen for timer updates
+        socket.on('timers_update', (data) => {
+            setTimers(data.timers || []);
+        });
 
 
         // Get All Media Devices (Microphones, Speakers, Webcams)
@@ -1509,6 +1514,7 @@ function App() {
                             audioData={aiAudioData}
                             isListening={isConnected && !isMuted}
                             intensity={audioAmp}
+                            timers={timers}
                         />
                     </div>
                     {isModularMode && <div className={`absolute top-2 right-2 text-xs font-bold tracking-widest z-20 ${activeDragElement === 'visualizer' ? 'text-green-500' : 'text-yellow-500/50'}`}>VISUALIZER</div>}

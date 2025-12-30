@@ -282,6 +282,7 @@ async def start_audio(sid, data=None):
     try:
         print(f"Initializing AudioLoop with device_index={device_index}")
         audio_loop = ada.AudioLoop(
+            sio=sio,
             video_mode="none", 
             on_audio_data=on_audio_data,
             on_cad_data=on_cad_data,
@@ -1005,6 +1006,19 @@ async def update_settings(sid, data):
     save_settings()
     # Broadcast new full settings
     await sio.emit('settings', SETTINGS)
+
+@sio.event
+async def delete_timer(sid, data):
+    """Handles request from frontend to delete a timer or reminder."""
+    name = data.get('name')
+    if name and audio_loop and audio_loop.timer_agent:
+        print(f"Received delete_timer request for: {name}")
+        result = audio_loop.timer_agent.delete_entry(name)
+        # The broadcast loop in TimerAgent will handle updating clients,
+        # but we can send a confirmation or the result back.
+        await sio.emit('status', {'msg': result})
+    else:
+        await sio.emit('error', {'msg': 'Failed to delete timer.'})
 
 @sio.event
 async def get_project_config(sid):
