@@ -981,12 +981,14 @@ class AudioLoop:
                     print(f"[ADA DEBUG] [WARN] Could not decode JSON string for display content: {data}")
                 pass # Leave it as a string if it's not valid JSON
 
-        # New check: If the parsed data is a dict with a 'forecast' key, extract the forecast list.
-        # This handles the model wrapping the data in an object.
-        if widget_type == 'weather' and isinstance(parsed_data, dict) and 'forecast' in parsed_data:
-             if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [WEATHER WIDGET] Detected 'forecast' key in data. Extracting the list.")
-             parsed_data = parsed_data['forecast']
+        # More robust check for wrapped data, especially for weather widgets.
+        # Handles cases where the model wraps the list in a dict like {'forecast': [...]} or {'daily': [...]}.
+        if widget_type == 'weather' and isinstance(parsed_data, dict) and len(parsed_data) == 1:
+            key = list(parsed_data.keys())[0]
+            if isinstance(parsed_data[key], list):
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WEATHER WIDGET] Detected single-key dictionary wrapping the data with key '{key}'. Extracting the list.")
+                parsed_data = parsed_data[key]
 
         if self.on_display_content:
             self.on_display_content({
