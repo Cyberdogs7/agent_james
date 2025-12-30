@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import json
 import os
 import sys
 import traceback
@@ -967,6 +968,10 @@ class AudioLoop:
     async def handle_display_content(self, content_type, url=None, widget_type=None, data=None, duration=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [DISPLAY] Displaying content: {content_type}")
+            # Diagnostic logging
+            if widget_type == 'weather':
+                print(f"[ADA DEBUG] [WEATHER WIDGET] Data type: {type(data)}")
+                print(f"[ADA DEBUG] [WEATHER WIDGET] Data content: {data}")
         if self.on_display_content:
             self.on_display_content({
                 "content_type": content_type,
