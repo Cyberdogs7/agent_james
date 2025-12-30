@@ -18,6 +18,7 @@ import httpx
 from giphy_client.apis.default_api import DefaultApi
 from giphy_client.api_client import ApiClient
 
+from time_utils import set_time_format_tool, get_datetime_tool, format_datetime, get_local_time
 from google import genai
 from google.genai import types
 
@@ -269,7 +270,8 @@ tools = [{'google_search': {}}, {"function_declarations": [
     list_projects_tool, list_smart_devices_tool, control_light_tool,
     discover_printers_tool, print_stl_tool, get_print_status_tool,
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
-    delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool
+    delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
+    set_time_format_tool, get_datetime_tool
 ] + tools_list[0]['function_declarations'][1:]}]
 
 pya = pyaudio.PyAudio()
@@ -1394,10 +1396,29 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "get_weather":
+                                if fc.name == "set_time_format":
+                                    time_format = fc.args["format"]
+                                    success, msg = self.project_manager.set_time_format(time_format)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "get_datetime":
+                                    time_format = self.project_manager.get_project_config().get("time_format", "12h")
+                                    current_time = get_local_time()
+                                    formatted_time = format_datetime(current_time, time_format)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": f"The current date and time is {formatted_time}."}
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "get_weather":
                                     location = fc.args["location"]
                                     result = await self.handle_get_weather(location)
                                     function_response = types.FunctionResponse(

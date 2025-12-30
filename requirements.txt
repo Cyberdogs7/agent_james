@@ -26,3 +26,4 @@ requests
 giphy_client
 pytest
 httpx
+tzlocal

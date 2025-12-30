@@ -245,3 +245,9 @@ class ProjectManager:
             print(f"[ProjectManager] [ERR] Failed to read jules sessions: {e}")
             return []
 
+    def set_time_format(self, time_format: str):
+        """Sets the time format for the project."""
+        if time_format not in ["12h", "24h"]:
+            return False, "Invalid time format. Please use '12h' or '24h'."
+
+        return self.update_project_config({"time_format": time_format})
