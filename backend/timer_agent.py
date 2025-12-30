@@ -8,13 +8,66 @@ import struct
 import pyaudio
 
 class TimerAgent:
-    def __init__(self, session=None, storage_file="timers.json"):
+    def __init__(self, session=None, sio=None, storage_file="timers.json"):
         self.session = session
+        self.sio = sio
         self.storage_file = storage_file
         self.active_timers = {}
         self.active_reminders = {}
         self._pyaudio_instance = pyaudio.PyAudio()
         self._load_from_disk()
+        self._active_tasks = {} # To track all running timer/reminder tasks
+        self._update_loop_task = None # Will be started on demand
+
+    def _start_update_loop_if_needed(self):
+        """Starts the background broadcast loop if it's not already running."""
+        if self._update_loop_task is None:
+            try:
+                # Check if a loop is running
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    self._update_loop_task = asyncio.create_task(self._broadcast_updates())
+            except RuntimeError:
+                # No running loop, do nothing. This happens in synchronous contexts like tests.
+                pass
+
+    def stop(self):
+        """Stops all running tasks."""
+        if self._update_loop_task:
+            self._update_loop_task.cancel()
+        for task in self._active_tasks.values():
+            task.cancel()
+        self._active_tasks = {}
+
+    async def _broadcast_updates(self):
+        """Periodically sends the status of all timers and reminders to the frontend."""
+        while True:
+            try:
+                if self.sio:
+                    # Prepare the data for the frontend
+                    timers_list = []
+                    for name, data in self.active_timers.items():
+                        timers_list.append({
+                            'name': name,
+                            'type': 'timer',
+                            'end_time': data['end_time'],
+                            'duration': data['duration'],
+                        })
+                    for name, data in self.active_reminders.items():
+                        timers_list.append({
+                            'name': name,
+                            'type': 'reminder',
+                            'reminder_time': data['reminder_time'],
+                        })
+
+                    await self.sio.emit('timers_update', {'timers': timers_list})
+
+                await asyncio.sleep(1) # Broadcast every second for live countdowns
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"Error in TimerAgent update loop: {e}")
+                await asyncio.sleep(5) # Wait longer if there's an error
 
     def _play_notification_sound(self):
         # A simple notification sound using pyaudio
@@ -75,6 +128,7 @@ class TimerAgent:
             remaining_duration = timer_data["end_time"] - time.time()
             if remaining_duration > 0:
                 task = asyncio.create_task(self._timer_task(remaining_duration, name))
+                self._active_tasks[name] = task
                 self.active_timers[name] = {
                     "task": task,
                     "end_time": timer_data["end_time"],
@@ -89,6 +143,7 @@ class TimerAgent:
                 delay = (reminder_time - now).total_seconds()
                 if delay > 0:
                     task = asyncio.create_task(self._reminder_task(delay, name, reminder_data["reminder_time"]))
+                    self._active_tasks[name] = task
                     self.active_reminders[name] = {
                         "task": task,
                         "reminder_time": reminder_data["reminder_time"],
@@ -108,7 +163,10 @@ class TimerAgent:
             await asyncio.sleep(duration)
             if name in self.active_timers: # Check if it wasn't cancelled
                 await self._send_notification(f"Timer '{name}' is up!")
+                if self.sio:
+                    await self.sio.emit('timer_finished', {'name': name})
                 self.active_timers.pop(name, None)
+                self._active_tasks.pop(name, None)
                 self._save_to_disk()
         except asyncio.CancelledError:
             # Timer was cancelled, do nothing.
@@ -120,7 +178,9 @@ class TimerAgent:
         if name in self.active_timers or name in self.active_reminders:
             return f"A timer or reminder with the name '{name}' already exists."
 
+        self._start_update_loop_if_needed()
         task = asyncio.create_task(self._timer_task(duration, name))
+        self._active_tasks[name] = task
         self.active_timers[name] = {
             "task": task,
             "end_time": time.time() + duration,
@@ -135,7 +195,10 @@ class TimerAgent:
             await asyncio.sleep(delay)
             if name in self.active_reminders: # Check if it wasn't cancelled
                 await self._send_notification(f"Reminder: '{name}'")
+                if self.sio:
+                    await self.sio.emit('reminder_due', {'name': name, 'timestamp': timestamp})
                 self.active_reminders.pop(name, None)
+                self._active_tasks.pop(name, None)
                 self._save_to_disk()
         except asyncio.CancelledError:
             # Reminder was cancelled, do nothing.
@@ -156,7 +219,9 @@ class TimerAgent:
             if delay <= 0:
                 return "The specified time is in the past."
 
+            self._start_update_loop_if_needed()
             task = asyncio.create_task(self._reminder_task(delay, name, timestamp))
+            self._active_tasks[name] = task
             self.active_reminders[name] = {
                 "task": task,
                 "reminder_time": timestamp,
@@ -174,8 +239,10 @@ class TimerAgent:
             if new_duration is not None:
                 # Cancel the old task
                 self.active_timers[name]["task"].cancel()
+                self._active_tasks.pop(name, None)
                 # Create a new task with the new duration
                 task = asyncio.create_task(self._timer_task(new_duration, name))
+                self._active_tasks[name] = task
                 self.active_timers[name].update({
                     "task": task,
                     "end_time": time.time() + new_duration,
@@ -197,8 +264,10 @@ class TimerAgent:
 
                     # Cancel the old task
                     self.active_reminders[name]["task"].cancel()
+                    self._active_tasks.pop(name, None)
                     # Create a new task with the new timestamp
                     task = asyncio.create_task(self._reminder_task(delay, name, new_timestamp))
+                    self._active_tasks[name] = task
                     self.active_reminders[name].update({
                         "task": task,
                         "reminder_time": new_timestamp,
@@ -235,11 +304,13 @@ class TimerAgent:
         """Deletes a timer or reminder by name."""
         if name in self.active_timers:
             self.active_timers[name]["task"].cancel()
+            self._active_tasks.pop(name, None)
             del self.active_timers[name]
             self._save_to_disk()
             return f"Timer '{name}' deleted."
         elif name in self.active_reminders:
             self.active_reminders[name]["task"].cancel()
+            self._active_tasks.pop(name, None)
             del self.active_reminders[name]
             self._save_to_disk()
             return f"Reminder '{name}' deleted."

@@ -1,12 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Visualizer from './Visualizer';
 import WeatherWidget from './WeatherWidget';
+import TimerCarousel from './TimerCarousel';
 import { X } from 'lucide-react';
 
-const DisplayArea = ({ socket, isListening, audioData, intensity }) => {
+const DisplayArea = ({ socket, isListening, audioData, intensity, timers }) => {
   const [displayContent, setDisplayContent] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const timerRef = useRef(null);
+
+  const handleTimerDismiss = (name) => {
+    if (socket) {
+      socket.emit('delete_timer', { name });
+    }
+  };
 
   const handleDisplay = (data) => {
     if (timerRef.current) {
@@ -55,6 +62,9 @@ const DisplayArea = ({ socket, isListening, audioData, intensity }) => {
 
   const renderContent = () => {
     if (!displayContent) {
+      if (timers && timers.length > 0) {
+        return <TimerCarousel timers={timers} onDismiss={handleTimerDismiss} />;
+      }
       return <Visualizer isListening={isListening} audioData={audioData} intensity={intensity} />;
     }
 
