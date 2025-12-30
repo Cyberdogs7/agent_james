@@ -6,6 +6,8 @@ import os
 import math
 import struct
 import pyaudio
+from tzlocal import get_localzone
+from time_utils import get_local_time
 
 class TimerAgent:
     def __init__(self, session=None, sio=None, storage_file="timers.json"):
@@ -15,8 +17,8 @@ class TimerAgent:
         self.active_timers = {}
         self.active_reminders = {}
         self._pyaudio_instance = pyaudio.PyAudio()
-        self._load_from_disk()
         self._active_tasks = {} # To track all running timer/reminder tasks
+        self._load_from_disk()
         self._update_loop_task = None # Will be started on demand
 
     def _start_update_loop_if_needed(self):
@@ -139,7 +141,10 @@ class TimerAgent:
         for name, reminder_data in data.get("reminders", {}).items():
             try:
                 reminder_time = datetime.datetime.fromisoformat(reminder_data["reminder_time"])
-                now = datetime.datetime.now()
+                # Ensure the loaded time is timezone-aware for correct comparison
+                if reminder_time.tzinfo is None:
+                    reminder_time = reminder_time.replace(tzinfo=get_localzone())
+                now = get_local_time()
                 delay = (reminder_time - now).total_seconds()
                 if delay > 0:
                     task = asyncio.create_task(self._reminder_task(delay, name, reminder_data["reminder_time"]))
@@ -211,24 +216,27 @@ class TimerAgent:
             return f"A timer or reminder with the name '{name}' already exists."
 
         try:
-            # Using fromisoformat which is more robust
             reminder_time = datetime.datetime.fromisoformat(timestamp)
-            now = datetime.datetime.now()
+            if reminder_time.tzinfo is None:
+                reminder_time = reminder_time.replace(tzinfo=get_localzone())
+
+            now = get_local_time()
             delay = (reminder_time - now).total_seconds()
 
             if delay <= 0:
                 return "The specified time is in the past."
 
             self._start_update_loop_if_needed()
-            task = asyncio.create_task(self._reminder_task(delay, name, timestamp))
+            aware_timestamp = reminder_time.isoformat()
+            task = asyncio.create_task(self._reminder_task(delay, name, aware_timestamp))
             self._active_tasks[name] = task
             self.active_reminders[name] = {
                 "task": task,
-                "reminder_time": timestamp,
+                "reminder_time": aware_timestamp,
                 "name": name
             }
             self._save_to_disk()
-            return f"Reminder '{name}' set for {timestamp}."
+            return f"Reminder '{name}' set for {aware_timestamp}."
 
         except ValueError:
             return "Invalid timestamp format. Please use ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."
@@ -256,7 +264,10 @@ class TimerAgent:
             if new_timestamp is not None:
                 try:
                     reminder_time = datetime.datetime.fromisoformat(new_timestamp)
-                    now = datetime.datetime.now()
+                    if reminder_time.tzinfo is None:
+                        reminder_time = reminder_time.replace(tzinfo=get_localzone())
+
+                    now = get_local_time()
                     delay = (reminder_time - now).total_seconds()
 
                     if delay <= 0:
@@ -266,14 +277,15 @@ class TimerAgent:
                     self.active_reminders[name]["task"].cancel()
                     self._active_tasks.pop(name, None)
                     # Create a new task with the new timestamp
-                    task = asyncio.create_task(self._reminder_task(delay, name, new_timestamp))
+                    aware_timestamp = reminder_time.isoformat()
+                    task = asyncio.create_task(self._reminder_task(delay, name, aware_timestamp))
                     self._active_tasks[name] = task
                     self.active_reminders[name].update({
                         "task": task,
-                        "reminder_time": new_timestamp,
+                        "reminder_time": aware_timestamp,
                     })
                     self._save_to_disk()
-                    return f"Reminder '{name}' modified to {new_timestamp}."
+                    return f"Reminder '{name}' modified to {aware_timestamp}."
                 except ValueError:
                     return "Invalid timestamp format. Please use ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."
             else:
