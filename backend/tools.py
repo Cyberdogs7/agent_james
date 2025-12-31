@@ -541,5 +541,13 @@ tools_list = [{"function_declarations": [
             },
             "required": ["location"]
         }
+    },
+    {
+        "name": "restart_application",
+        "description": "Restarts the entire application, including the backend and frontend.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
     }
 ]}]

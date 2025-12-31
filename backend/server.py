@@ -299,7 +299,8 @@ async def start_audio(sid, data=None):
             input_device_index=device_index,
             input_device_name=device_name,
             kasa_agent=kasa_agent,
-            project_manager=project_manager
+            project_manager=project_manager,
+            restart_handler=lambda: shutdown(sid, {"restart": True})
         )
         print("AudioLoop initialized successfully.")
 
