@@ -544,7 +544,7 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "restart_application",
-        "description": "Restarts the entire application, including the backend and frontend.",
+        "description": "Restarts the entire application, including the backend and frontend. Use this tool when the user asks to 'restart' or 'reboot' the system.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
