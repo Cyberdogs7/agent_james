@@ -13,7 +13,6 @@ import asyncio
 import threading
 import sys
 import os
-import time
 import json
 from datetime import datetime
 from pathlib import Path
@@ -300,8 +299,7 @@ async def start_audio(sid, data=None):
             input_device_index=device_index,
             input_device_name=device_name,
             kasa_agent=kasa_agent,
-            project_manager=project_manager,
-            restart_handler=_shutdown_and_restart
+            project_manager=project_manager
         )
         print("AudioLoop initialized successfully.")
 
@@ -427,12 +425,13 @@ async def confirm_tool(sid, data):
     else:
         print("Audio loop not active, cannot resolve confirmation.")
 
-async def _shutdown_and_restart():
-    """Internal function to handle the full shutdown and restart sequence."""
+@sio.event
+async def shutdown(sid, data=None):
+    """Gracefully shutdown the server when the application closes."""
     global audio_loop, loop_task, authenticator
 
     print("[SERVER] ========================================")
-    print("[SERVER]   SHUTDOWN AND RESTART SEQUENCE INIT   ")
+    print("[SERVER] SHUTDOWN SIGNAL RECEIVED FROM FRONTEND")
     print("[SERVER] ========================================")
 
     # Stop audio loop
@@ -452,51 +451,41 @@ async def _shutdown_and_restart():
         print("[SERVER] Stopping Authenticator...")
         authenticator.stop()
 
-    print("[SERVER] Graceful shutdown complete. Launching restart script...")
+    print("[SERVER] Graceful shutdown complete. Terminating process...")
 
-    # Launch the restart script in a new process
-    try:
-        import subprocess
-        backend_dir = os.path.dirname(os.path.abspath(__file__))
-        restart_script_path = os.path.join(backend_dir, "restart.py")
-        subprocess.Popen([sys.executable, restart_script_path])
-        print(f"[SERVER] Launched {restart_script_path}.")
-    except Exception as e:
-        print(f"[SERVER] Failed to launch restart script: {e}")
-
-    # Give the new process a moment to start before exiting
-    await asyncio.sleep(1)
-
-    print("[SERVER] Exiting old process.")
-    os._exit(0)
-
-
-@sio.event
-async def shutdown(sid, data=None):
-    """Gracefully shutdown the server when the application closes."""
+    # Force exit immediately - os._exit bypasses cleanup but ensures termination
     if data and data.get("restart"):
-        await _shutdown_and_restart()
-    else:
-        # Perform a simple shutdown without restart
-        global audio_loop, loop_task, authenticator
-        print("[SERVER] ========================================")
-        print("[SERVER] SHUTDOWN SIGNAL RECEIVED FROM FRONTEND")
-        print("[SERVER] ========================================")
-        if audio_loop:
-            audio_loop.stop()
-        if loop_task and not loop_task.done():
-            loop_task.cancel()
-        if authenticator:
-            authenticator.stop()
-        print("[SERVER] Graceful shutdown complete. Terminating process...")
-        os._exit(0)
+        print("[SERVER] Restarting application...")
+        import subprocess
+        # Use sys.executable to restart the backend with the same python interpreter
+        # and use Popen with a new process group to ensure it survives our exit
+        try:
+            # Re-run the same command that started this script
+            # sys.executable is the path to python.exe
+            # sys.argv[0] is server.py
+            # We want to make sure we are in the right directory
+            backend_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(backend_dir)
 
+            if sys.platform == 'win32':
+                # On Windows, we can use start to launch a new console window or just spawn it detached
+                # npm run dev is what the original code used, maybe it's preferred to restart EVERYTHING
+                # Let's try to stick to what the user had but make it more robust
+                subprocess.Popen("npm run dev", shell=True, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            else:
+                subprocess.Popen("npm run dev", shell=True, cwd=project_root)
+        except Exception as e:
+            print(f"[SERVER] Failed to restart: {e}")
+
+        os._exit(0)
+    else:
+        os._exit(0)
 
 @sio.event
 async def restart_request(sid, data=None):
-    """Restart the application, typically after an update or by agent request."""
+    """Restart the application after an update."""
     print("[SERVER] Restart request received.")
-    await _shutdown_and_restart()
+    await shutdown(sid, {"restart": True})
 
 @sio.event
 async def user_input(sid, data):

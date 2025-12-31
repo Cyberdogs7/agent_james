@@ -286,7 +286,7 @@ from timer_agent import TimerAgent
 from update_agent import UpdateAgent
 
 class AudioLoop:
-    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, restart_handler=None):
+    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
         self.sio = sio
         self.video_mode = video_mode
         self.on_audio_data = on_audio_data
@@ -371,7 +371,6 @@ class AudioLoop:
             # If ada.py is in backend/, project root is one up
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
-        self.restart_handler = restart_handler
         
         # Sync Initial Project State
         if self.on_project_update:
@@ -1008,15 +1007,12 @@ class AudioLoop:
 
     async def handle_restart_application(self):
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [RESTART] Handling agent restart request...")
-        if self.restart_handler:
-            # Use asyncio.create_task to avoid blocking the tool response
-            asyncio.create_task(self.restart_handler())
-            return "Restart initiated."
+            print("[ADA DEBUG] [RESTART] Emitting restart signal to frontend...")
+        if self.sio:
+            await self.sio.emit('initiate_restart')
+            return "Restart signal sent to frontend."
         else:
-            if self.on_error:
-                self.on_error("Restart handler not configured.")
-            return "Cannot restart: handler not available."
+            return "Cannot send restart signal: not connected to server."
 
     async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
