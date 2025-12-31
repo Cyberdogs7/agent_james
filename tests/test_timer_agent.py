@@ -110,8 +110,10 @@ async def test_persistence(timer_agent):
     await timer_agent.set_reminder(get_future_timestamp(), "reminder1")
 
     # Create a new agent to load from the same file
-    new_agent = TimerAgent(session=AsyncMock(), storage_file=STORAGE_FILE)
-    assert "timer1" in new_agent.active_timers
-    assert "reminder1" in new_agent.active_reminders
-    new_agent.active_timers["timer1"]["task"].cancel()
-    new_agent.active_reminders["reminder1"]["task"].cancel()
+    with patch('pyaudio.PyAudio') as mock_pyaudio:
+        mock_pyaudio.return_value.open.return_value = AsyncMock()
+        new_agent = TimerAgent(session=AsyncMock(), storage_file=STORAGE_FILE)
+        assert "timer1" in new_agent.active_timers
+        assert "reminder1" in new_agent.active_reminders
+        new_agent.active_timers["timer1"]["task"].cancel()
+        new_agent.active_reminders["reminder1"]["task"].cancel()

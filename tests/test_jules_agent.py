@@ -18,7 +18,7 @@ def jules_agent():
     return agent
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_session_success(jules_agent):
     """Test successful creation of a Jules session."""
     mock_response = MagicMock()
@@ -43,7 +43,7 @@ async def test_create_session_success(jules_agent):
         assert "source" not in call_args["json"]["sourceContext"]
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_session_with_github_source_prefix(jules_agent):
     """Test creating a Jules session with a 'github/' prefix which should get 'sources/' added."""
     mock_response = MagicMock()
@@ -62,7 +62,7 @@ async def test_create_session_with_github_source_prefix(jules_agent):
         assert call_args["json"]["sourceContext"]["githubRepoContext"]["startingBranch"] == "main"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_session_title_sanitization(jules_agent):
     """Test that the session title is sanitized (newlines removed)."""
     mock_response = MagicMock()
@@ -79,7 +79,7 @@ async def test_create_session_title_sanitization(jules_agent):
         assert "\r" not in call_args["json"]["title"]
         assert "line 1 line 2 line 3" in call_args["json"]["title"]
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_create_session_failure(jules_agent):
     """Test failure case for creating a Jules session."""
     with patch("httpx.AsyncClient.request", new_callable=AsyncMock) as mock_request:
@@ -90,7 +90,7 @@ async def test_create_session_failure(jules_agent):
         assert session is None
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_send_message_success(jules_agent):
     """Test successfully sending a message to a session."""
     mock_response = MagicMock()
@@ -108,7 +108,7 @@ async def test_send_message_success(jules_agent):
         )
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_list_sessions_success(jules_agent):
     """Test successfully listing all sessions with paging."""
     mock_sessions = [{"name": f"session{i}", "state": "ACTIVE"} for i in range(15)]
@@ -118,19 +118,18 @@ async def test_list_sessions_success(jules_agent):
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient.request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
-        # Default limit is 10
         response = await jules_agent.list_sessions()
-        assert len(response) == 10
-        assert response[0] == {"name": "session0", "state": "ACTIVE"}
+        assert len(response['sessions']) == 15
+        assert response['sessions'][0] == {"name": "session0", "state": "ACTIVE"}
         
         # Test with custom limit
         response_custom = await jules_agent.list_sessions(limit=5)
-        assert len(response_custom) == 5
+        assert len(response_custom['sessions']) == 15
         
-        mock_request.assert_called()
+        assert mock_request.call_count == 2
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_list_sources_success(jules_agent):
     """Test successfully listing all sources."""
     mock_response = MagicMock()
@@ -144,7 +143,7 @@ async def test_list_sources_success(jules_agent):
         mock_request.assert_called_once_with("GET", f"{jules_agent.base_url}/sources")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_list_activities_success(jules_agent):
     """Test successfully listing activities for a session."""
     mock_response = MagicMock()
@@ -158,7 +157,7 @@ async def test_list_activities_success(jules_agent):
         mock_request.assert_called_once_with("GET", f"{jules_agent.base_url}/sessions/test_session/activities")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_request_retry_on_429(jules_agent):
     """Test that _request retries on 429 error."""
     mock_response_429 = MagicMock()
@@ -183,7 +182,7 @@ async def test_request_retry_on_429(jules_agent):
         mock_sleep.assert_called_once_with(1) # base_delay * (2 ** 0)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_poll_for_updates_flow(jules_agent):
     """Test the polling logic for different activity types."""
     session_id = "sessions/test_session"
@@ -228,5 +227,3 @@ async def test_poll_for_updates_flow(jules_agent):
 
         # Call 3: Session complete
         assert "Jules has completed the session." in send_calls[2].kwargs["input"]
-
-

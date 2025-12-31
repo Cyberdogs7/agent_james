@@ -10,15 +10,43 @@ from typing import List, Optional
 
 load_dotenv()
 
+generate_cad_tool = {
+    "name": "generate_cad",
+    "description": "Generates a 3D CAD model based on a prompt.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The description of the object to generate."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
+iterate_cad_tool = {
+    "name": "iterate_cad",
+    "description": "Modifies or iterates on the current CAD design based on user feedback. Use this when the user asks to adjust, change, modify, or iterate on the existing 3D model (e.g., 'make it taller', 'add a handle', 'reduce the thickness').",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The changes or modifications to apply to the current design."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
+
 class CadAgent:
     def __init__(self, on_thought=None, on_status=None):
+        self.tools = [generate_cad_tool, iterate_cad_tool]
         self.client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
         # Using Gemini 2.5 Pro for thinking/streaming support
         self.model = "gemini-3-pro-preview"
-        self.on_thought = on_thought  # Callback for streaming thoughts 
+        self.on_thought = on_thought  # Callback for streaming thoughts
         self.on_status = on_status  # Callback for retry status info
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
-        
+
         self.system_instruction = """
 You are a Python-based 3D CAD Engineer using the `build123d` library.
 Your goal is to write a Python script that generates a 3D model based on the user's request.
@@ -73,7 +101,7 @@ export_stl(result_part, 'output.stl')
             output_dir: Directory to save the script and STL. If None, uses temp dir.
         """
         self._log(f"[CadAgent DEBUG] [START] Generation started for: '{prompt}'")
-        
+
         try:
             # Use provided output_dir or fall back to temp
             if output_dir:
@@ -82,7 +110,7 @@ export_stl(result_part, 'output.stl')
             else:
                 import tempfile
                 work_dir = tempfile.gettempdir()
-            
+
             # Generate timestamped filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_stl = os.path.join(work_dir, f"output_{timestamp}.stl")
@@ -90,10 +118,10 @@ export_stl(result_part, 'output.stl')
 
             max_retries = 3
             current_prompt = f"You are a build123d expert. Write a generic python script to create a 3D model of: {prompt}. Ensure you export to 'output.stl'. Unscaled."
-            
+
             for attempt in range(max_retries):
                 self._log(f"[CadAgent DEBUG] Attempt {attempt + 1}/{max_retries}")
-                
+
                 # Emit status update
                 if self.on_status:
                     status_info = {
@@ -103,7 +131,7 @@ export_stl(result_part, 'output.stl')
                         "error": None
                     }
                     self.on_status(status_info)
-                
+
                 # 1. Ask Gemini for the code with streaming and thinking
                 raw_content = ""
                 stream = await self.client.aio.models.generate_content_stream(
@@ -127,7 +155,7 @@ export_stl(result_part, 'output.stl')
                             else:
                                 # Accumulate answer text
                                 raw_content += part.text
-                
+
                 if not raw_content:
                     self._log("[CadAgent DEBUG] [ERR] Empty response from model.")
                     return None
@@ -145,22 +173,22 @@ export_stl(result_part, 'output.stl')
                     else:
                         self._log("[CadAgent DEBUG] [ERR] Could not extract python code.")
                         return None
-                
+
                 # 3. Save to Local File in cad_outputs folder
                 # Fix for Windows paths in python strings: escape backslashes
                 safe_output_path = output_stl.replace("\\", "\\\\")
-                
+
                 with open(script_path, "w") as f:
                     # Inject output path into the script
                     code_with_path = code.replace("output.stl", safe_output_path)
                     f.write(code_with_path)
-                    
+
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
-                
+
                 # 4. Execute Locally
                 import subprocess
                 import sys
-                
+
                 # Use the current Python interpreter (unified environment with build123d + mediapipe)
                 try:
                     proc = await asyncio.to_thread(
@@ -175,14 +203,14 @@ export_stl(result_part, 'output.stl')
                      proc = type('obj', (object,), {'returncode': 1})
                      stdout = ""
                      stderr = str(e)
-                
+
                 if proc.returncode != 0:
                     error_msg = stderr
                     # Extract a concise error message for display
                     error_lines = error_msg.strip().split('\n')
                     short_error = error_lines[-1][:100] if error_lines else "Unknown error"
                     self._log(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
-                    
+
                     # Emit retry status with error
                     if self.on_status:
                         self.on_status({
@@ -191,29 +219,29 @@ export_stl(result_part, 'output.stl')
                             "max_attempts": max_retries,
                             "error": short_error
                         })
-                    
+
                     # Preparing feedback for next attempt
                     current_prompt = f"""
 The Python script you generated failed to execute with the following error:
 {error_msg}
 
-Please fix the code to resolve this error. Return the full corrected script. 
+Please fix the code to resolve this error. Return the full corrected script.
 Ensure you still export to 'output.stl'.
 Original request: {prompt}
 """
                     continue # Retry loop
-                
+
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
-                
+
                 # 5. Read Output
                 if os.path.exists(output_stl):
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     with open(output_stl, "rb") as f:
                         stl_data = f.read()
-                        
+
                     import base64
                     b64_stl = base64.b64encode(stl_data).decode('utf-8')
-                    
+
                     return {
                         "format": "stl",
                         "data": b64_stl,
@@ -252,7 +280,7 @@ Original request: {prompt}
             output_dir: Directory containing existing script and where to save new STL.
         """
         self._log(f"[CadAgent DEBUG] [START] Iteration started for: '{prompt}'")
-        
+
         # Use provided output_dir or fall back to temp
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
@@ -260,18 +288,18 @@ Original request: {prompt}
         else:
             import tempfile
             work_dir = tempfile.gettempdir()
-        
+
         # Generate timestamped filename for the output
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         script_path = os.path.join(work_dir, "current_design.py")
         output_stl = os.path.join(work_dir, f"output_{timestamp}.stl")
-        
+
         existing_code = ""
-        
+
         if os.path.exists(script_path):
             with open(script_path, "r") as f:
                 existing_code = f.read()
-            
+
             # Sanitize existing code: replace any absolute paths with 'output.stl'
             # This prevents the LLM from seeing/reproducing Windows paths that cause Unicode escape errors
             import re
@@ -307,10 +335,10 @@ User Request: {prompt}
 Task: Rewrite the code to satisfy the user's request while maintaining the rest of the model structure.
 Ensure you still export to 'output.stl'.
 """
-            
+
             for attempt in range(max_retries):
                 self._log(f"[CadAgent DEBUG] Iteration Attempt {attempt + 1}/{max_retries}")
-                
+
                 # Emit status update
                 if self.on_status:
                     status_info = {
@@ -320,7 +348,7 @@ Ensure you still export to 'output.stl'.
                         "error": None
                     }
                     self.on_status(status_info)
-                
+
                 # 1. Ask Gemini for the code with streaming and thinking
                 raw_content = ""
                 stream = await self.client.aio.models.generate_content_stream(
@@ -344,7 +372,7 @@ Ensure you still export to 'output.stl'.
                             else:
                                 # Accumulate answer text
                                 raw_content += part.text
-                
+
                 if not raw_content:
                     self._log("[CadAgent DEBUG] [ERR] Empty response from model.")
                     return None
@@ -362,24 +390,24 @@ Ensure you still export to 'output.stl'.
                     else:
                         self._log("[CadAgent DEBUG] [ERR] Could not extract python code.")
                         return None
-                
+
                 # 3. Save to Local File in cad_outputs folder
                 # Overwrite the script so the next iteration builds on this one
-                
+
                 # Fix for Windows paths in python strings: escape backslashes
                 safe_output_path = output_stl.replace("\\", "\\\\")
-                
+
                 with open(script_path, "w") as f:
                     # Inject output path into the script
                     code_with_path = code.replace("output.stl", safe_output_path)
                     f.write(code_with_path)
-                    
+
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
-                
+
                 # 4. Execute Locally
                 import subprocess
                 import sys
-                
+
                 # Use asyncio.to_thread for Windows compatibility (asyncio.create_subprocess_exec
                 # throws NotImplementedError on Windows with certain event loop policies)
                 try:
@@ -395,32 +423,32 @@ Ensure you still export to 'output.stl'.
                     proc = type('obj', (object,), {'returncode': 1})()
                     stdout = ""
                     stderr = str(e)
-                
+
                 if proc.returncode != 0:
                     error_msg = stderr
                     self._log(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
-                    
+
                     # Preparing feedback for next attempt
                     current_prompt = f"""
 The updated Python script you generated failed to execute with the following error:
 {error_msg}
 
-Please fix the code to resolve this error. Return the full corrected script. 
+Please fix the code to resolve this error. Return the full corrected script.
 Ensure you still export to 'output.stl'.
 """
                     continue # Retry loop
-                
+
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
-                
+
                 # 5. Read Output
                 if os.path.exists(output_stl):
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     with open(output_stl, "rb") as f:
                         stl_data = f.read()
-                        
+
                     import base64
                     b64_stl = base64.b64encode(stl_data).decode('utf-8')
-                    
+
                     return {
                         "format": "stl",
                         "data": b64_stl,
@@ -448,4 +476,3 @@ Ensure you still export to 'output.stl'.
                 import traceback
                 traceback.print_exc()
             return None
-

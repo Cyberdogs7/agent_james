@@ -2,8 +2,28 @@ import asyncio
 import os
 import subprocess
 
+check_for_updates_tool = {
+    "name": "check_for_updates",
+    "description": "Checks if a new version of the application is available from the GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+apply_update_tool = {
+    "name": "apply_update",
+    "description": "Downloads the latest version of the application from GitHub and restarts the application to apply the changes.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+
 class UpdateAgent:
     def __init__(self, session=None, on_log=None):
+        self.tools = [check_for_updates_tool, apply_update_tool]
         self.session = session
         self.on_log = on_log
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"

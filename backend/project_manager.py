@@ -4,12 +4,47 @@ import shutil
 import time
 from pathlib import Path
 
+create_project_tool = {
+    "name": "create_project",
+    "description": "Creates a new project folder to organize files.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the new project."}
+        },
+        "required": ["name"]
+    }
+}
+
+switch_project_tool = {
+    "name": "switch_project",
+    "description": "Switches the current active project context.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the project to switch to."}
+        },
+        "required": ["name"]
+    }
+}
+
+list_projects_tool = {
+    "name": "list_projects",
+    "description": "Lists all available projects.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+
 class ProjectManager:
     def __init__(self, workspace_root: str):
+        self.tools = [create_project_tool, switch_project_tool, list_projects_tool]
         self.workspace_root = Path(workspace_root)
         self.projects_dir = self.workspace_root / "projects"
         self.current_project = "temp"
-        
+
         # Ensure projects root exists
         if not self.projects_dir.exists():
             self.projects_dir.mkdir(parents=True)
@@ -21,13 +56,13 @@ class ProjectManager:
                 if not config_path.exists():
                     print(f"[ProjectManager] Creating default config for existing project: {project_dir.name}")
                     self._create_default_config(project_dir)
-            
+
         # Clear temp project on startup if it exists
         temp_path = self.projects_dir / "temp"
         if temp_path.exists():
             print("[ProjectManager] Clearing temp project...")
             shutil.rmtree(temp_path)
-            
+
         # Ensure temp project receives fresh creation
         self.create_project("temp")
 
@@ -36,7 +71,7 @@ class ProjectManager:
         # Sanitize name to be safe for filesystem
         safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
         project_path = self.projects_dir / safe_name
-        
+
         if not project_path.exists():
             project_path.mkdir()
             (project_path / "cad").mkdir()
@@ -84,7 +119,7 @@ class ProjectManager:
         """Switches the active project context."""
         safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
         project_path = self.projects_dir / safe_name
-        
+
         if project_path.exists():
             self.current_project = safe_name
             print(f"[ProjectManager] Switched to project: {safe_name}")

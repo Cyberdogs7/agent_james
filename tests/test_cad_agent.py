@@ -4,6 +4,9 @@ Tests for CAD Generation Agent.
 import pytest
 import asyncio
 import os
+import tempfile
+import shutil
+from pathlib import Path
 
 from cad_agent import CadAgent
 
@@ -55,17 +58,21 @@ class TestCadGeneration:
         agent.on_thought = lambda t: thoughts.append(t)
         agent.on_status = lambda s: statuses.append(s)
         
-        try:
-            result = await agent.generate_prototype("A simple 10mm cube")
-            print(f"Generation result: {result}")
-            print(f"Thoughts received: {len(thoughts)}")
-            print(f"Statuses received: {len(statuses)}")
-            
-            # Check if STL was generated
-            if "output.stl" in str(result) or "success" in str(result).lower():
-                print("CAD generation successful")
-        except Exception as e:
-            print(f"Generation failed (expected if build123d not installed): {e}")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cad_dir = os.path.join(temp_dir, "cad")
+            os.makedirs(cad_dir)
+            try:
+                result = await agent.generate_prototype("A simple 10mm cube", output_dir=cad_dir)
+                print(f"Generation result: {result}")
+                print(f"Thoughts received: {len(thoughts)}")
+                print(f"Statuses received: {len(statuses)}")
+
+                # Check if STL was generated
+                assert result is not None
+                assert 'file_path' in result
+                assert os.path.exists(result['file_path'])
+            except Exception as e:
+                pytest.fail(f"Generation failed: {e}")
     
     @pytest.mark.asyncio
     @pytest.mark.skipif(
@@ -74,11 +81,17 @@ class TestCadGeneration:
     )
     async def test_generate_sphere(self, agent):
         """Test generating a sphere."""
-        try:
-            result = await agent.generate_prototype("A sphere with 25mm radius")
-            print(f"Sphere generation result: {result}")
-        except Exception as e:
-            print(f"Sphere generation failed: {e}")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cad_dir = os.path.join(temp_dir, "cad")
+            os.makedirs(cad_dir)
+            try:
+                result = await agent.generate_prototype("A sphere with 25mm radius", output_dir=cad_dir)
+                print(f"Sphere generation result: {result}")
+                assert result is not None
+                assert 'file_path' in result
+                assert os.path.exists(result['file_path'])
+            except Exception as e:
+                pytest.fail(f"Sphere generation failed: {e}")
 
 
 class TestCadIteration:
@@ -93,21 +106,22 @@ class TestCadIteration:
         """Test iterating on an existing design."""
         agent = CadAgent()
         
-        # First check if temp_cad_gen.py exists
-        temp_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "backend",
-            "temp_cad_gen.py"
-        )
-        
-        if not os.path.exists(temp_file):
-            pytest.skip("No existing temp_cad_gen.py to iterate on")
-        
-        try:
-            result = await agent.iterate_prototype("Make it 50% larger")
-            print(f"Iteration result: {result}")
-        except Exception as e:
-            print(f"Iteration failed: {e}")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cad_dir = os.path.join(temp_dir, "cad")
+            os.makedirs(cad_dir)
+            # Create a dummy current_design.py for iteration
+            design_file = os.path.join(cad_dir, "current_design.py")
+            with open(design_file, "w") as f:
+                f.write("from build123d import *; result_part = Box(10, 10, 10); export_stl(result_part, 'output.stl')")
+
+            try:
+                result = await agent.iterate_prototype("Make it 50% larger", output_dir=cad_dir)
+                print(f"Iteration result: {result}")
+                assert result is not None
+                assert 'file_path' in result
+                assert os.path.exists(result['file_path'])
+            except Exception as e:
+                pytest.fail(f"Iteration failed: {e}")
 
 
 class TestCadSystemPrompt:
@@ -117,7 +131,7 @@ class TestCadSystemPrompt:
         """Test that system prompt is defined."""
         agent = CadAgent()
         # The agent should have a system prompt for Gemini
-        assert hasattr(agent, 'system_prompt') or hasattr(agent, 'client')
+        assert hasattr(agent, 'system_instruction')
 
 
 class TestBuild123dImport:
