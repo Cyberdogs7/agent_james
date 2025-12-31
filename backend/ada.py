@@ -14,9 +14,6 @@ import argparse
 import math
 import struct
 import time
-import httpx
-from giphy_client.apis.default_api import DefaultApi
-from giphy_client.api_client import ApiClient
 
 from time_utils import set_time_format_tool, get_datetime_tool, format_datetime, get_local_time
 from google import genai
@@ -42,238 +39,6 @@ INCLUDE_RAW_LOGS = os.getenv("INCLUDE_RAW_LOGS", "True").lower() == "true"
 os.environ["INCLUDE_RAW_LOGS"] = str(INCLUDE_RAW_LOGS)
 client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
 
-# Function definitions
-generate_cad = {
-    "name": "generate_cad",
-    "description": "Generates a 3D CAD model based on a prompt.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "prompt": {"type": "STRING", "description": "The description of the object to generate."}
-        },
-        "required": ["prompt"]
-    },
-    "behavior": "NON_BLOCKING"
-}
-
-run_web_agent = {
-    "name": "run_web_agent",
-    "description": "Opens a web browser and performs a task according to the prompt.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "prompt": {"type": "STRING", "description": "The detailed instructions for the web browser agent."}
-        },
-        "required": ["prompt"]
-    },
-    "behavior": "NON_BLOCKING"
-}
-
-create_project_tool = {
-    "name": "create_project",
-    "description": "Creates a new project folder to organize files.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "name": {"type": "STRING", "description": "The name of the new project."}
-        },
-        "required": ["name"]
-    }
-}
-
-modify_timer_tool = {
-    "name": "modify_timer",
-    "description": "Modifies an existing timer or reminder.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "name": {"type": "STRING", "description": "The name of the timer or reminder to modify."},
-            "new_duration": {"type": "INTEGER", "description": "The new duration of the timer in seconds."},
-            "new_timestamp": {"type": "STRING", "description": "The new time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."}
-        },
-        "required": ["name"]
-    }
-}
-
-switch_project_tool = {
-    "name": "switch_project",
-    "description": "Switches the current active project context.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "name": {"type": "STRING", "description": "The name of the project to switch to."}
-        },
-        "required": ["name"]
-    }
-}
-
-list_projects_tool = {
-    "name": "list_projects",
-    "description": "Lists all available projects.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
-}
-
-list_smart_devices_tool = {
-    "name": "list_smart_devices",
-    "description": "Lists all available smart home devices (lights, plugs, etc.) on the network.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
-}
-
-control_light_tool = {
-    "name": "control_light",
-    "description": "Controls a smart light device.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "target": {
-                "type": "STRING",
-                "description": "The IP address of the device to control. Always prefer the IP address over the alias for reliability."
-            },
-            "action": {
-                "type": "STRING",
-                "description": "The action to perform: 'turn_on', 'turn_off', or 'set'."
-            },
-            "brightness": {
-                "type": "INTEGER",
-                "description": "Optional brightness level (0-100)."
-            },
-            "color": {
-                "type": "STRING",
-                "description": "Optional color name (e.g., 'red', 'cool white') or 'warm'."
-            }
-        },
-        "required": ["target", "action"]
-    }
-}
-
-discover_printers_tool = {
-    "name": "discover_printers",
-    "description": "Discovers 3D printers available on the local network.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
-}
-
-print_stl_tool = {
-    "name": "print_stl",
-    "description": "Prints an STL file to a 3D printer. Handles slicing the STL to G-code and uploading to the printer.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "stl_path": {"type": "STRING", "description": "Path to STL file, or 'current' for the most recent CAD model."},
-            "printer": {"type": "STRING", "description": "Printer name or IP address."},
-            "profile": {"type": "STRING", "description": "Optional slicer profile name."}
-        },
-        "required": ["stl_path", "printer"]
-    }
-}
-
-get_print_status_tool = {
-    "name": "get_print_status",
-    "description": "Gets the current status of a 3D printer including progress, time remaining, and temperatures.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "printer": {"type": "STRING", "description": "Printer name or IP address."}
-        },
-        "required": ["printer"]
-    }
-}
-
-iterate_cad_tool = {
-    "name": "iterate_cad",
-    "description": "Modifies or iterates on the current CAD design based on user feedback. Use this when the user asks to adjust, change, modify, or iterate on the existing 3D model (e.g., 'make it taller', 'add a handle', 'reduce the thickness').",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "prompt": {"type": "STRING", "description": "The changes or modifications to apply to the current design."}
-        },
-        "required": ["prompt"]
-    },
-    "behavior": "NON_BLOCKING"
-}
-
-set_timer_tool = {
-    "name": "set_timer",
-    "description": "Sets a timer for a specified duration.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "duration": {"type": "INTEGER", "description": "The duration of the timer in seconds."},
-            "name": {"type": "STRING", "description": "The name of the timer."}
-        },
-        "required": ["duration", "name"]
-    }
-}
-
-set_reminder_tool = {
-    "name": "set_reminder",
-    "description": "Sets a reminder for a specific time.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "timestamp": {"type": "STRING", "description": "The time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."},
-            "name": {"type": "STRING", "description": "The name of the reminder."}
-        },
-        "required": ["timestamp", "name"]
-    }
-}
-
-list_timers_tool = {
-    "name": "list_timers",
-    "description": "Lists all active timers and reminders.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
-}
-
-delete_entry_tool = {
-    "name": "delete_entry",
-    "description": "Deletes a timer or reminder by name.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "name": {"type": "STRING", "description": "The name of the timer or reminder to delete."}
-        },
-        "required": ["name"]
-    }
-}
-
-check_for_updates_tool = {
-    "name": "check_for_updates",
-    "description": "Checks if a new version of the application is available from the GitHub repository.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
-}
-
-apply_update_tool = {
-    "name": "apply_update",
-    "description": "Downloads the latest version of the application from GitHub and restarts the application to apply the changes.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {},
-    }
-}
-
-tools = [{'google_search': {}}, {"function_declarations": [
-    generate_cad, run_web_agent, create_project_tool, switch_project_tool,
-    list_projects_tool, list_smart_devices_tool, control_light_tool,
-    discover_printers_tool, print_stl_tool, get_print_status_tool,
-    iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
-    delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
-    set_time_format_tool, get_datetime_tool
-] + tools_list[0]['function_declarations'][1:]}]
-
 pya = pyaudio.PyAudio()
 
 from cad_agent import CadAgent
@@ -284,6 +49,11 @@ from trello_agent import TrelloAgent
 from jules_agent import JulesAgent
 from timer_agent import TimerAgent
 from update_agent import UpdateAgent
+from weather_agent import WeatherAgent
+from display_agent import DisplayAgent
+from system_agent import SystemAgent
+from filesystem_agent import FileSystemAgent
+
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
@@ -336,13 +106,16 @@ class AudioLoop:
         self.printer_agent = PrinterAgent()
         self.trello_agent = TrelloAgent()
         self.timer_agent = TimerAgent(sio=self.sio)
-        self.giphy_client = DefaultApi(ApiClient())
         
         def handle_update_log(message):
             # Always print to console from the main thread context
             print(f"[ADA DEBUG] {message}", flush=True)
 
         self.update_agent = UpdateAgent(on_log=handle_update_log)
+        self.weather_agent = WeatherAgent()
+        self.display_agent = DisplayAgent(on_display_content=self.on_display_content)
+        self.system_agent = SystemAgent(sio=self.sio)
+
 
         # Dictionary to keep track of active polling tasks
         self.jules_polling_tasks = {}
@@ -371,7 +144,25 @@ class AudioLoop:
             # If ada.py is in backend/, project root is one up
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
+
+        self.filesystem_agent = FileSystemAgent(project_manager=self.project_manager, session=self.session, on_project_update=self.on_project_update)
         
+        self.tools = [{'google_search': {}}, {"function_declarations":
+            self.cad_agent.tools +
+            self.web_agent.tools +
+            self.kasa_agent.tools +
+            self.printer_agent.tools +
+            self.trello_agent.tools +
+            self.timer_agent.tools +
+            self.update_agent.tools +
+            self.weather_agent.tools +
+            self.display_agent.tools +
+            self.system_agent.tools +
+            self.filesystem_agent.tools +
+            self.project_manager.tools +
+            [set_time_format_tool, get_datetime_tool] +
+            tools_list[0]['function_declarations'][1:]
+        }]
         # Sync Initial Project State
         if self.on_project_update:
             # We need to defer this slightly or just call it. 
@@ -713,307 +504,6 @@ class AudioLoop:
             except Exception:
                 pass
 
-
-
-    async def handle_write_file(self, path, content):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Writing file: '{path}'")
-        
-        # Auto-create project if stuck in temp
-        if self.project_manager.current_project == "temp":
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            new_project_name = f"Project_{timestamp}"
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [FS] Auto-creating project: {new_project_name}")
-            
-            success, msg = self.project_manager.create_project(new_project_name)
-            if success:
-                self.project_manager.switch_project(new_project_name)
-                # Notify User
-                try:
-                    await self.session.send(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
-                    if self.on_project_update:
-                         self.on_project_update(new_project_name)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
-        
-        # Force path to be relative to current project
-        # If absolute path is provided, we try to strip it or just ignore it and use basename
-        filename = os.path.basename(path)
-        
-        # If path contained subdirectories (e.g. "backend/server.py"), preserving that structure might be desired IF it's within the project.
-        # But for safety, and per user request to "always create the file in the project", 
-        # we will root it in the current project path.
-        
-        current_project_path = self.project_manager.get_current_project_path()
-        final_path = current_project_path / filename # Simple flat structure for now, or allow relative?
-        
-        # If the user specifically wanted a subfolder, they might have provided "sub/file.txt".
-        # Let's support relative paths if they don't start with /
-        if not os.path.isabs(path):
-             final_path = current_project_path / path
-        
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Resolved path: '{final_path}'")
-
-        try:
-            # Ensure parent exists
-            os.makedirs(os.path.dirname(final_path), exist_ok=True)
-            with open(final_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            result = f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
-        except Exception as e:
-            result = f"Failed to write file '{path}': {str(e)}"
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Result: {result}")
-        try:
-             await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
-
-    async def handle_read_directory(self, path):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Reading directory: '{path}'")
-        
-        # Resolve path relative to current project
-        current_project_path = self.project_manager.get_current_project_path()
-        final_path = current_project_path / path if not os.path.isabs(path) else path
-        
-        try:
-            if not os.path.exists(final_path):
-                result = f"Directory '{final_path}' does not exist."
-            else:
-                items = os.listdir(final_path)
-                result = f"Contents of '{final_path}': {', '.join(items)}"
-        except Exception as e:
-            result = f"Failed to read directory '{path}': {str(e)}"
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Result: {result}")
-        try:
-             await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
-
-    async def handle_read_file(self, path):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Reading file: '{path}'")
-        
-        # Resolve path relative to current project
-        current_project_path = self.project_manager.get_current_project_path()
-        final_path = current_project_path / path if not os.path.isabs(path) else path
-
-        try:
-            if not os.path.exists(final_path):
-                result = f"File '{final_path}' does not exist."
-            else:
-                with open(final_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                result = f"Content of '{final_path}':\n{content}"
-        except Exception as e:
-            result = f"Failed to read file '{path}': {str(e)}"
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Result: {result}")
-        try:
-             await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
-
-    async def handle_get_weather(self, location, forecast_days=7, past_days=0, hourly=None, daily=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEATHER] Getting weather for: '{location}' with params: forecast_days={forecast_days}, past_days={past_days}, hourly={hourly}, daily={daily}")
-
-        try:
-            # Step 1: Geocoding
-            parts = [p.strip() for p in location.split(',')]
-            city = parts[0]
-            state = parts[1] if len(parts) > 1 else None
-            country = parts[2] if len(parts) > 2 else None
-
-            async with httpx.AsyncClient() as client:
-                params = {"name": city, "count": 15, "language": "en", "format": "json"}
-                url = "https://geocoding-api.open-meteo.com/v1/search"
-
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WEATHER] Requesting Geocoding URL: {url} with params: {params}")
-
-                geo_response = await client.get(url, params=params)
-
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WEATHER] Geocoding Response Status: {geo_response.status_code}")
-                    print(f"[ADA DEBUG] [WEATHER] Geocoding Response Text: {geo_response.text}")
-
-                geo_response.raise_for_status()
-                geo_data = geo_response.json()
-                results = geo_data.get("results")
-
-                if not results:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [WEATHER] Geocoding returned no results. Raw response: {geo_response.text}")
-                    return f"Could not find location: {location}"
-
-                # Step 2: Filter results if state/country was provided
-                if state or country:
-                    filtered_results = []
-                    for r in results:
-                        match = True
-                        # State/Admin1 must match if provided
-                        if state and not (r.get('admin1') and state.lower() in r.get('admin1').lower()):
-                            match = False
-                        # Country must match if provided
-                        if country and not (r.get('country') and country.lower() in r.get('country').lower()):
-                            match = False
-
-                        if match:
-                            filtered_results.append(r)
-
-                    # If we found any matches, use the filtered list. Otherwise, stick with the original broad list.
-                    if filtered_results:
-                        results = filtered_results
-
-                # Step 3: Handle ambiguity
-                if len(results) > 1:
-                    locations = [
-                        f"{i+1}. {r.get('name', 'N/A')}, {r.get('admin1', 'N/A')}, {r.get('country', 'N/A')}"
-                        for i, r in enumerate(results)
-                    ]
-                    return f"Multiple locations found. Please be more specific:\n" + "\n".join(locations)
-
-                lat = results[0]["latitude"]
-                lon = results[0]["longitude"]
-
-            # Step 2: Weather Forecast
-            params = {
-                "latitude": lat,
-                "longitude": lon,
-                "timezone": "auto"
-            }
-            if forecast_days is not None:
-                params["forecast_days"] = forecast_days
-            if past_days is not None:
-                params["past_days"] = past_days
-            if hourly:
-                params["hourly"] = ",".join(hourly)
-            if daily:
-                params["daily"] = ",".join(daily)
-
-            # Add default daily if nothing is specified
-            if not hourly and not daily:
-                params["daily"] = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
-
-
-            async with httpx.AsyncClient() as client:
-                forecast_response = await client.get(
-                    "https://api.open-meteo.com/v1/forecast",
-                    params=params
-                )
-                forecast_response.raise_for_status()
-                weather_data = forecast_response.json()
-
-                # The widget expects a simple daily forecast structure.
-                # If daily data is present, format it for the widget.
-                # Otherwise, return the full JSON for the model to interpret.
-                daily_data = weather_data.get('daily', {})
-                if 'time' in daily_data and daily_data['time']:
-                    forecast = []
-                    num_days = len(daily_data['time'])
-                    weather_codes = daily_data.get('weather_code', [None] * num_days)
-                    temp_maxes = daily_data.get('temperature_2m_max', [None] * num_days)
-                    temp_mins = daily_data.get('temperature_2m_min', [None] * num_days)
-                    precipitations = daily_data.get('precipitation_sum', [None] * num_days)
-
-                    for i in range(num_days):
-                        forecast.append({
-                            "date": daily_data['time'][i],
-                            "weather_code": weather_codes[i],
-                            "temp_max": temp_maxes[i],
-                            "temp_min": temp_mins[i],
-                            "precipitation": precipitations[i]
-                        })
-                    return forecast
-                else:
-                    return weather_data
-
-        except httpx.HTTPStatusError as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] HTTP error in weather tool: {e}")
-            return f"Error processing weather request: {e.response.status_code}"
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to get weather: {e}")
-                traceback.print_exc()
-            return "Failed to get weather data."
-
-    async def handle_search_gifs(self, query):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [GIF] Searching for GIFs with query: '{query}'")
-        try:
-            # Use Giphy's search endpoint
-            response = self.giphy_client.gifs_search_get(os.getenv("GIPHY_API_KEY"), query, limit=5)
-            if response.data:
-                # Get the URL of the first GIF
-                image_url = response.data[0].images.original.url
-                return f"Found image: {image_url}"
-            else:
-                return "No images found."
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to search for images: {e}")
-            return "Failed to search for images."
-
-    async def handle_display_content(self, content_type, url=None, widget_type=None, data=None, duration=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DISPLAY] Displaying content: {content_type}")
-
-        # If data is a string, assume it's JSON and parse it.
-        # This handles the case where the model passes the result of one tool (get_weather)
-        # as a stringified argument to another tool (display_content).
-        parsed_data = data
-        if isinstance(data, str):
-            try:
-                parsed_data = json.loads(data)
-            except json.JSONDecodeError:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Could not decode JSON string for display content: {data}")
-                pass # Leave it as a string if it's not valid JSON
-
-        # More robust check for wrapped data, especially for weather widgets.
-        # Handles cases where the model wraps the list in a dict like {'forecast': [...]} or {'daily': [...]}.
-        if widget_type == 'weather' and isinstance(parsed_data, dict) and len(parsed_data) == 1:
-            key = list(parsed_data.keys())[0]
-            if isinstance(parsed_data[key], list):
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WEATHER WIDGET] Detected single-key dictionary wrapping the data with key '{key}'. Extracting the list.")
-                parsed_data = parsed_data[key]
-
-        if self.on_display_content:
-            self.on_display_content({
-                "content_type": content_type,
-                "url": url,
-                "widget_type": widget_type,
-                "data": parsed_data,
-                "duration": duration
-            })
-            return "Content displayed."
-        else:
-            return "No display content handler registered."
-
-    async def handle_restart_application(self):
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [RESTART] Emitting restart signal to frontend...")
-        if self.sio:
-            await self.sio.emit('initiate_restart')
-            return "Restart signal sent to frontend."
-        else:
-            return "Cannot send restart signal: not connected to server."
-
     async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [WEB] Background Task Started: handle_web_agent_request('{prompt}')")
@@ -1207,7 +697,7 @@ User: "What's the weather in London?"
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction=system_prompt,
-            tools=tools,
+            tools=self.tools,
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
@@ -1409,7 +899,7 @@ User: "What's the weather in London?"
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "restart_application":
-                                    result = await self.handle_restart_application()
+                                    result = await self.system_agent.restart_application()
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
@@ -1437,7 +927,7 @@ User: "What's the weather in London?"
                                     function_responses.append(function_response)
                                 elif fc.name == "get_weather":
                                     location = fc.args["location"]
-                                    result = await self.handle_get_weather(location)
+                                    result = await self.weather_agent.get_weather(location)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
@@ -1446,7 +936,7 @@ User: "What's the weather in London?"
                                     function_responses.append(function_response)
                                 elif fc.name == "search_gifs":
                                     query = fc.args["query"]
-                                    result = await self.handle_search_gifs(query)
+                                    result = await self.display_agent.search_gifs(query)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
@@ -1459,7 +949,7 @@ User: "What's the weather in London?"
                                     widget_type = fc.args.get("widget_type")
                                     data = fc.args.get("data")
                                     duration = fc.args.get("duration")
-                                    result = await self.handle_display_content(content_type, url, widget_type, data, duration)
+                                    result = await self.display_agent.display_content(content_type, url, widget_type, data, duration)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
@@ -1557,9 +1047,9 @@ User: "What's the weather in London?"
                                     content = fc.args["content"]
                                     if INCLUDE_RAW_LOGS:
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
-                                    asyncio.create_task(self.handle_write_file(path, content))
+                                    result = await self.filesystem_agent.write_file(path, content)
                                     function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": "Writing file..."}
+                                        id=fc.id, name=fc.name, response={"result": result}
                                     )
                                     function_responses.append(function_response)
 
@@ -1567,9 +1057,9 @@ User: "What's the weather in London?"
                                     path = fc.args["path"]
                                     if INCLUDE_RAW_LOGS:
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'", flush=True)
-                                    asyncio.create_task(self.handle_read_directory(path))
+                                    result = await self.filesystem_agent.read_directory(path)
                                     function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": "Reading directory..."}
+                                        id=fc.id, name=fc.name, response={"result": result}
                                     )
                                     function_responses.append(function_response)
 
@@ -1577,9 +1067,9 @@ User: "What's the weather in London?"
                                     path = fc.args["path"]
                                     if INCLUDE_RAW_LOGS:
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'", flush=True)
-                                    asyncio.create_task(self.handle_read_file(path))
+                                    result = await self.filesystem_agent.read_file(path)
                                     function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": "Reading file..."}
+                                        id=fc.id, name=fc.name, response={"result": result}
                                     )
                                     function_responses.append(function_response)
 

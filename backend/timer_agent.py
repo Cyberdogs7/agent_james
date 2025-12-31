@@ -9,8 +9,71 @@ import pyaudio
 from tzlocal import get_localzone
 from time_utils import get_local_time
 
+set_timer_tool = {
+    "name": "set_timer",
+    "description": "Sets a timer for a specified duration.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "duration": {"type": "INTEGER", "description": "The duration of the timer in seconds."},
+            "name": {"type": "STRING", "description": "The name of the timer."}
+        },
+        "required": ["duration", "name"]
+    }
+}
+
+set_reminder_tool = {
+    "name": "set_reminder",
+    "description": "Sets a reminder for a specific time.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "timestamp": {"type": "STRING", "description": "The time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."},
+            "name": {"type": "STRING", "description": "The name of the reminder."}
+        },
+        "required": ["timestamp", "name"]
+    }
+}
+
+list_timers_tool = {
+    "name": "list_timers",
+    "description": "Lists all active timers and reminders.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+delete_entry_tool = {
+    "name": "delete_entry",
+    "description": "Deletes a timer or reminder by name.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the timer or reminder to delete."}
+        },
+        "required": ["name"]
+    }
+}
+
+modify_timer_tool = {
+    "name": "modify_timer",
+    "description": "Modifies an existing timer or reminder.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the timer or reminder to modify."},
+            "new_duration": {"type": "INTEGER", "description": "The new duration of the timer in seconds."},
+            "new_timestamp": {"type": "STRING", "description": "The new time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."}
+        },
+        "required": ["name"]
+    }
+}
+
+
 class TimerAgent:
     def __init__(self, session=None, sio=None, storage_file="timers.json"):
+        self.tools = [set_timer_tool, set_reminder_tool, list_timers_tool, delete_entry_tool, modify_timer_tool]
         self.session = session
         self.sio = sio
         self.storage_file = storage_file

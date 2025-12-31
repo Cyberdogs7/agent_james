@@ -5,6 +5,7 @@ import pytest
 import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # Add backend to path
 BACKEND_DIR = Path(__file__).parent.parent / "backend"
@@ -16,28 +17,28 @@ class TestToolDefinitions:
     
     def test_generate_cad_tool_schema(self):
         """Test generate_cad tool has correct schema."""
-        from ada import generate_cad
+        from cad_agent import generate_cad_tool
         
-        assert generate_cad['name'] == 'generate_cad'
-        assert 'description' in generate_cad
-        assert 'parameters' in generate_cad
-        assert generate_cad['parameters']['type'] == 'OBJECT'
-        assert 'prompt' in generate_cad['parameters']['properties']
-        print(f"generate_cad tool: {generate_cad['name']}")
+        assert generate_cad_tool['name'] == 'generate_cad'
+        assert 'description' in generate_cad_tool
+        assert 'parameters' in generate_cad_tool
+        assert generate_cad_tool['parameters']['type'] == 'OBJECT'
+        assert 'prompt' in generate_cad_tool['parameters']['properties']
+        print(f"generate_cad tool: {generate_cad_tool['name']}")
     
     def test_run_web_agent_tool_schema(self):
         """Test run_web_agent tool has correct schema."""
-        from ada import run_web_agent
+        from web_agent import run_web_agent_tool
         
-        assert run_web_agent['name'] == 'run_web_agent'
-        assert 'description' in run_web_agent
-        assert 'parameters' in run_web_agent
-        assert 'prompt' in run_web_agent['parameters']['properties']
-        print(f"run_web_agent tool: {run_web_agent['name']}")
+        assert run_web_agent_tool['name'] == 'run_web_agent'
+        assert 'description' in run_web_agent_tool
+        assert 'parameters' in run_web_agent_tool
+        assert 'prompt' in run_web_agent_tool['parameters']['properties']
+        print(f"run_web_agent tool: {run_web_agent_tool['name']}")
     
     def test_print_stl_tool_schema(self):
         """Test print_stl tool has correct schema."""
-        from ada import print_stl_tool
+        from printer_agent import print_stl_tool
         
         assert print_stl_tool['name'] == 'print_stl'
         assert 'description' in print_stl_tool
@@ -46,7 +47,7 @@ class TestToolDefinitions:
     
     def test_discover_printers_tool_schema(self):
         """Test discover_printers tool has correct schema."""
-        from ada import discover_printers_tool
+        from printer_agent import discover_printers_tool
         
         assert discover_printers_tool['name'] == 'discover_printers'
         assert 'description' in discover_printers_tool
@@ -54,7 +55,7 @@ class TestToolDefinitions:
     
     def test_list_smart_devices_tool_schema(self):
         """Test list_smart_devices tool has correct schema."""
-        from ada import list_smart_devices_tool
+        from kasa_agent import list_smart_devices_tool
         
         assert list_smart_devices_tool['name'] == 'list_smart_devices'
         assert 'description' in list_smart_devices_tool
@@ -62,7 +63,7 @@ class TestToolDefinitions:
     
     def test_control_light_tool_schema(self):
         """Test control_light tool has correct schema."""
-        from ada import control_light_tool
+        from kasa_agent import control_light_tool
         
         assert control_light_tool['name'] == 'control_light'
         assert 'parameters' in control_light_tool
@@ -73,14 +74,14 @@ class TestToolDefinitions:
     
     def test_list_projects_tool_schema(self):
         """Test list_projects tool has correct schema."""
-        from ada import list_projects_tool
+        from project_manager import list_projects_tool
         
         assert list_projects_tool['name'] == 'list_projects'
         print(f"list_projects tool: {list_projects_tool['name']}")
     
     def test_iterate_cad_tool_schema(self):
         """Test iterate_cad tool has correct schema."""
-        from ada import iterate_cad_tool
+        from cad_agent import iterate_cad_tool
         
         assert iterate_cad_tool['name'] == 'iterate_cad'
         print(f"iterate_cad tool: {iterate_cad_tool['name']}")
@@ -169,19 +170,19 @@ class TestFileOperations:
     """Test file operation handlers."""
     
     def test_read_directory_method_exists(self):
-        """Test handle_read_directory exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'handle_read_directory')
+        """Test read_directory exists."""
+        from filesystem_agent import FileSystemAgent
+        assert hasattr(FileSystemAgent, 'read_directory')
     
     def test_read_file_method_exists(self):
-        """Test handle_read_file exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'handle_read_file')
+        """Test read_file exists."""
+        from filesystem_agent import FileSystemAgent
+        assert hasattr(FileSystemAgent, 'read_file')
     
     def test_write_file_method_exists(self):
-        """Test handle_write_file exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'handle_write_file')
+        """Test write_file exists."""
+        from filesystem_agent import FileSystemAgent
+        assert hasattr(FileSystemAgent, 'write_file')
 
 
 class TestLiveConnectConfig:
@@ -192,8 +193,19 @@ class TestLiveConnectConfig:
         from ada import AudioLoop
         from google.genai import types
 
-        # Instantiate AudioLoop to access the config generation method
-        audio_loop = AudioLoop()
+        # Mock the agent classes
+        mock_project_manager = MagicMock()
+        mock_project_manager.get_project_config.return_value = {}
+        mock_project_manager.tools = []
+
+        mock_kasa_agent = MagicMock()
+        mock_kasa_agent.tools = []
+
+        # Instantiate AudioLoop with mocked agents
+        audio_loop = AudioLoop(
+            project_manager=mock_project_manager,
+            kasa_agent=mock_kasa_agent
+        )
         config = audio_loop._get_live_connect_config()
 
         assert config is not None, "Config object should not be None"

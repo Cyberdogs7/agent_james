@@ -19,6 +19,41 @@ from enum import Enum
 import aiohttp
 from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
 
+discover_printers_tool = {
+    "name": "discover_printers",
+    "description": "Discovers 3D printers available on the local network.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+print_stl_tool = {
+    "name": "print_stl",
+    "description": "Prints an STL file to a 3D printer. Handles slicing the STL to G-code and uploading to the printer.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "stl_path": {"type": "STRING", "description": "Path to STL file, or 'current' for the most recent CAD model."},
+            "printer": {"type": "STRING", "description": "Printer name or IP address."},
+            "profile": {"type": "STRING", "description": "Optional slicer profile name."}
+        },
+        "required": ["stl_path", "printer"]
+    }
+}
+
+get_print_status_tool = {
+    "name": "get_print_status",
+    "description": "Gets the current status of a 3D printer including progress, time remaining, and temperatures.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "printer": {"type": "STRING", "description": "Printer name or IP address."}
+        },
+        "required": ["printer"]
+    }
+}
+
 
 class PrinterType(Enum):
     OCTOPRINT = "octoprint"
@@ -36,7 +71,7 @@ class Printer:
     printer_type: PrinterType
     api_key: Optional[str] = None
     camera_url: Optional[str] = None
-    
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["printer_type"] = self.printer_type.value
@@ -53,17 +88,17 @@ class PrintStatus:
     time_elapsed: Optional[str]
     filename: Optional[str]
     temperatures: Optional[Dict[str, Dict[str, float]]] = None
-    
+
     def to_dict(self) -> dict:
         return asdict(self)
 
 
 class PrinterDiscoveryListener(ServiceListener):
     """mDNS listener for printer discovery."""
-    
+
     def __init__(self):
         self.printers: List[Printer] = []
-    
+
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         info = zc.get_service_info(type_, name)
         if info:
@@ -80,7 +115,7 @@ class PrinterDiscoveryListener(ServiceListener):
                     printer_type = PrinterType.MOONRAKER
                 else:
                     printer_type = PrinterType.UNKNOWN
-                
+
                 printer = Printer(
                     name=name.replace(f".{type_}", ""),
                     host=host,
@@ -92,7 +127,7 @@ class PrinterDiscoveryListener(ServiceListener):
 
     def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         pass
-    
+
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         pass
 
@@ -101,21 +136,22 @@ class PrinterAgent:
     """
     Handles 3D printer discovery, profile management, slicing, and print job submission.
     """
-    
+
     def __init__(self, profiles_dir: str = "printer_profiles"):
+        self.tools = [discover_printers_tool, print_stl_tool, get_print_status_tool]
         self.printers: Dict[str, Printer] = {}  # host -> Printer
         self.profiles_dir = profiles_dir
         self._zeroconf: Optional[Zeroconf] = None
         self._error_tracker = set() # Track hosts with errors to prevent log spam
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
-        
+
         # Detect slicer path and profiles directory
         self.slicer_path = self._detect_slicer_path()
         self._orca_profiles_dir = self._detect_orca_profiles_dir()
-        
+
         # Ensure profiles directory exists
         os.makedirs(profiles_dir, exist_ok=True)
-    
+
     def _log(self, *args, **kwargs):
         if self.include_raw:
             print(*args, **kwargs)
@@ -123,63 +159,63 @@ class PrinterAgent:
     def _detect_orca_profiles_dir(self) -> Optional[str]:
         """Detect OrcaSlicer profiles directory."""
         system = platform.system()
-        
+
         if system == "Darwin":  # macOS
             base = os.path.expanduser("~/Library/Application Support/OrcaSlicer")
         elif system == "Windows":
             base = os.path.join(os.environ.get("APPDATA", ""), "OrcaSlicer")
         else:  # Linux
             base = os.path.expanduser("~/.config/OrcaSlicer")
-        
+
         if os.path.isdir(base):
             self._log(f"[PRINTER] Found OrcaSlicer profiles at: {base}")
             return base
-        
+
         return None
-    
+
     def get_available_profiles(self) -> Dict[str, List[str]]:
         """
         Get all available OrcaSlicer profiles from the system folder.
         Returns dict with 'machines', 'processes', 'filaments' lists.
         """
         profiles = {"machines": [], "processes": [], "filaments": []}
-        
+
         if not self._orca_profiles_dir:
             return profiles
-        
+
         system_dir = os.path.join(self._orca_profiles_dir, "system")
         if not os.path.isdir(system_dir):
             return profiles
-        
+
         # Scan all vendor folders (Creality, Custom, etc.)
         for vendor in os.listdir(system_dir):
             vendor_path = os.path.join(system_dir, vendor)
             if not os.path.isdir(vendor_path):
                 continue
-            
+
             # Machine profiles
             machine_dir = os.path.join(vendor_path, "machine")
             if os.path.isdir(machine_dir):
                 for f in os.listdir(machine_dir):
                     if f.endswith(".json"):
                         profiles["machines"].append(f"system/{vendor}/machine/{f}")
-            
+
             # Process profiles
             process_dir = os.path.join(vendor_path, "process")
             if os.path.isdir(process_dir):
                 for f in os.listdir(process_dir):
                     if f.endswith(".json"):
                         profiles["processes"].append(f"system/{vendor}/process/{f}")
-            
+
             # Filament profiles
             filament_dir = os.path.join(vendor_path, "filament")
             if os.path.isdir(filament_dir):
                 for f in os.listdir(filament_dir):
                     if f.endswith(".json"):
                         profiles["filaments"].append(f"system/{vendor}/filament/{f}")
-        
+
         return profiles
-    
+
     def _find_matching_profile(self, printer_name: str, profile_type: str) -> Optional[str]:
         """
         Find a matching profile for a printer by name.
@@ -187,11 +223,11 @@ class PrinterAgent:
         """
         if not self._orca_profiles_dir:
             return None
-        
+
         # Normalize printer name for matching
         # e.g., "Creality K1" -> search for "k1"
         search_terms = printer_name.lower().split()
-        
+
         # Common brand keywords to identify vendor folder
         vendor_map = {
             "creality": "Creality",
@@ -199,7 +235,7 @@ class PrinterAgent:
             "cr-": "Creality",
             "k1": "Creality",
         }
-        
+
         # Try to identify vendor
         vendor = None
         for term in search_terms:
@@ -209,30 +245,30 @@ class PrinterAgent:
                     break
             if vendor:
                 break
-        
+
         if not vendor:
             vendor = "Creality"  # Default fallback
-        
+
         system_dir = os.path.join(self._orca_profiles_dir, "system", vendor)
         if not os.path.isdir(system_dir):
             print(f"[PRINTER] Vendor folder not found: {vendor}")
             return None
-        
+
         target_dir = os.path.join(system_dir, profile_type)
         if not os.path.isdir(target_dir):
             return None
-        
+
         # Score-based matching
         best_match = None
         best_score = 0
-        
+
         for filename in os.listdir(target_dir):
             if not filename.endswith(".json"):
                 continue
-            
+
             name_lower = filename.lower()
             score = 0
-            
+
             # Score based on matching search terms
             for term in search_terms:
                 if term in name_lower:
@@ -252,18 +288,18 @@ class PrinterAgent:
                                 elif next_char in ' .(-':
                                     # Direct match followed by delimiter - bonus
                                     score += 5
-            
+
             # Bonus for "0.4 nozzle" (most common)
             if "0.4" in name_lower:
                 score += 2
-            
+
             # Bonus for "standard" or "optimal" process profiles
             if profile_type == "process":
                 if "standard" in name_lower:
                     score += 5
                 elif "optimal" in name_lower:
                     score += 3
-            
+
             # Bonus for generic PLA filament (non-silk preferred for general use)
             if profile_type == "filament":
                 if "pla" in name_lower and "generic" in name_lower:
@@ -278,16 +314,16 @@ class PrinterAgent:
                     # Plain PLA gets a bonus
                     if "@k1" in name_lower and "-" not in name_lower.split("pla")[-1].split("@")[0]:
                         score += 3  # Plain PLA for K1
-            
+
             if score > best_score:
                 best_score = score
                 best_match = os.path.join(target_dir, filename)
-        
+
         if best_match:
             print(f"[PRINTER] Matched {profile_type} profile: {os.path.basename(best_match)} (score: {best_score})")
-        
+
         return best_match
-    
+
     def get_profiles_for_printer(self, printer_name: str) -> Dict[str, Optional[str]]:
         """
         Auto-detect suitable profiles for a given printer name.
@@ -298,11 +334,11 @@ class PrinterAgent:
             "process": self._find_matching_profile(printer_name, "process"),
             "filament": self._find_matching_profile(printer_name, "filament"),
         }
-    
+
     def _detect_slicer_path(self) -> Optional[str]:
         """Detect OrcaSlicer or PrusaSlicer installation path."""
         system = platform.system()
-        
+
         paths = []
         if system == "Darwin":  # macOS
             paths = [
@@ -331,12 +367,12 @@ class PrinterAgent:
                 "/usr/local/bin/prusa-slicer",
                 os.path.expanduser("~/.local/bin/prusa-slicer")
             ]
-        
+
         for path in paths:
             if os.path.exists(path):
                 self._log(f"[PRINTER] Found Slicer at: {path}")
                 return path
-        
+
         # Try to find via which/where
         for binary in ["orca-slicer", "prusa-slicer", "prusa-slicer-console"]:
              try:
@@ -350,7 +386,7 @@ class PrinterAgent:
                     return path
              except Exception:
                 pass
-        
+
         self._log("[PRINTER] Warning: No Slicer (Orca/Prusa) found. Slicing will fail.")
         return None
 
@@ -360,10 +396,10 @@ class PrinterAgent:
         Returns list of discovered printers.
         """
         self._log(f"[PRINTER] Starting printer discovery (timeout: {timeout}s)...")
-        
+
         self._zeroconf = Zeroconf()
         listener = PrinterDiscoveryListener()
-        
+
         # Browse for common 3D printer services
         services = [
             "_octoprint._tcp.local.",
@@ -371,18 +407,18 @@ class PrinterAgent:
             "_klipper._tcp.local.", # Some Klipper installs use this
             "_http._tcp.local."  # Generic HTTP - critical for some Creality/Prusa setups
         ]
-        
+
         browsers = []
         for service in services:
             browser = ServiceBrowser(self._zeroconf, service, listener)
             browsers.append(browser)
-        
+
         # Wait for discovery
         await asyncio.sleep(timeout)
-        
+
         # Cleanup
         self._zeroconf.close()
-        
+
         # PROBE UNKNOWN PRINTERS
         # Many printers show up as _http._tcp with generic names
         # We try to identify them by hitting known endpoints
@@ -393,7 +429,7 @@ class PrinterAgent:
                 if ptype != PrinterType.UNKNOWN:
                     printer.printer_type = ptype
                     self._log(f"[PRINTER] Identified {printer.name} as {ptype.value}")
-        
+
         # PROBE CAMERAS
         for printer in listener.printers:
             if not printer.camera_url:
@@ -401,12 +437,12 @@ class PrinterAgent:
                 cam_url = await self._probe_camera(printer.host, printer.port)
                 if cam_url:
                     printer.camera_url = cam_url
-        
+
         # Store discovered printers
         for printer in listener.printers:
             # Avoid duplicates if we found same host on multiple services
             self.printers[printer.host] = printer
-        
+
         self._log(f"[PRINTER] Discovery complete. Found {len(self.printers)} printers.")
         return [p.to_dict() for p in self.printers.values()]
 
@@ -447,7 +483,7 @@ class PrinterAgent:
                      pass
                 except Exception:
                      pass
-                     
+
                 # Fallback: Check root for identification
                 try:
                     url = f"http://{host}:{port}/"
@@ -461,10 +497,10 @@ class PrinterAgent:
                             self._log(f"[PRINTER DEBUG] Server Header: {resp.headers['Server']}")
                 except:
                     pass
-                    
+
         except Exception as e:
             self._log(f"[PRINTER] Probe error for {host}:{port}: {e}")
-        
+
         return PrinterType.UNKNOWN
 
     async def _probe_camera(self, host: str, port: int) -> Optional[str]:
@@ -477,7 +513,7 @@ class PrinterAgent:
             "/stream",
             ":8080/?action=stream",        # mjpg-streamer standalone port
         ]
-        
+
         timeout = aiohttp.ClientTimeout(total=2.0, connect=1.0)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for path in paths:
@@ -488,7 +524,7 @@ class PrinterAgent:
                         url = f"http://{host}{target}"
                     else:
                         url = f"http://{host}{target}"
-                        
+
                     async with session.get(url) as resp:
                         if resp.status == 200:
                             # Verify content type is a stream
@@ -499,8 +535,8 @@ class PrinterAgent:
                 except:
                     continue
         return None
-    
-    def add_printer_manually(self, name: str, host: str, port: int = 80, 
+
+    def add_printer_manually(self, name: str, host: str, port: int = 80,
                              printer_type: str = "octoprint", api_key: Optional[str] = None,
                              camera_url: Optional[str] = None) -> Printer:
         """Manually add a printer (useful when mDNS discovery fails)."""
@@ -509,28 +545,28 @@ class PrinterAgent:
         self.printers[host] = printer
         print(f"[PRINTER] Manually added: {name} at {host}:{port}")
         return printer
-    
+
     def _resolve_printer(self, target: str) -> Optional[Printer]:
         """Resolve printer by name or host."""
         # Check by host/IP
         if target in self.printers:
             return self.printers[target]
-        
+
         # Check by name
         for printer in self.printers.values():
             if printer.name.lower() == target.lower():
                 return printer
-        
+
         return None
-    
+
     def _resolve_file_path(self, path: str, root_path: Optional[str] = None) -> Optional[str]:
         """Resolve file path by checking common locations."""
         # 1. Check if absolute path exists
         if os.path.isabs(path) and os.path.exists(path):
             return path
-            
+
         common_paths = []
-        
+
         # 2. Check relative to provided root path (Project Directory)
         if root_path:
             common_paths.append(os.path.join(root_path, path))
@@ -541,52 +577,52 @@ class PrinterAgent:
         # 3. Check relative to backend/current dir
         common_paths.append(path)
         basename = os.path.basename(path)
-        
+
         # 4. Check other heuristics
         common_paths.extend([
             os.path.join("..", basename),   # parent root
-            os.path.join("cad", basename),  # cad subdir of backend? 
+            os.path.join("cad", basename),  # cad subdir of backend?
             os.path.join("..", "cad", basename), # cad subdir of root
             "output.stl",
             "../output.stl"
         ])
-        
+
         for p in common_paths:
             if os.path.exists(p):
                 print(f"[PRINTER] Resolved {path} -> {p}")
                 return p
-        
+
         return None
 
     async def slice_stl(self, stl_path: str, output_path: Optional[str] = None,
-                        profile_path: Optional[str] = None, 
+                        profile_path: Optional[str] = None,
                         progress_callback: Optional[Any] = None,
                         root_path: Optional[str] = None,
                         printer_name: Optional[str] = None) -> Optional[str]:
         """
         Slice an STL file to G-code using OrcaSlicer/PrusaSlicer CLI.
-        
+
         Args:
             stl_path: Path to input STL file
             output_path: Optional output G-code path (default: same dir as STL)
             profile_path: Optional path to .ini profile file (legacy)
             root_path: Optional root directory to resolve relative paths
             printer_name: Optional printer name for auto-detecting profiles
-        
+
         Returns:
             Path to generated G-code file, or None on failure
         """
         if not self.slicer_path:
             self._log("[PRINTER] Error: Cannot slice without OrcaSlicer path.")
             return None
-        
+
         # Robust path resolution
         resolved_path = self._resolve_file_path(stl_path, root_path)
         if not resolved_path:
             print(f"[PRINTER] Error: STL file not found: {stl_path} (root: {root_path})")
             return None
         stl_path = resolved_path
-        
+
         # Default output path - save to project's gcode folder if root_path is provided
         if not output_path:
             if root_path:
@@ -597,29 +633,29 @@ class PrinterAgent:
                 print(f"[PRINTER] G-code output: {output_path}")
             else:
                 output_path = stl_path.rsplit('.', 1)[0] + ".gcode"
-        
+
         # Build command
         is_orca = "OrcaSlicer" in self.slicer_path
-        
+
         if is_orca:
             # OrcaSlicer CLI: orca-slicer [OPTIONS] [file.stl]
             output_dir = os.path.dirname(output_path)
-            
+
             # FIX: Handle empty output_dir (when output_path has no directory prefix)
             if not output_dir:
                 output_dir = os.path.dirname(stl_path) or "."
-            
+
             cmd = [
                 self.slicer_path,
                 "--slice", "0",
                 "--outputdir", output_dir,
             ]
-            
+
             # Auto-detect profiles if printer_name is provided
             profiles = None
             if printer_name:
                 profiles = self.get_profiles_for_printer(printer_name)
-            
+
             # Build settings string: "machine.json;process.json"
             settings_files = []
             if profiles:
@@ -627,20 +663,20 @@ class PrinterAgent:
                     settings_files.append(profiles["machine"])
                 if profiles.get("process"):
                     settings_files.append(profiles["process"])
-            
+
             # Add --load-settings if we have profiles
             if settings_files:
                 cmd.extend(["--load-settings", ";".join(settings_files)])
                 print(f"[PRINTER] Using settings: {[os.path.basename(f) for f in settings_files]}")
-            
+
             # Add --load-filaments if we have filament profile
             if profiles and profiles.get("filament"):
                 cmd.extend(["--load-filaments", profiles["filament"]])
                 print(f"[PRINTER] Using filament: {os.path.basename(profiles['filament'])}")
-            
+
             # Add STL file at the end
             cmd.append(stl_path)
-            
+
         else:
             # PrusaSlicer CLI
             cmd = [
@@ -649,7 +685,7 @@ class PrinterAgent:
                 "--output", output_path,
                 stl_path
             ]
-        
+
         # Add legacy profile if specified (for backward compatibility)
         if profile_path and os.path.exists(profile_path):
             if is_orca:
@@ -667,22 +703,22 @@ class PrinterAgent:
             else:
                 cmd.insert(1, "--load")
                 cmd.insert(2, profile_path)
-        
+
         print(f"[PRINTER] Slicing: {stl_path}")
         print(f"[PRINTER] Command: {' '.join(cmd)}")
-        
+
         try:
             # Notify slicing start
             if progress_callback:
                 await progress_callback(5, "Starting slicer...")
-            
+
             # Use asyncio.to_thread for Windows compatibility (asyncio.create_subprocess_exec
             # throws NotImplementedError on Windows with certain event loop policies)
             import subprocess
-            
+
             if progress_callback:
                 await progress_callback(10, "Running slicer...")
-            
+
             try:
                 result = await asyncio.to_thread(
                     subprocess.run,
@@ -690,37 +726,37 @@ class PrinterAgent:
                     capture_output=True,
                     text=True
                 )
-                
+
                 # Log slicer output for debugging
                 if result.stdout:
                     for line in result.stdout.strip().split('\n'):
                         if line:
                             self._log(f"[SLICER OUTPUT] {line}")
-                
+
                 if progress_callback:
                     await progress_callback(90, "Finalizing...")
-                
+
             except Exception as e:
                 self._log(f"[PRINTER] Subprocess run failed: {e}")
                 return None
-            
+
             if result.returncode == 0:
                 # Handle OrcaSlicer output naming
                 # OrcaSlicer outputs as "plate_1.gcode", "plate_2.gcode" etc.
                 if is_orca:
                     output_dir = os.path.dirname(output_path) or "."
-                    
+
                     # Look for plate_*.gcode files (OrcaSlicer naming convention)
                     import glob
                     gcode_files = glob.glob(os.path.join(output_dir, "plate_*.gcode"))
-                    
+
                     if not gcode_files:
                         # Fallback: look for {basename}.gcode
                         base_name = os.path.splitext(os.path.basename(stl_path))[0]
                         expected_gcode = os.path.join(output_dir, f"{base_name}.gcode")
                         if os.path.exists(expected_gcode):
                             gcode_files = [expected_gcode]
-                    
+
                     if gcode_files:
                         # Use the first (or only) plate file
                         actual_gcode = gcode_files[0]
@@ -738,24 +774,24 @@ class PrinterAgent:
             else:
                 self._log(f"[PRINTER] Slicing failed: {result.stderr}")
                 return None
-                
+
         except subprocess.TimeoutExpired:
             self._log("[PRINTER] Slicing timeout (5 min exceeded)")
             return None
         except Exception as e:
             self._log(f"[PRINTER] Slicing error: {e}")
             return None
-    
-    async def upload_gcode(self, target: str, gcode_path: str, 
+
+    async def upload_gcode(self, target: str, gcode_path: str,
                            start_print: bool = False) -> bool:
         """
         Upload G-code to printer and optionally start print.
-        
+
         Args:
             target: Printer name or host
             gcode_path: Path to G-code file
             start_print: Whether to start printing immediately
-        
+
         Returns:
             True on success, False on failure
         """
@@ -763,11 +799,11 @@ class PrinterAgent:
         if not printer:
             self._log(f"[PRINTER] Error: Printer not found: {target}")
             return False
-        
+
         if not os.path.exists(gcode_path):
             self._log(f"[PRINTER] Error: G-code file not found: {gcode_path}")
             return False
-        
+
         if printer.printer_type == PrinterType.OCTOPRINT:
             return await self._upload_octoprint(printer, gcode_path, start_print)
         elif printer.printer_type == PrinterType.MOONRAKER:
@@ -775,17 +811,17 @@ class PrinterAgent:
         else:
             print(f"[PRINTER] Error: Unsupported printer type: {printer.printer_type}")
             return False
-    
-    async def _upload_octoprint(self, printer: Printer, gcode_path: str, 
+
+    async def _upload_octoprint(self, printer: Printer, gcode_path: str,
                                  start_print: bool) -> bool:
         """Upload to OctoPrint."""
         url = f"http://{printer.host}:{printer.port}/api/files/local"
         headers = {}
         if printer.api_key:
             headers["X-Api-Key"] = printer.api_key
-        
+
         filename = os.path.basename(gcode_path)
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 with open(gcode_path, 'rb') as f:
@@ -793,7 +829,7 @@ class PrinterAgent:
                     data.add_field('file', f, filename=filename)
                     if start_print:
                         data.add_field('print', 'true')
-                    
+
                     async with session.post(url, data=data, headers=headers) as resp:
                         if resp.status in (200, 201, 202, 204):
                             self._log(f"[PRINTER] Uploaded {filename} to OctoPrint at {printer.host}")
@@ -805,24 +841,24 @@ class PrinterAgent:
             self._log(f"[PRINTER] OctoPrint upload error: {e}")
             return False
 
-    async def _upload_moonraker(self, printer: Printer, gcode_path: str, 
+    async def _upload_moonraker(self, printer: Printer, gcode_path: str,
                                 start_print: bool) -> bool:
         """Upload to Moonraker."""
         url = f"http://{printer.host}:{printer.port}/server/files/upload"
-        
+
         filename = os.path.basename(gcode_path)
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 with open(gcode_path, 'rb') as f:
                     data = aiohttp.FormData()
                     data.add_field('file', f, filename=filename)
                     # Explicitly set root if needed, but default is usually fine?
-                    
+
                     async with session.post(url, data=data) as resp:
                         if resp.status in (200, 201):
                             self._log(f"[PRINTER] Uploaded {filename} to Moonraker at {printer.host}")
-                            
+
                             if start_print:
                                 # Trigger print
                                 print_url = f"http://{printer.host}:{printer.port}/printer/print/start"
@@ -840,7 +876,7 @@ class PrinterAgent:
 
             # Fallback to OctoPrint API (as Moonraker usually supports it and Creality K1 definitely does)
             return await self._upload_octoprint(printer, gcode_path, start_print)
-            
+
         except Exception as e:
             self._log(f"[PRINTER] Moonraker upload error: {e}")
             return False
@@ -855,14 +891,14 @@ class PrinterAgent:
         printer = self._resolve_printer(target)
         if not printer:
             return None
-            
+
         if printer.printer_type == PrinterType.OCTOPRINT:
             return await self._status_octoprint(printer)
         elif printer.printer_type == PrinterType.MOONRAKER:
             return await self._status_moonraker(printer)
         else:
             return None
-            
+
     async def _status_octoprint(self, printer: Printer) -> Optional[PrintStatus]:
         """Get status from OctoPrint."""
         job_url = f"http://{printer.host}:{printer.port}/api/job"
@@ -870,7 +906,7 @@ class PrinterAgent:
         headers = {}
         if printer.api_key:
             headers["X-Api-Key"] = printer.api_key
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 # Fetch Job Status
@@ -878,7 +914,7 @@ class PrinterAgent:
                 async with session.get(job_url, headers=headers) as resp:
                     if resp.status == 200:
                         job_data = await resp.json()
-                
+
                 # Fetch Printer Status (Temps)
                 temps = {}
                 async with session.get(printer_url, headers=headers) as resp:
@@ -900,7 +936,7 @@ class PrinterAgent:
                 if job_data:
                     progress = job_data.get("progress", {})
                     job = job_data.get("job", {})
-                    
+
                     return PrintStatus(
                         printer=printer.name,
                         state=job_data.get("state", "unknown").lower(),
@@ -916,25 +952,25 @@ class PrinterAgent:
         except Exception as e:
             print(f"[PRINTER] OctoPrint status error: {e}")
             return None
-    
+
     async def _status_moonraker(self, printer: Printer) -> Optional[PrintStatus]:
         """Get status from Moonraker."""
         url = f"http://{printer.host}:{printer.port}/printer/objects/query?print_stats&display_status&heater_bed&extruder"
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
                     if resp.status == 200:
                         # Clear error state on success
                         self._error_tracker.discard(printer.host)
-                        
+
                         data = await resp.json()
                         status = data.get("result", {}).get("status", {})
                         stats = status.get("print_stats", {})
                         display = status.get("display_status", {})
                         extruder = status.get("extruder", {})
                         bed = status.get("heater_bed", {})
-                        
+
                         return PrintStatus(
                             printer=printer.name,
                             state=stats.get("state", "unknown"),
@@ -966,7 +1002,7 @@ class PrinterAgent:
                 else:
                      self._log(f"[PRINTER] Moonraker status failed: {e}")
                 self._error_tracker.add(printer.host)
-            
+
             return PrintStatus(
                 printer=printer.name,
                 state=f"Error: {e}",
@@ -985,14 +1021,14 @@ class PrinterAgent:
         return f"{h:02d}:{m:02d}:{s:02d}"
 
 
-    async def print_stl(self, stl_path: str, printer_name: str, 
-                        profile_path: Optional[str] = None, 
+    async def print_stl(self, stl_path: str, printer_name: str,
+                        profile_path: Optional[str] = None,
                         root_path: Optional[str] = None) -> Dict[str, str]:
         """
         Orchestrate the full printing workflow: Slice -> Upload -> Print.
         """
         self._log(f"[PRINTER] Starting print job for {stl_path} on {printer_name}")
-        
+
         # 1. Resolve Printer
         printer = self._resolve_printer(printer_name)
         if not printer:
@@ -1001,18 +1037,18 @@ class PrinterAgent:
         # 2. Slice STL
         # Use printer name to auto-detect profiles if not provided
         gcode_path = await self.slice_stl(
-            stl_path, 
+            stl_path,
             profile_path=profile_path,
             root_path=root_path,
-            printer_name=printer.name 
+            printer_name=printer.name
         )
-        
+
         if not gcode_path:
             return {"status": "error", "message": "Slicing failed check logs."}
 
         # 3. Upload & Start Print
         success = await self.upload_gcode(printer_name, gcode_path, start_print=True)
-        
+
         if success:
             return {"status": "success", "message": f"Printing {os.path.basename(stl_path)} on {printer.name}"}
         else:
@@ -1023,16 +1059,16 @@ class PrinterAgent:
 if __name__ == "__main__":
     async def main():
         agent = PrinterAgent()
-        
+
         print("\n=== Testing Printer Discovery ===")
         printers = await agent.discover_printers(timeout=3)
         print(f"Found: {printers}")
-        
+
         if printers:
             printer = printers[0]
             print(f"\n=== Testing Status for {printer['name']} ===")
             status = await agent.get_print_status(printer['host'])
             if status:
                 print(f"Status: {status.to_dict()}")
-    
+
     asyncio.run(main())

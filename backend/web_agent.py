@@ -20,8 +20,22 @@ SCREEN_HEIGHT = 900
 # UPDATED: Use the specific Computer Use preview model
 MODEL_ID = "gemini-2.5-computer-use-preview-10-2025"
 
+run_web_agent_tool = {
+    "name": "run_web_agent",
+    "description": "Opens a web browser and performs a task according to the prompt.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The detailed instructions for the web browser agent."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
 class WebAgent:
     def __init__(self):
+        self.tools = [run_web_agent_tool]
         self.client = genai.Client(api_key=API_KEY)
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
         self.browser = None

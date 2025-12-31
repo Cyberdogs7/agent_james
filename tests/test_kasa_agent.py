@@ -4,6 +4,7 @@ Uses REAL devices from settings.json.
 """
 import pytest
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Try to import the agent, skip all tests if dependencies missing
 try:
@@ -16,6 +17,19 @@ except ImportError as e:
 pytestmark = pytest.mark.skipif(not HAS_KASA, reason=f"Kasa dependencies not installed: {IMPORT_ERROR if not HAS_KASA else ''}")
 
 
+@pytest.fixture
+def mock_kasa_device():
+    """Fixture to create a mock Kasa device."""
+    mock_device = AsyncMock()
+    mock_device.alias = "Living Room Lamp"
+    mock_device.host = "192.168.1.100"
+    mock_device.is_on = False
+    mock_device.is_dimmable = True
+    mock_device.is_color = True
+    mock_device.brightness = 50
+    mock_device.hsv = (0, 100, 100)
+    return mock_device
+
 
 class TestKasaDiscovery:
     """Tests for device discovery."""
@@ -27,42 +41,45 @@ class TestKasaDiscovery:
         assert hasattr(agent, 'devices')
         print(f"KasaAgent initialized with {len(kasa_devices)} known devices")
     
-    @pytest.mark.asyncio
-    async def test_initialize_known_devices(self, kasa_devices):
+    @pytest.mark.anyio
+    async def test_initialize_known_devices(self, kasa_devices, mock_kasa_device):
         """Test initializing devices from settings."""
-        agent = KasaAgent(known_devices=kasa_devices)
-        await agent.initialize()
-        print(f"Initialized {len(agent.devices)} devices")
-        
-        # If we have known devices, they should be loaded
-        if kasa_devices:
-            assert len(agent.devices) > 0
+        with patch("kasa.Discover.discover_single", return_value=mock_kasa_device):
+            agent = KasaAgent(known_devices=kasa_devices)
+            await agent.initialize()
+            print(f"Initialized {len(agent.devices)} devices")
+
+            # If we have known devices, they should be loaded
+            if kasa_devices:
+                assert len(agent.devices) > 0
     
-    @pytest.mark.asyncio
-    async def test_discover_devices(self):
+    @pytest.mark.anyio
+    async def test_discover_devices(self, mock_kasa_device):
         """Test discovering devices on network."""
-        agent = KasaAgent()
-        devices = await agent.discover_devices()
-        
-        print(f"Discovered {len(devices)} devices:")
-        for device in devices:
-            print(f"  - {device.get('alias', 'unknown')} @ {device.get('ip', 'unknown')}")
-        
-        # Discovery should return a list (may be empty if no devices)
-        assert isinstance(devices, list)
+        with patch("kasa.Discover.discover", return_value={"192.168.1.100": mock_kasa_device}):
+            agent = KasaAgent()
+            devices = await agent.discover_devices()
+
+            print(f"Discovered {len(devices)} devices:")
+            for device in devices:
+                print(f"  - {device.get('alias', 'unknown')} @ {device.get('ip', 'unknown')}")
+
+            # Discovery should return a list (may be empty if no devices)
+            assert isinstance(devices, list)
 
 
 class TestKasaDeviceControl:
     """Tests for device control - only runs if devices exist."""
     
     @pytest.fixture
-    async def agent_with_devices(self, kasa_devices):
+    async def agent_with_devices(self, kasa_devices, mock_kasa_device):
         """Get an initialized agent with devices."""
-        agent = KasaAgent(known_devices=kasa_devices)
-        await agent.initialize()
-        return agent
+        with patch("kasa.Discover.discover_single", return_value=mock_kasa_device):
+            agent = KasaAgent(known_devices=kasa_devices)
+            await agent.initialize()
+            return agent
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_get_device_by_alias(self, agent_with_devices, kasa_devices):
         """Test finding device by alias."""
         agent = agent_with_devices
@@ -80,7 +97,7 @@ class TestKasaDeviceControl:
             device = agent.get_device_by_alias(alias)
             print(f"Found device by alias '{alias}': {device}")
     
-    @pytest.mark.asyncio  
+    @pytest.mark.anyio
     async def test_turn_on_device(self, agent_with_devices, kasa_devices):
         """Test turning on a device."""
         agent = agent_with_devices
@@ -101,7 +118,7 @@ class TestKasaDeviceControl:
             print(f"Turn on result for {ip}: {result}")
             assert result is True
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_turn_off_device(self, agent_with_devices, kasa_devices):
         """Test turning off a device."""
         agent = agent_with_devices
@@ -122,7 +139,7 @@ class TestKasaDeviceControl:
             print(f"Turn off result for {ip}: {result}")
             assert result is True
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_set_brightness(self, agent_with_devices, kasa_devices):
         """Test setting brightness."""
         agent = agent_with_devices
@@ -141,8 +158,9 @@ class TestKasaDeviceControl:
         if ip:
             result = await agent.set_brightness(ip, 50)
             print(f"Set brightness result for {ip}: {result}")
+            assert result is True
     
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_set_color(self, agent_with_devices, kasa_devices):
         """Test setting color."""
         agent = agent_with_devices
@@ -161,6 +179,7 @@ class TestKasaDeviceControl:
         if ip:
             result = await agent.set_color(ip, "blue")
             print(f"Set color result for {ip}: {result}")
+            assert result is True
 
 
 class TestKasaColorConversion:
