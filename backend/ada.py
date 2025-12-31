@@ -53,6 +53,7 @@ from weather_agent import WeatherAgent
 from display_agent import DisplayAgent
 from system_agent import SystemAgent
 from filesystem_agent import FileSystemAgent
+from writing_agent import WritingAgent
 
 
 class AudioLoop:
@@ -115,6 +116,7 @@ class AudioLoop:
         self.weather_agent = WeatherAgent()
         self.display_agent = DisplayAgent(on_display_content=self.on_display_content)
         self.system_agent = SystemAgent(sio=self.sio)
+        self.writing_agent = WritingAgent(sio=self.sio)
 
 
         # Dictionary to keep track of active polling tasks
@@ -158,6 +160,7 @@ class AudioLoop:
             self.weather_agent.tools +
             self.display_agent.tools +
             self.system_agent.tools +
+            self.writing_agent.tools +
             self.filesystem_agent.tools +
             self.project_manager.tools +
             [set_time_format_tool, get_datetime_tool] +
