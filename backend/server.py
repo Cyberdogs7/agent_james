@@ -16,7 +16,8 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
-
+import subprocess
+import atexit
 
 
 # Ensure we can import ada
@@ -26,6 +27,7 @@ import ada
 from authenticator import FaceAuthenticator
 from kasa_agent import KasaAgent
 from project_manager import ProjectManager
+from vram_utils import select_model
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -44,6 +46,8 @@ def signal_handler(sig, frame):
             audio_loop.stop() 
         except:
             pass
+    # Stop vLLM server
+    stop_vllm_server()
     # Force kill
     print("[SERVER] Force exiting...")
     os._exit(0)
@@ -57,6 +61,64 @@ loop_task = None
 authenticator = None
 kasa_agent = KasaAgent()
 SETTINGS_FILE = "settings.json"
+vllm_process = None
+
+def start_vllm_server():
+    global vllm_process
+    model = select_model()
+    if model:
+        print(f"Starting vLLM server with model: {model}")
+        try:
+            # Command to launch the vLLM server
+            command = [
+                sys.executable, "-m", "vllm.entrypoints.openai.api_server",
+                "--model", f"Tongyi-MAI/{model}",
+                "--served-model-name", model,
+                "--host", "0.0.0.0",
+                "--port", "8888",  # Use a different port than the main server
+                "--tensor-parallel-size", "1",
+                "--trust-remote-code"
+            ]
+
+            # Start the process
+            vllm_process = subprocess.Popen(command)
+            print(f"vLLM server started with PID: {vllm_process.pid}")
+
+        except FileNotFoundError:
+            print("Error: `python` command not found. Make sure Python is in your PATH.")
+        except Exception as e:
+            print(f"Failed to start vLLM server: {e}")
+    else:
+        print("No suitable model found for the available VRAM. vLLM server not started.")
+
+def stop_vllm_server():
+    global vllm_process
+    if vllm_process:
+        print("Stopping vLLM server...")
+        vllm_process.terminate()
+        try:
+            # Wait for a bit to see if it terminates gracefully
+            vllm_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            print("vLLM server did not terminate in time, killing it...")
+            vllm_process.kill()
+        vllm_process = None
+        print("vLLM server stopped.")
+
+# Register the stop function to be called on exit
+atexit.register(stop_vllm_server)
+
+def check_and_manage_vllm_server():
+    """Checks the current project config and starts or stops the vLLM server."""
+    project_config = project_manager.get_project_config()
+    if project_config.get("web_agent") == "mai-ui":
+        if vllm_process is None:
+            print("[SERVER] Project requires MAI-UI, starting vLLM server.")
+            start_vllm_server()
+    else:
+        if vllm_process is not None:
+            print("[SERVER] Project does not require MAI-UI, stopping vLLM server.")
+            stop_vllm_server()
 
 # Determine project root and initialize ProjectManager
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -129,6 +191,9 @@ async def startup_event():
 
     print("[SERVER] Startup: Initializing Kasa Agent...")
     await kasa_agent.initialize()
+
+    # Check if we need to start the vLLM server
+    check_and_manage_vllm_server()
 
 @app.get("/status")
 async def status():
@@ -1036,10 +1101,12 @@ async def update_project_config(sid, data):
             config = project_manager.get_project_config()
             await sio.emit('project_config', config)
 
-            # Check if system prompt or voice changed, and if so, reconnect
-            if 'system_prompt' in data or 'voice_name' in data:
+            # Check for changes that require action
+            if 'system_prompt' in data or 'voice_name' in data or 'web_agent' in data:
                 if audio_loop:
-                    print("[SERVER] System prompt or voice changed, reconnecting audio loop...")
+                    if 'web_agent' in data:
+                        check_and_manage_vllm_server()
+                    print("[SERVER] Config changed, reconnecting audio loop...")
                     audio_loop.reconnect()
         else:
             await sio.emit('error', {'msg': msg})
@@ -1052,6 +1119,7 @@ async def switch_project(sid, data):
         if success:
             await sio.emit('project_update', {'project': project_name})
             await sio.emit('status', {'msg': f"Switched to project: {project_name}"})
+            check_and_manage_vllm_server()
             if audio_loop:
                 audio_loop.reconnect()
         else:

@@ -27,3 +27,5 @@ giphy_client
 pytest
 httpx
 tzlocal
+pynvml
+vllm

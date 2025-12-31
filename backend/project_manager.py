@@ -37,10 +37,22 @@ list_projects_tool = {
     }
 }
 
+set_web_agent_tool = {
+    "name": "set_web_agent",
+    "description": "Sets the web agent for the project.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "web_agent": {"type": "STRING", "description": "The web agent to use. Can be 'gemini' or 'mai-ui'."}
+        },
+        "required": ["web_agent"]
+    }
+}
+
 
 class ProjectManager:
     def __init__(self, workspace_root: str):
-        self.tools = [create_project_tool, switch_project_tool, list_projects_tool]
+        self.tools = [create_project_tool, switch_project_tool, list_projects_tool, set_web_agent_tool]
         self.workspace_root = Path(workspace_root)
         self.projects_dir = self.workspace_root / "projects"
         self.current_project = "temp"
@@ -87,7 +99,8 @@ class ProjectManager:
         DEFAULT_CONFIG = {
             "system_prompt": "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant.",
             "jules_api_key": "",
-            "voice_name": "Sadaltager"
+            "voice_name": "Sadaltager",
+            "web_agent": "gemini"
         }
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4)
@@ -286,3 +299,10 @@ class ProjectManager:
             return False, "Invalid time format. Please use '12h' or '24h'."
 
         return self.update_project_config({"time_format": time_format})
+
+    def set_web_agent(self, web_agent: str):
+        """Sets the web agent for the project."""
+        if web_agent not in ["gemini", "mai-ui"]:
+            return False, "Invalid web agent. Please use 'gemini' or 'mai-ui'."
+
+        return self.update_project_config({"web_agent": web_agent})

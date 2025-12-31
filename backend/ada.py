@@ -18,6 +18,7 @@ import time
 from time_utils import set_time_format_tool, get_datetime_tool, format_datetime, get_local_time
 from google import genai
 from google.genai import types
+from vram_utils import select_model
 
 if sys.version_info < (3, 11, 0):
     import taskgroup, exceptiongroup
@@ -43,6 +44,7 @@ pya = pyaudio.PyAudio()
 
 from cad_agent import CadAgent
 from web_agent import WebAgent
+from mai_ui_agent import MAIUI_Agent
 from kasa_agent import KasaAgent
 from printer_agent import PrinterAgent
 from trello_agent import TrelloAgent
@@ -102,7 +104,13 @@ class AudioLoop:
                 self.on_cad_status(status_info)
         
         self.cad_agent = CadAgent(on_thought=handle_cad_thought, on_status=handle_cad_status)
-        self.web_agent = WebAgent()
+
+        project_config = project_manager.get_project_config()
+        if project_config.get("web_agent") == "mai-ui":
+            self.web_agent = MAIUI_Agent()
+        else:
+            self.web_agent = WebAgent()
+
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.printer_agent = PrinterAgent()
         self.trello_agent = TrelloAgent()
@@ -203,7 +211,17 @@ class AudioLoop:
         """Signals the main loop to reconnect."""
         if INCLUDE_RAW_LOGS:
             print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
+        self._reload_agents()
         self._reconnect_needed.set()
+
+    def _reload_agents(self):
+        """Reloads agents based on the current project configuration."""
+        project_config = self.project_manager.get_project_config()
+        if project_config.get("web_agent") == "mai-ui":
+            model_name = select_model()
+            self.web_agent = MAIUI_Agent(model_name=model_name)
+        else:
+            self.web_agent = WebAgent()
 
     def _cleanup_jules_task(self, session_id, task):
         """Callback to remove a completed Jules polling task."""
