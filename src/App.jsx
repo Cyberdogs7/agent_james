@@ -571,11 +571,10 @@ function App() {
             }
         });
 
-        socket.on('restart_request', (data) => {
-            console.log('Restart request received from backend:', data);
-            addMessage('System', 'Update applied. Restarting application...');
-            // Emit back to server to trigger shutdown with restart: true
-            socket.emit('restart_request', { restart: true });
+        socket.on('initiate_restart', () => {
+            console.log('[RESTART] Received restart signal from backend. Relaying to Electron main process.');
+            addMessage('System', 'Restarting application...');
+            ipcRenderer.send('restart_app');
         });
 
         // Listen for timer updates

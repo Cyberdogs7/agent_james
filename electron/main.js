@@ -100,6 +100,35 @@ app.whenReady().then(() => {
         if (mainWindow) mainWindow.close();
     });
 
+    ipcMain.on('restart_app', () => {
+        console.log('[RESTART] Received restart request from renderer process.');
+        if (pythonProcess) {
+            console.log('[RESTART] Killing existing Python backend...');
+            if (process.platform === 'win32') {
+                try {
+                    const { execSync } = require('child_process');
+                    execSync(`taskkill /pid ${pythonProcess.pid} /f /t`);
+                } catch (e) {
+                    console.error('Failed to kill python process during restart:', e.message);
+                }
+            } else {
+                pythonProcess.kill('SIGKILL');
+            }
+            pythonProcess = null;
+        }
+
+        console.log('[RESTART] Starting new Python backend...');
+        startPythonBackend();
+
+        console.log('[RESTART] Waiting for backend to become available...');
+        waitForBackend().then(() => {
+            console.log('[RESTART] Backend is ready. Reloading window.');
+            if (mainWindow) {
+                mainWindow.webContents.reload();
+            }
+        });
+    });
+
     checkBackendPort(8000).then((isTaken) => {
         if (isTaken) {
             console.log('Port 8000 is taken. Assuming backend is already running manually.');
