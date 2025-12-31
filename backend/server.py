@@ -13,6 +13,7 @@ import asyncio
 import threading
 import sys
 import os
+import time
 import json
 from datetime import datetime
 from pathlib import Path
@@ -466,6 +467,10 @@ async def shutdown(sid, data=None):
 
             # Use sys.executable to ensure the restart script runs in the same environment
             subprocess.Popen([sys.executable, restart_script_path])
+
+            # Add a small delay to allow the new process to start before we exit
+            time.sleep(1)
+
         except Exception as e:
             print(f"[SERVER] Failed to restart: {e}")
         
