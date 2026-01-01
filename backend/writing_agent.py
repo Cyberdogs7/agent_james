@@ -1,6 +1,57 @@
 import os
 import re
 
+create_new_book_tool = {
+    "name": "create_new_book",
+    "description": "Creates a new book project with a standard directory structure.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "book_title": {
+                "type": "STRING",
+                "description": "The title of the new book."
+            }
+        },
+        "required": ["book_title"]
+    }
+}
+
+set_active_book_tool = {
+    "name": "set_active_book",
+    "description": "Sets a book as the active project for subsequent commands.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "book_title": {
+                "type": "STRING",
+                "description": "The title of the book to set as active."
+            }
+        },
+        "required": ["book_title"]
+    }
+}
+
+list_books_tool = {
+    "name": "list_books",
+    "description": "Lists all available book projects.",
+    "parameters": { "type": "OBJECT", "properties": {} }
+}
+
+create_new_character_tool = {
+    "name": "create_new_character",
+    "description": "Creates a new character file with a template in the active project.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "character_name": {
+                "type": "STRING",
+                "description": "The name of the character."
+            }
+        },
+        "required": ["character_name"]
+    }
+}
+
 
 class WritingAgent:
     def __init__(self, sio):
@@ -92,8 +143,8 @@ class WritingAgent:
     @property
     def tools(self):
         return [
-            self.create_new_book,
-            self.set_active_book,
-            self.list_books,
-            self.create_new_character,
+            create_new_book_tool,
+            set_active_book_tool,
+            list_books_tool,
+            create_new_character_tool,
         ]
