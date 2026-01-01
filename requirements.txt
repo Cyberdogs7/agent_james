@@ -31,4 +31,4 @@ pynvml
 torch==2.7.1
 torchaudio==2.7.1
 torchvision==0.22.1
-https://github.com/SystemPanic/vllm-windows/releases/download/v0.10.1.1/vllm-0.10.1.1-cp312-cp312-win_amd64.whl
+https://github.com/SystemPanic/vllm-windows/releases/download/v0.10.1.1/vllm-0.10.1.1%2Bcu124-cp312-cp312-win_amd64.whl
