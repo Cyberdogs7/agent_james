@@ -1,1714 +1,1167 @@
-import asyncio
-import base64
-import io
-import json
-import os
 import sys
-import traceback
-from dotenv import load_dotenv
-import cv2
-import pyaudio
-import PIL.Image
-import mss
-import argparse
-import math
-import struct
-import time
+import asyncio
 
-from time_utils import set_time_format_tool, get_datetime_tool, format_datetime, get_local_time
-from google import genai
-from google.genai import types
+# Fix for asyncio subprocess support on Windows
+# MUST BE SET BEFORE OTHER IMPORTS
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
+import socketio
+import uvicorn
+from fastapi import FastAPI
+import asyncio
+import threading
+import sys
+import os
+import json
+from datetime import datetime
+from pathlib import Path
+import subprocess
+import atexit
+
+
+# Ensure we can import ada
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+import ada
+from authenticator import FaceAuthenticator
+from kasa_agent import KasaAgent
+from project_manager import ProjectManager
 from vram_utils import select_model
 
-if sys.version_info < (3, 11, 0):
-    import taskgroup, exceptiongroup
-    asyncio.TaskGroup = taskgroup.TaskGroup
-    asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
+# Create a Socket.IO server
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+app = FastAPI()
+app_socketio = socketio.ASGIApp(sio, app)
 
-from tools import tools_list
+import signal
 
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-SEND_SAMPLE_RATE = 16000
-RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE = 1024
-
-MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
-DEFAULT_MODE = "camera"
-load_dotenv()
-INCLUDE_RAW_LOGS = os.getenv("INCLUDE_RAW_LOGS", "True").lower() == "true"
-os.environ["INCLUDE_RAW_LOGS"] = str(INCLUDE_RAW_LOGS)
-client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
-
-pya = pyaudio.PyAudio()
-
-from cad_agent import CadAgent
-from web_agent import WebAgent
-from mai_ui_agent import MAIUI_Agent
-from kasa_agent import KasaAgent
-from printer_agent import PrinterAgent
-from trello_agent import TrelloAgent
-from jules_agent import JulesAgent
-from timer_agent import TimerAgent
-from update_agent import UpdateAgent
-from weather_agent import WeatherAgent
-from display_agent import DisplayAgent
-from system_agent import SystemAgent
-from filesystem_agent import FileSystemAgent
-from writing_agent import WritingAgent
-
-
-class AudioLoop:
-    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
-        self.sio = sio
-        self.video_mode = video_mode
-        self.on_audio_data = on_audio_data
-        self.on_video_frame = on_video_frame
-        self.on_cad_data = on_cad_data
-        self.on_web_data = on_web_data
-        self.on_display_content = on_display_content
-        self.on_transcription = on_transcription
-        self.on_tool_confirmation = on_tool_confirmation
-        self.on_cad_status = on_cad_status
-        self.on_cad_thought = on_cad_thought
-        self.on_project_update = on_project_update
-        self.on_device_update = on_device_update
-        self.on_error = on_error
-        self.input_device_index = input_device_index
-        self.input_device_name = input_device_name
-        self.output_device_index = output_device_index
-
-        self.audio_in_queue = None
-        self.out_queue = None
-        self.paused = False
-
-        self.chat_buffer = {"sender": None, "text": ""} # For aggregating chunks
-        
-        # Track last transcription text to calculate deltas (Gemini sends cumulative text)
-        self._last_input_transcription = ""
-        self._last_output_transcription = ""
-
-        self.audio_in_queue = None
-        self.out_queue = None
-        self.paused = False
-
-        self.session = None
-        
-        # Create CadAgent with thought callback
-        def handle_cad_thought(thought_text):
-            if self.on_cad_thought:
-                self.on_cad_thought(thought_text)
-        
-        def handle_cad_status(status_info):
-            if self.on_cad_status:
-                self.on_cad_status(status_info)
-        
-        self.cad_agent = CadAgent(on_thought=handle_cad_thought, on_status=handle_cad_status)
-
-        project_config = project_manager.get_project_config()
-        if project_config.get("web_agent") == "mai-ui":
-            model_name = select_model()
-            self.web_agent = MAIUI_Agent(model_name=model_name)
-        else:
-            self.web_agent = WebAgent()
-
-        self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
-        self.printer_agent = PrinterAgent()
-        self.trello_agent = TrelloAgent()
-        self.timer_agent = TimerAgent(sio=self.sio)
-        
-        def handle_update_log(message):
-            # Always print to console from the main thread context
-            print(f"[ADA DEBUG] {message}", flush=True)
-
-        self.update_agent = UpdateAgent(on_log=handle_update_log)
-        self.weather_agent = WeatherAgent()
-        self.display_agent = DisplayAgent(on_display_content=self.on_display_content)
-        self.system_agent = SystemAgent(sio=self.sio)
-        self.writing_agent = WritingAgent(sio=self.sio)
-
-
-        # Dictionary to keep track of active polling tasks
-        self.jules_polling_tasks = {}
-
-        self.send_text_task = None
-        self.stop_event = asyncio.Event()
-        self._reconnect_needed = asyncio.Event()
-        
-        self.permissions = {} # Default Empty (Will treat unset as True)
-        self._pending_confirmations = {}
-
-        # Video buffering state
-        self._latest_image_payload = None
-        # VAD State
-        self._is_speaking = False
-        self._silence_start_time = None
-        
-        # Initialize ProjectManager
-        if project_manager:
-            self.project_manager = project_manager
-        else:
-            from project_manager import ProjectManager
-            # Assuming we are running from backend/ or root?
-            # Using abspath of current file to find root
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            # If ada.py is in backend/, project root is one up
-            project_root = os.path.dirname(current_dir)
-            self.project_manager = ProjectManager(project_root)
-
-        self.filesystem_agent = FileSystemAgent(project_manager=self.project_manager, session=self.session, on_project_update=self.on_project_update)
-        
-        self.tools = [{'google_search': {}}, {"function_declarations":
-            self.cad_agent.tools +
-            self.web_agent.tools +
-            self.kasa_agent.tools +
-            self.printer_agent.tools +
-            self.trello_agent.tools +
-            self.timer_agent.tools +
-            self.update_agent.tools +
-            self.weather_agent.tools +
-            self.display_agent.tools +
-            self.system_agent.tools +
-            self.writing_agent.tools +
-            self.filesystem_agent.tools +
-            self.project_manager.tools +
-            [set_time_format_tool, get_datetime_tool] +
-            tools_list[0]['function_declarations'][1:]
-        }]
-        # Sync Initial Project State
-        if self.on_project_update:
-            # We need to defer this slightly or just call it. 
-            # Since this is init, loop might not be running, but on_project_update in server.py uses asyncio.create_task which needs a loop.
-            # We will handle this by calling it in run() or just print for now.
+# --- SHUTDOWN HANDLER ---
+def signal_handler(sig, frame):
+    print(f"\n[SERVER] Caught signal {sig}. Exiting gracefully...")
+    # Clean up audio loop
+    if audio_loop:
+        try:
+            print("[SERVER] Stopping Audio Loop...")
+            audio_loop.stop()
+        except:
             pass
+    # Stop vLLM server
+    stop_vllm_server()
+    # Force kill
+    print("[SERVER] Force exiting...")
+    os._exit(0)
 
-    def flush_chat(self):
-        """Forces the current chat buffer to be written to log."""
-        if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
-            self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
-            self.chat_buffer = {"sender": None, "text": ""}
-        # Reset transcription tracking for new turn
-        self._last_input_transcription = ""
-        self._last_output_transcription = ""
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
-    def update_permissions(self, new_perms):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CONFIG] Updating tool permissions: {new_perms}")
-        self.permissions.update(new_perms)
+# Global state
+audio_loop = None
+loop_task = None
+authenticator = None
+kasa_agent = KasaAgent()
+SETTINGS_FILE = "settings.json"
+vllm_process = None
 
-    def set_paused(self, paused):
-        self.paused = paused
-
-    def stop(self):
-        self.stop_event.set()
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [SHUTDOWN] Stopping all Jules polling tasks...")
-        for session_id, task_info in self.jules_polling_tasks.items():
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [SHUTDOWN] Signaling stop for session: {session_id}")
-            task_info["stop_event"].set()
-
-    def reconnect(self):
-        """Signals the main loop to reconnect."""
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
-        self._reload_agents()
-        self._reconnect_needed.set()
-
-    def _reload_agents(self):
-        """Reloads agents based on the current project configuration."""
-        project_config = self.project_manager.get_project_config()
-        if project_config.get("web_agent") == "mai-ui":
-            model_name = select_model()
-            self.web_agent = MAIUI_Agent(model_name=model_name)
-        else:
-            self.web_agent = WebAgent()
-
-    def _cleanup_jules_task(self, session_id, task):
-        """Callback to remove a completed Jules polling task."""
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Cleaning up polling task for session: {session_id}")
-        self.jules_polling_tasks.pop(session_id, None)
-        
-    def resolve_tool_confirmation(self, request_id, confirmed):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
-        if request_id in self._pending_confirmations:
-            future = self._pending_confirmations[request_id]
-            if not future.done():
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [RESOLVE] Future found and pending. Setting result to: {confirmed}")
-                future.set_result(confirmed)
-            else:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Request {request_id} future already done. Result: {future.result()}")
-        else:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [WARN] Confirmation Request {request_id} not found in pending dict. Keys: {list(self._pending_confirmations.keys())}")
-
-    def clear_audio_queue(self):
-        """Clears the queue of pending audio chunks to stop playback immediately."""
+def start_vllm_server():
+    global vllm_process
+    model = select_model()
+    if model:
+        print(f"Starting vLLM server with model: {model}")
         try:
-            count = 0
-            while not self.audio_in_queue.empty():
-                self.audio_in_queue.get_nowait()
-                count += 1
-            if count > 0:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [AUDIO] Cleared {count} chunks from playback queue due to interruption.")
+            # Command to launch the vLLM server
+            command = [
+                sys.executable, "-m", "vllm.entrypoints.openai.api_server",
+                "--model", f"Tongyi-MAI/{model}",
+                "--served-model-name", model,
+                "--host", "0.0.0.0",
+                "--port", "8888",  # Use a different port than the main server
+                "--tensor-parallel-size", "1",
+                "--trust-remote-code"
+            ]
+
+            # Start the process
+            vllm_process = subprocess.Popen(command)
+            print(f"vLLM server started with PID: {vllm_process.pid}")
+
+        except FileNotFoundError:
+            print("Error: `python` command not found. Make sure Python is in your PATH.")
         except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to clear audio queue: {e}")
+            print(f"Failed to start vLLM server: {e}")
+    else:
+        print("No suitable model found for the available VRAM. vLLM server not started.")
 
-    async def send_frame(self, frame_data):
-        # Update the latest frame payload
-        if isinstance(frame_data, bytes):
-            b64_data = base64.b64encode(frame_data).decode('utf-8')
-        else:
-            b64_data = frame_data 
-
-        # Store as the designated "next frame to send"
-        self._latest_image_payload = {"mime_type": "image/jpeg", "data": b64_data}
-        # No event signal needed - listen_audio pulls it
-
-    async def send_realtime(self):
-        while True:
-            msg = await self.out_queue.get()
-            await self.session.send(input=msg, end_of_turn=False)
-
-    async def listen_audio(self):
-        mic_info = pya.get_default_input_device_info()
-
-        # Resolve Input Device by Name if provided
-        resolved_input_device_index = None
-        
-        if self.input_device_name:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA] Attempting to find input device matching: '{self.input_device_name}'")
-            count = pya.get_device_count()
-            best_match = None
-            
-            for i in range(count):
-                try:
-                    info = pya.get_device_info_by_index(i)
-                    if info['maxInputChannels'] > 0:
-                        name = info.get('name', '')
-                        # Simple case-insensitive check
-                        if self.input_device_name.lower() in name.lower() or name.lower() in self.input_device_name.lower():
-                             if INCLUDE_RAW_LOGS:
-                                 print(f"   Candidate {i}: {name}")
-                             # Prioritize exact match or very close match if possible, but first match is okay for now
-                             resolved_input_device_index = i
-                             best_match = name
-                             break
-                except Exception:
-                    continue
-            
-            if resolved_input_device_index is not None:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] Resolved input device '{self.input_device_name}' to index {resolved_input_device_index} ({best_match})")
-            else:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] Could not find device matching '{self.input_device_name}'. Checking index...")
-
-        # Fallback to index if Name lookup failed or wasn't provided
-        if resolved_input_device_index is None and self.input_device_index is not None:
-             try:
-                 resolved_input_device_index = int(self.input_device_index)
-                 if INCLUDE_RAW_LOGS:
-                     print(f"[ADA] Requesting Input Device Index: {resolved_input_device_index}")
-             except ValueError:
-                 if INCLUDE_RAW_LOGS:
-                     print(f"[ADA] Invalid device index '{self.input_device_index}', reverting to default.")
-                 resolved_input_device_index = None
-
-        if resolved_input_device_index is None:
-             if INCLUDE_RAW_LOGS:
-                 print("[ADA] Using Default Input Device")
-
-        # Determine actual channels to use
-        actual_input_device_index = resolved_input_device_index if resolved_input_device_index is not None else mic_info["index"]
-        
-        # Try to open with requested CHANNELS, fallback if needed
-        self.audio_stream = None
-        stream_channels = CHANNELS
-        
+def stop_vllm_server():
+    global vllm_process
+    if vllm_process:
+        print("Stopping vLLM server...")
+        vllm_process.terminate()
         try:
-            self.audio_stream = await asyncio.to_thread(
-                pya.open,
-                format=FORMAT,
-                channels=CHANNELS,
-                rate=SEND_SAMPLE_RATE,
-                input=True,
-                input_device_index=actual_input_device_index,
-                frames_per_buffer=CHUNK_SIZE,
-            )
-        except OSError:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA] Failed to open stream with {CHANNELS} channels. Trying to detect supported channels...")
-            try:
-                device_info = pya.get_device_info_by_index(actual_input_device_index)
-                max_channels = int(device_info.get('maxInputChannels', 0))
-                
-                # Try common counts up to max_channels
-                for c in [1, 2, 4, 8]:
-                    if c == CHANNELS: continue
-                    if c > max_channels and max_channels > 0: continue
-                    try:
-                        self.audio_stream = await asyncio.to_thread(
-                            pya.open,
-                            format=FORMAT,
-                            channels=c,
-                            rate=SEND_SAMPLE_RATE,
-                            input=True,
-                            input_device_index=actual_input_device_index,
-                            frames_per_buffer=CHUNK_SIZE,
-                        )
-                        stream_channels = c
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA] Successfully opened audio stream with {c} channels.")
-                        break
-                    except OSError:
-                        continue
-            except Exception as e:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] [ERR] Device info lookup failed: {e}")
+            # Wait for a bit to see if it terminates gracefully
+            vllm_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            print("vLLM server did not terminate in time, killing it...")
+            vllm_process.kill()
+        vllm_process = None
+        print("vLLM server stopped.")
 
-        if not self.audio_stream:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
-                print("[ADA] [WARN] Audio features will be disabled. Please check microphone permissions.")
+# Register the stop function to be called on exit
+atexit.register(stop_vllm_server)
+
+def check_and_manage_vllm_server():
+    """Checks the current project config and starts or stops the vLLM server."""
+    project_config = project_manager.get_project_config()
+    if project_config.get("web_agent") == "mai-ui":
+        if vllm_process is None:
+            print("[SERVER] Project requires MAI-UI, starting vLLM server.")
+            start_vllm_server()
+    else:
+        if vllm_process is not None:
+            print("[SERVER] Project does not require MAI-UI, stopping vLLM server.")
+            stop_vllm_server()
+
+# Determine project root and initialize ProjectManager
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+project_manager = ProjectManager(project_root)
+
+DEFAULT_SETTINGS = {
+    "face_auth_enabled": False, # Default OFF as requested
+    "tool_permissions": {
+        "generate_cad": True,
+        "run_web_agent": True,
+        "write_file": True,
+        "read_directory": True,
+        "read_file": True,
+        "create_project": True,
+        "switch_project": True,
+        "list_projects": True
+    },
+    "printers": [], # List of {host, port, name, type}
+    "kasa_devices": [], # List of {ip, alias, model}
+    "camera_flipped": False # Invert cursor horizontal direction
+}
+
+SETTINGS = DEFAULT_SETTINGS.copy()
+
+def load_settings():
+    global SETTINGS
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                loaded = json.load(f)
+                # Merge with defaults to ensure new keys exist
+                # Deep merge for tool_permissions would be better but shallow merge of top keys + tool_permissions check is okay for now
+                for k, v in loaded.items():
+                    if k == "tool_permissions" and isinstance(v, dict):
+                         SETTINGS["tool_permissions"].update(v)
+                    else:
+                        SETTINGS[k] = v
+            print(f"Loaded settings: {SETTINGS}")
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+
+def save_settings():
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(SETTINGS, f, indent=4)
+        print("Settings saved.")
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+
+# Load on startup
+load_settings()
+
+authenticator = None
+kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
+# tool_permissions is now SETTINGS["tool_permissions"]
+
+@app.on_event("startup")
+async def startup_event():
+    import sys
+    print(f"[SERVER DEBUG] Startup Event Triggered")
+    print(f"[SERVER DEBUG] Python Version: {sys.version}")
+    try:
+        loop = asyncio.get_running_loop()
+        print(f"[SERVER DEBUG] Running Loop: {type(loop)}")
+        policy = asyncio.get_event_loop_policy()
+        print(f"[SERVER DEBUG] Current Policy: {type(policy)}")
+    except Exception as e:
+        print(f"[SERVER DEBUG] Error checking loop: {e}")
+
+    print("[SERVER] Startup: Initializing Kasa Agent...")
+    await kasa_agent.initialize()
+
+    # Check if we need to start the vLLM server
+    check_and_manage_vllm_server()
+
+@app.get("/status")
+async def status():
+    return {"status": "running", "service": "A.D.A Backend"}
+
+@sio.event
+async def connect(sid, environ):
+    print(f"Client connected: {sid}")
+    await sio.emit('status', {'msg': 'Connected to A.D.A Backend'}, room=sid)
+
+    global authenticator
+
+    # Callback for Auth Status
+    async def on_auth_status(is_auth):
+        print(f"[SERVER] Auth status change: {is_auth}")
+        await sio.emit('auth_status', {'authenticated': is_auth})
+
+    # Callback for Auth Camera Frames
+    async def on_auth_frame(frame_b64):
+        await sio.emit('auth_frame', {'image': frame_b64})
+
+    # Initialize Authenticator if not already done
+    if authenticator is None:
+        authenticator = FaceAuthenticator(
+            reference_image_path="reference.jpg",
+            on_status_change=on_auth_status,
+            on_frame=on_auth_frame
+        )
+
+    # Check if already authenticated or needs to start
+    if authenticator.authenticated:
+        await sio.emit('auth_status', {'authenticated': True})
+    else:
+        # Check Settings for Auth
+        if SETTINGS.get("face_auth_enabled", False):
+            await sio.emit('auth_status', {'authenticated': False})
+            # Start the auth loop in background
+            asyncio.create_task(authenticator.start_authentication_loop())
+        else:
+            # Bypass Auth
+            print("Face Auth Disabled. Auto-authenticating.")
+            # We don't change authenticator state to true to avoid confusion if re-enabled?
+            # Or we should just tell client it's auth'd.
+            await sio.emit('auth_status', {'authenticated': True})
+
+@sio.event
+async def disconnect(sid):
+    print(f"Client disconnected: {sid}")
+
+@sio.event
+async def start_audio(sid, data=None):
+    global audio_loop, loop_task
+
+    # Optional: Block if not authenticated
+    # Only block if auth is ENABLED and not authenticated
+    if SETTINGS.get("face_auth_enabled", False):
+        if authenticator and not authenticator.authenticated:
+            print("Blocked start_audio: Not authenticated.")
+            await sio.emit('error', {'msg': 'Authentication Required'})
             return
 
-        if __debug__:
-            kwargs = {"exception_on_overflow": False}
+    print("Starting Audio Loop...")
+
+    device_index = None
+    device_name = None
+    if data:
+        if 'device_index' in data:
+            device_index = data['device_index']
+        if 'device_name' in data:
+            device_name = data['device_name']
+
+    print(f"Using input device: Name='{device_name}', Index={device_index}")
+
+    if audio_loop:
+        if loop_task and (loop_task.done() or loop_task.cancelled()):
+             print("Audio loop task appeared finished/cancelled. Clearing and restarting...")
+             audio_loop = None
+             loop_task = None
         else:
-            kwargs = {}
-        
-        # VAD Constants
-        VAD_THRESHOLD = 800 # Adj based on mic sensitivity (800 is conservative for 16-bit)
-        SILENCE_DURATION = 0.5 # Seconds of silence to consider "done speaking"
-        
-        while True:
-            if self.paused:
-                await asyncio.sleep(0.1)
-                continue
+             print("Audio loop already running. Re-connecting client to session.")
+             await sio.emit('status', {'msg': 'A.D.A Already Running'})
+             return
 
-            try:
-                data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
-                
-                # Downmix if needed (Gemini expects Mono)
-                if stream_channels > 1:
-                    count = len(data) // (2 * stream_channels)
-                    if count > 0:
-                        shorts = struct.unpack(f"<{count * stream_channels}h", data)
-                        # Take the first channel (left)
-                        mono_shorts = shorts[::stream_channels]
-                        data = struct.pack(f"<{count}h", *mono_shorts)
 
-                # 1. Send Audio
-                if self.out_queue:
-                    await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
-                
-                # 2. VAD Logic for Video
-                # rms = audioop.rms(data, 2)
-                # Replacement for audioop.rms(data, 2)
-                count = len(data) // 2
-                if count > 0:
-                    shorts = struct.unpack(f"<{count}h", data)
-                    sum_squares = sum(s**2 for s in shorts)
-                    rms = int(math.sqrt(sum_squares / count))
-                else:
-                    rms = 0
-                
-                if rms > VAD_THRESHOLD:
-                    # Speech Detected
-                    self._silence_start_time = None
-                    
-                    if not self._is_speaking:
-                        # NEW Speech Utterance Started
-                        self._is_speaking = True
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Sending Video Frame.")
-                        
-                        # Send ONE frame
-                        if self._latest_image_payload and self.out_queue:
-                            await self.out_queue.put(self._latest_image_payload)
-                        else:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [VAD] No video frame available to send.")
-                            
-                else:
-                    # Silence
-                    if self._is_speaking:
-                        if self._silence_start_time is None:
-                            self._silence_start_time = time.time()
-                        
-                        elif time.time() - self._silence_start_time > SILENCE_DURATION:
-                            # Silence confirmed, reset state
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [VAD] Silence detected. Resetting speech state.")
-                            self._is_speaking = False
-                            self._silence_start_time = None
+    # Callback to send audio data to frontend
+    def on_audio_data(data_bytes):
+        # We need to schedule this on the event loop
+        # This is high frequency, so we might want to downsample or batch if it's too much
+        asyncio.create_task(sio.emit('audio_data', {'data': list(data_bytes)}))
 
-            except Exception as e:
-                if INCLUDE_RAW_LOGS:
-                    print(f"Error reading audio: {e}")
-                await asyncio.sleep(0.1)
+    # Callback to send CAL data to frontend
+    def on_cad_data(data):
+        info = f"{len(data.get('vertices', []))} vertices" if 'vertices' in data else f"{len(data.get('data', ''))} bytes (STL)"
+        print(f"Sending CAD data to frontend: {info}")
+        asyncio.create_task(sio.emit('cad_data', data))
 
-    async def handle_cad_request(self, prompt):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CAD] Background Task Started: handle_cad_request('{prompt}')")
-        if self.on_cad_status:
-            self.on_cad_status("generating")
-            
-        # Auto-create project if stuck in temp
-        if self.project_manager.current_project == "temp":
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            new_project_name = f"Project_{timestamp}"
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [CAD] Auto-creating project: {new_project_name}")
-            
-            success, msg = self.project_manager.create_project(new_project_name)
-            if success:
-                self.project_manager.switch_project(new_project_name)
-                # Notify User (Optional, or rely on update)
-                try:
-                    await self.session.send(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
-                    if self.on_project_update:
-                         self.on_project_update(new_project_name)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
-        
-        # Get project cad folder path
-        cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
-        
-        # Call the secondary agent with project path
-        cad_data = await self.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
-        
-        if cad_data:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OK] CadAgent returned data successfully.")
-                print(f"[ADA DEBUG] [INFO] Data Check: {len(cad_data.get('vertices', []))} vertices, {len(cad_data.get('edges', []))} edges.")
-            
-            if self.on_cad_data:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SEND] Dispatching data to frontend callback...")
-                self.on_cad_data(cad_data)
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
-            
-            # Save to Project
-            if 'file_path' in cad_data:
-                self.project_manager.save_cad_artifact(cad_data['file_path'], prompt)
-            else:
-                 # Fallback (legacy support)
-                 self.project_manager.save_cad_artifact("output.stl", prompt)
+    # Callback to send Browser data to frontend
+    def on_web_data(data):
+        print(f"Sending Browser data to frontend: {len(data.get('log', ''))} chars logs")
+        asyncio.create_task(sio.emit('browser_frame', data))
 
-            # Notify the model that the task is done - this triggers speech about completion
-            completion_msg = "System Notification: CAD generation is complete! The 3D model is now displayed for the user. Let them know it's ready."
-            try:
-                await self.session.send(input=completion_msg, end_of_turn=True)
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [NOTE] Sent completion notification to model.")
-            except Exception as e:
-                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to send completion notification: {e}")
+    # Callback to send Transcription data to frontend
+    def on_transcription(data):
+        # data = {"sender": "User"|"ADA", "text": "..."}
+        asyncio.create_task(sio.emit('transcription', data))
 
+    # Callback to send Confirmation Request to frontend
+    def on_tool_confirmation(data):
+        # data = {"id": "uuid", "tool": "tool_name", "args": {...}}
+        print(f"Requesting confirmation for tool: {data.get('tool')}")
+        asyncio.create_task(sio.emit('tool_confirmation_request', data))
+
+    # Callback to send CAD status to frontend
+    def on_cad_status(status):
+        # status can be:
+        # - a string like "generating" (from ada.py handle_cad_request)
+        # - a dict with {status, attempt, max_attempts, error} (from CadAgent)
+        if isinstance(status, dict):
+            print(f"Sending CAD Status: {status.get('status')} (attempt {status.get('attempt')}/{status.get('max_attempts')})")
+            asyncio.create_task(sio.emit('cad_status', status))
         else:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] CadAgent returned None.")
-            # Optionally notify failure
-            try:
-                await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
-            except Exception:
-                pass
+            # Legacy: simple string
+            print(f"Sending CAD Status: {status}")
+            asyncio.create_task(sio.emit('cad_status', {'status': status}))
 
-    async def handle_web_agent_request(self, prompt):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Background Task Started: handle_web_agent_request('{prompt}')")
-        
-        async def update_frontend(image_b64, log_text):
-            if self.on_web_data:
-                 self.on_web_data({"image": image_b64, "log": log_text})
-                 
-        # Run the web agent and wait for it to return
-        result = await self.web_agent.run_task(prompt, update_callback=update_frontend)
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Web Agent Task Returned: {result}")
-        
-        # Send the final result back to the main model
-        try:
-             await self.session.send(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
+    # Callback to send CAD thoughts to frontend (streaming)
+    def on_cad_thought(thought_text):
+        asyncio.create_task(sio.emit('cad_thought', {'text': thought_text}))
 
-    async def handle_jules_request(self, prompt, source=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
+    # Callback to send Project Update to frontend
+    def on_project_update(project_name):
+        print(f"Sending Project Update: {project_name}")
+        asyncio.create_task(sio.emit('project_update', {'project': project_name}))
 
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(session=self.session, api_key=api_key)
+    # Callback to send Device Update to frontend
+    def on_device_update(devices):
+        # devices is a list of dicts
+        print(f"Sending Kasa Device Update: {len(devices)} devices")
+        asyncio.create_task(sio.emit('kasa_devices', devices))
 
-        if not source:
-            if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
-            
-            async def fetch_sources_and_notify():
-                sources_response = await jules_agent.list_sources()
-                if sources_response and "sources" in sources_response:
-                    sources = [s["name"] for s in sources_response["sources"]]
-                    sources_str = "\n".join(sources)
-                    msg = f"System Notification: Available Jules sources:\n{sources_str}\n\nPlease ask the user to select one."
-                else:
-                    msg = "System Notification: Failed to fetch Jules sources."
-                
-                try:
-                    await self.session.send(input=msg, end_of_turn=True)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send jules sources notification: {e}")
+    # Callback to send Error to frontend
+    def on_error(msg):
+        print(f"Sending Error to frontend: {msg}")
+        asyncio.create_task(sio.emit('error', {'msg': msg}))
 
-            asyncio.create_task(fetch_sources_and_notify())
-            return "Fetching available Jules sources. I will notify you shortly."
+    def on_display_content(data):
+        print(f"Sending display content to frontend: {data}")
+        asyncio.create_task(sio.emit('display_content', data))
 
-        async def run_jules_task():
-            session = await jules_agent.create_session(prompt, source)
-            if session:
-                session_id = session['name']
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [JULES] Session created: {session_id}")
+    # Initialize ADA
+    try:
+        print(f"Initializing AudioLoop with device_index={device_index}")
+        audio_loop = ada.AudioLoop(
+            sio=sio,
+            video_mode="none",
+            on_audio_data=on_audio_data,
+            on_cad_data=on_cad_data,
+            on_web_data=on_web_data,
+            on_transcription=on_transcription,
+            on_tool_confirmation=on_tool_confirmation,
+            on_cad_status=on_cad_status,
+            on_cad_thought=on_cad_thought,
+            on_project_update=on_project_update,
+            on_device_update=on_device_update,
+            on_error=on_error,
+            on_display_content=on_display_content,
 
-                stop_event = asyncio.Event()
-                polling_task = asyncio.create_task(
-                    jules_agent.poll_for_updates(session_id, stop_event)
-                )
-                self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
-                title = session.get('title', f"Jules: {prompt[:50]}")
-                self.project_manager.save_jules_session(session_id, title)
-                polling_task.add_done_callback(
-                    lambda task: self._cleanup_jules_task(session_id, task)
-                )
-
-                try:
-                    title = session.get('title', session_id)
-                    await self.session.send(input=f"System Notification: Jules session created: '{title}'", end_of_turn=True)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
-            else:
-                if INCLUDE_RAW_LOGS:
-                    print("[ADA DEBUG] [JULES] Failed to create session.")
-                try:
-                    await self.session.send(input="System Notification: Failed to start Jules task.", end_of_turn=True)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send jules failure notification: {e}")
-
-        asyncio.create_task(run_jules_task())
-        return "Jules task starting. I will notify you once the session is created."
-
-    async def handle_jules_feedback(self, session_id, feedback):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
-        
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(session=self.session, api_key=api_key)
-
-        if session_id not in self.jules_polling_tasks:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
-            stop_event = asyncio.Event()
-            polling_task = asyncio.create_task(
-                jules_agent.poll_for_updates(session_id, stop_event)
-            )
-            self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
-            polling_task.add_done_callback(
-                lambda task: self._cleanup_jules_task(session_id, task)
-            )
-
-        response = await jules_agent.send_message(session_id, feedback)
-        if response:
-            return "Feedback sent successfully."
-        else:
-            return "Failed to send feedback."
-
-    async def handle_list_jules_sources(self):
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [JULES] Listing all sources")
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(api_key=api_key)
-        response = await jules_agent.list_sources()
-        if response and "sources" in response:
-            return response["sources"]
-        else:
-            return "Failed to list Jules sources."
-
-    async def handle_list_jules_sessions(self):
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [JULES] Listing saved sessions from local memory")
-        sessions = self.project_manager.get_jules_sessions()
-        if sessions:
-            return sessions
-        else:
-            return "No Jules sessions found in local memory for this project."
-
-    async def handle_list_jules_activities(self, session_id):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(api_key=api_key)
-        response = await jules_agent.list_activities(session_id)
-        if response and "activities" in response:
-            return response["activities"]
-        else:
-            return "Failed to list Jules activities."
-
-    def _get_live_connect_config(self):
-        project_config = self.project_manager.get_project_config()
-
-        # Hardcoded mandatory instructions for tool usage
-        tool_prompt = """
-**Primary Directive: Use Tools for Visuals**
-Your primary mode of communication is visual. When the user asks for any information that can be displayed, you **must** use the available tools to show it first. This includes weather, images, etc. Speaking the information is secondary to displaying it.
-
-**Weather Request Workflow (MANDATORY):**
-This is a strict, multi-step tool use process. You must follow it exactly.
-1.  When the user asks about the weather, your first and only goal is to get the data for the visual widget.
-2.  Call the `get_weather` tool.
-3.  If `get_weather` returns a numbered list of locations, you **must** ask the user to clarify by selecting a number.
-4.  If `get_weather` returns weather data, your next action **must** be to call `display_content` to show the widget.
-5.  Only after the `display_content` tool call is complete may you speak a summary of the weather.
-
-**Example 1: Ambiguous Location**
-User: "What's the weather in Paris?"
-1.  **You call:** `get_weather(location='Paris')`.
-2.  **You receive:** "1. Paris, France; 2. Paris, Texas".
-3.  **You respond:** "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
-
-**Example 2: Unambiguous Location**
-User: "What's the weather in London?"
-1.  **You call:** `get_weather(location='London')`.
-2.  **You receive:** (forecast data object)
-3.  **You call:** `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
-4.  **You respond:** "I've pulled up the weather for London for you."
-"""
-
-        # Load personality prompt from project config, with a default
-        personality_prompt = project_config.get("system_prompt", "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant.")
-
-        # Combine prompts
-        system_prompt = f"{personality_prompt}\\n{tool_prompt}"
-
-        voice_name = project_config.get("voice_name", "Sadaltager")
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CONFIG] Using Project: '{self.project_manager.current_project}'")
-            print(f"[ADA DEBUG] [CONFIG] Using System Prompt: '{system_prompt[:80]}...'")
-            print(f"[ADA DEBUG] [CONFIG] Using Voice: '{voice_name}'")
-
-        return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
-            output_audio_transcription={},
-            input_audio_transcription={},
-            system_instruction=system_prompt,
-            tools=self.tools,
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=voice_name
-                    )
-                )
-            )
+            input_device_index=device_index,
+            input_device_name=device_name,
+            kasa_agent=kasa_agent,
+            project_manager=project_manager
         )
+        print("AudioLoop initialized successfully.")
 
-    async def receive_audio(self):
-        "Background task to reads from the websocket and write pcm chunks to the output queue"
-        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
+        # Apply current permissions
+        audio_loop.update_permissions(SETTINGS["tool_permissions"])
+
+        # Check initial mute state
+        if data and data.get('muted', False):
+            print("Starting with Audio Paused")
+            audio_loop.set_paused(True)
+
+        print("Creating asyncio task for AudioLoop.run()")
+        loop_task = asyncio.create_task(audio_loop.run())
+
+        # Add a done callback to catch silent failures in the loop
+        def handle_loop_exit(task):
+            try:
+                task.result()
+            except asyncio.CancelledError:
+                print("Audio Loop Cancelled")
+            except Exception as e:
+                print(f"Audio Loop Crashed: {e}")
+                # You could emit 'error' here if you have context
+
+        loop_task.add_done_callback(handle_loop_exit)
+
+        audio_loop.update_agent.sio = sio
+
+        print("Emitting 'A.D.A Started'")
+        await sio.emit('status', {'msg': 'A.D.A Started'})
+
+        # Load saved printers
+        saved_printers = SETTINGS.get("printers", [])
+        if saved_printers and audio_loop.printer_agent:
+            print(f"[SERVER] Loading {len(saved_printers)} saved printers...")
+            for p in saved_printers:
+                audio_loop.printer_agent.add_printer_manually(
+                    name=p.get("name", p["host"]),
+                    host=p["host"],
+                    port=p.get("port", 80),
+                    printer_type=p.get("type", "moonraker"),
+                    camera_url=p.get("camera_url")
+                )
+
+        # Start Printer Monitor
+        asyncio.create_task(monitor_printers_loop())
+
+    except Exception as e:
+        print(f"CRITICAL ERROR STARTING ADA: {e}")
+        import traceback
+        traceback.print_exc()
+        await sio.emit('error', {'msg': f"Failed to start: {str(e)}"})
+        audio_loop = None # Ensure we can try again
+
+
+async def monitor_printers_loop():
+    """Background task to query printer status periodically."""
+    print("[SERVER] Starting Printer Monitor Loop")
+    while audio_loop and audio_loop.printer_agent:
         try:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
-            while True:
-                try:
-                    turn = self.session.receive()
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
-                    raise e
-
-                async for response in turn:
-                    # Access parts directly to avoid 'non-data parts' / 'non-text parts' warnings 
-                    # from the SDK's lazy properties (.text, .data, .thought)
-                    if response.server_content and response.server_content.model_turn:
-                        parts = response.server_content.model_turn.parts
-                        if parts:
-                            for part in parts:
-                                if hasattr(part, 'thought') and part.thought:
-                                    thought_text = part.thought
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [THOUGHT] {thought_text}")
-                                    if self.on_cad_thought:
-                                        self.on_cad_thought(thought_text)
-                                
-                                if hasattr(part, 'text') and part.text:
-                                    text_content = part.text
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TEXT] {text_content}")
-                                    if self.on_transcription:
-                                        self.on_transcription({"sender": "ADA", "text": text_content})
-                                    
-                                    # Update chat buffer for logging
-                                    if self.chat_buffer["sender"] != "ADA":
-                                        if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
-                                            self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
-                                        self.chat_buffer = {"sender": "ADA", "text": text_content}
-                                    else:
-                                        self.chat_buffer["text"] += text_content
-
-                                if hasattr(part, 'inline_data') and part.inline_data:
-                                    self.audio_in_queue.put_nowait(part.inline_data.data)
-
-                                if hasattr(part, 'call') and part.call:
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool call in Part: {part.call.name}, Args: {part.call.args}", flush=True)
-
-                    # 1. Handle Audio Data (Fallback if not handled in parts loop, though parts loop is preferred)
-                    # We only use this if we didn't find inline_data in the parts loop to avoid duplicates
-                    # But actually, response.data is just a shortcut. 
-                    # To avoid the warning completely, we should NOT access response.data if we already processed parts.
-                    
-                    # 2. Handle Transcription (User & Model)
-                    if response.server_content:
-                        if response.server_content.input_transcription:
-                            transcript = response.server_content.input_transcription.text
-                            if transcript:
-                                # Skip if this is an exact duplicate event
-                                if transcript != self._last_input_transcription:
-                                    # Calculate delta (Gemini may send cumulative or chunk-based text)
-                                    delta = transcript
-                                    if transcript.startswith(self._last_input_transcription):
-                                        delta = transcript[len(self._last_input_transcription):]
-                                    self._last_input_transcription = transcript
-                                    
-                                    # Only send if there's new text
-                                    if delta:
-                                        # User is speaking, so interrupt model playback!
-                                        self.clear_audio_queue()
-
-                                        # Send to frontend (Streaming)
-                                        if self.on_transcription:
-                                             self.on_transcription({"sender": "User", "text": delta})
-                                        
-                                        # Buffer for Logging
-                                        if self.chat_buffer["sender"] != "User":
-                                            # Flush previous if exists
-                                            if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
-                                                self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
-                                            # Start new
-                                            self.chat_buffer = {"sender": "User", "text": delta}
-                                        else:
-                                            # Append
-                                            self.chat_buffer["text"] += delta
-                        
-                        if response.server_content.output_transcription:
-                            transcript = response.server_content.output_transcription.text
-                            if transcript:
-                                # Skip if this is an exact duplicate event
-                                if transcript != self._last_output_transcription:
-                                    # Calculate delta (Gemini may send cumulative or chunk-based text)
-                                    delta = transcript
-                                    if transcript.startswith(self._last_output_transcription):
-                                        delta = transcript[len(self._last_output_transcription):]
-                                    self._last_output_transcription = transcript
-                                    
-                                    # Only send if there's new text
-                                    if delta:
-                                        # Send to frontend (Streaming)
-                                        if self.on_transcription:
-                                             self.on_transcription({"sender": "ADA", "text": delta})
-                                        
-                                        # Buffer for Logging
-                                        if self.chat_buffer["sender"] != "ADA":
-                                            # Flush previous
-                                            if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
-                                                self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
-                                            # Start new
-                                            self.chat_buffer = {"sender": "ADA", "text": delta}
-                                        else:
-                                            # Append
-                                            self.chat_buffer["text"] += delta
-                        
-                        # Flush buffer on turn completion if needed, 
-                        # but usually better to wait for sender switch or explicit end.
-                        # We can also check turn_complete signal if available in response.server_content.model_turn etc
-
-                    # 3. Handle Tool Calls
-                    if response.tool_call:
-                        # print("The tool was called")
-                        function_responses = []
-                        for fc in response.tool_call.function_calls:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
-                            else:
-                                # Basic log as requested: tool, endpoint, status
-                                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
-
-                            # Unified confirmation logic
-                            destructive_keywords = ['delete', 'remove', 'wipe', 'destroy']
-                            confirmation_required = any(keyword in fc.name.lower() for keyword in destructive_keywords)
-
-                            confirmed = True
-                            if confirmation_required:
-                                if self.on_tool_confirmation:
-                                    import uuid
-                                    request_id = str(uuid.uuid4())
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
-
-                                    future = asyncio.Future()
-                                    self._pending_confirmations[request_id] = future
-
-                                    self.on_tool_confirmation({
-                                        "id": request_id,
-                                        "tool": fc.name,
-                                        "args": fc.args
-                                    })
-
-                                    try:
-                                        confirmed = await future
-                                    finally:
-                                        self._pending_confirmations.pop(request_id, None)
-
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
-                                else:
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
-                                    confirmed = False
-
-                            if not confirmed:
-                                if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
-                                function_response = types.FunctionResponse(
-                                    id=fc.id,
-                                    name=fc.name,
-                                    response={
-                                        "result": "User denied the request to use this tool.",
-                                    }
-                                )
-                                function_responses.append(function_response)
-                                continue
-
-                            # If confirmed, proceed with execution
-                            if fc.name.startswith("trello_"):
-                                tool_name = fc.name.replace("trello_", "")
-                                trello_func = getattr(self.trello_agent, tool_name)
-                                result = trello_func(**fc.args)
-                                function_response = types.FunctionResponse(
-                                    id=fc.id,
-                                    name=fc.name,
-                                    response={"result": result}
-                                )
-                                function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application"]:
-                                prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
-
-                                if fc.name == "restart_application":
-                                    result = await self.system_agent.restart_application()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "set_time_format":
-                                    time_format = fc.args["format"]
-                                    success, msg = self.project_manager.set_time_format(time_format)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "get_datetime":
-                                    time_format = self.project_manager.get_project_config().get("time_format", "12h")
-                                    current_time = get_local_time()
-                                    formatted_time = format_datetime(current_time, time_format)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": f"The current date and time is {formatted_time}."}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "get_weather":
-                                    location = fc.args["location"]
-                                    result = await self.weather_agent.get_weather(location)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "search_gifs":
-                                    query = fc.args["query"]
-                                    result = await self.display_agent.search_gifs(query)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "display_content":
-                                    content_type = fc.args["content_type"]
-                                    url = fc.args.get("url")
-                                    widget_type = fc.args.get("widget_type")
-                                    data = fc.args.get("data")
-                                    duration = fc.args.get("duration")
-                                    result = await self.display_agent.display_content(content_type, url, widget_type, data, duration)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"\n[ADA DEBUG] --------------------------------------------------")
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
-                                        print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
-
-                                    asyncio.create_task(self.handle_cad_request(prompt))
-                                    # No function response needed - model already acknowledged when user asked
-
-                                elif fc.name == "run_web_agent":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
-                                    asyncio.create_task(self.handle_web_agent_request(prompt))
-
-                                    result_text = "Web Navigation started. Do not reply to this message."
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={
-                                            "result": result_text,
-                                        }
-                                    )
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "run_jules_agent":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
-                                    source = fc.args.get("source")
-                                    result = await self.handle_jules_request(prompt, source)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "send_jules_feedback":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
-                                    session_id = fc.args.get("session_id")
-                                    feedback = fc.args.get("feedback")
-                                    result = await self.handle_jules_feedback(session_id, feedback)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-
-                                elif fc.name == "list_jules_sources":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
-                                    result = await self.handle_list_jules_sources()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_jules_sessions":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
-                                    result = await self.handle_list_jules_sessions()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_jules_activities":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
-                                    session_id = fc.args.get("session_id")
-                                    result = await self.handle_list_jules_activities(session_id)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "write_file":
-                                    path = fc.args["path"]
-                                    content = fc.args["content"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
-                                    result = await self.filesystem_agent.write_file(path, content)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "read_directory":
-                                    path = fc.args["path"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'", flush=True)
-                                    result = await self.filesystem_agent.read_directory(path)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "read_file":
-                                    path = fc.args["path"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'", flush=True)
-                                    result = await self.filesystem_agent.read_file(path)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "create_project":
-                                    name = fc.args["name"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
-                                    success, msg = self.project_manager.create_project(name)
-                                    if success:
-                                        # Auto-switch to the newly created project
-                                        self.project_manager.switch_project(name)
-                                        msg += f" Switched to '{name}'."
-                                        if self.on_project_update:
-                                            self.on_project_update(name)
-                                        self.reconnect()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "switch_project":
-                                    name = fc.args["name"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
-                                    success, msg = self.project_manager.switch_project(name)
-                                    if success:
-                                        if self.on_project_update:
-                                            self.on_project_update(name)
-
-                                        # Trigger a reconnect to load the new project's system prompt
-                                        self.reconnect()
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_projects":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
-                                    projects = self.project_manager.list_projects()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": f"Available projects: {', '.join(projects)}"}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_smart_devices":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
-                                    # Use cached devices directly for speed
-                                    # devices_dict is {ip: SmartDevice}
-                                    # Use cached devices directly for speed
-                                    # devices_dict is {ip: SmartDevice}
-
-                                    dev_summaries = []
-                                    frontend_list = []
-
-                                    for ip, d in self.kasa_agent.devices.items():
-                                        dev_type = "unknown"
-                                        if d.is_bulb: dev_type = "bulb"
-                                        elif d.is_plug: dev_type = "plug"
-                                        elif d.is_strip: dev_type = "strip"
-                                        elif d.is_dimmer: dev_type = "dimmer"
-
-                                        # Format for Model
-                                        info = f"{d.alias} (IP: {ip}, Type: {dev_type})"
-                                        if d.is_on:
-                                            info += " [ON]"
-                                        else:
-                                            info += " [OFF]"
-                                        dev_summaries.append(info)
-
-                                        # Format for Frontend
-                                        frontend_list.append({
-                                            "ip": ip,
-                                            "alias": d.alias,
-                                            "model": d.model,
-                                            "type": dev_type,
-                                            "is_on": d.is_on,
-                                            "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
-                                            "hsv": d.hsv if d.is_bulb and d.is_color else None,
-                                            "has_color": d.is_color if d.is_bulb else False,
-                                            "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
-                                        })
-
-                                    result_str = "No devices found in cache."
-                                    if dev_summaries:
-                                        result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
-
-                                    # Trigger frontend update
-                                    if self.on_device_update:
-                                        self.on_device_update(frontend_list)
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "control_light":
-                                    target = fc.args["target"]
-                                    action = fc.args["action"]
-                                    brightness = fc.args.get("brightness")
-                                    color = fc.args.get("color")
-
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
-
-                                    result_msg = f"Action '{action}' on '{target}' failed."
-                                    success = False
-
-                                    if action == "turn_on":
-                                        success = await self.kasa_agent.turn_on(target)
-                                        if success:
-                                            result_msg = f"Turned ON '{target}'."
-                                    elif action == "turn_off":
-                                        success = await self.kasa_agent.turn_off(target)
-                                        if success:
-                                            result_msg = f"Turned OFF '{target}'."
-                                    elif action == "set":
-                                        success = True
-                                        result_msg = f"Updated '{target}':"
-
-                                    # Apply extra attributes if 'set' or if we just turned it on and want to set them too
-                                    if success or action == "set":
-                                        if brightness is not None:
-                                            sb = await self.kasa_agent.set_brightness(target, brightness)
-                                            if sb:
-                                                result_msg += f" Set brightness to {brightness}."
-                                        if color is not None:
-                                            sc = await self.kasa_agent.set_color(target, color)
-                                            if sc:
-                                                result_msg += f" Set color to {color}."
-
-                                    # Notify Frontend of State Change
-                                    if success:
-                                        # We don't need full discovery, just refresh known state or push update
-                                        # But for simplicity, let's get the standard list representation
-                                        # KasaAgent updates its internal state on control, so we can rebuild the list
-
-                                        # Quick rebuild of list from internal dict
-                                        updated_list = []
-                                        for ip, dev in self.kasa_agent.devices.items():
-                                            # We need to ensure we have the correct dict structure expected by frontend
-                                            # We duplicate logic from KasaAgent.discover_devices a bit, but that's okay for now or we can add a helper
-                                            # Ideally KasaAgent has a 'get_devices_list()' method.
-                                            # Use the cached objects in self.kasa_agent.devices
-
-                                            dev_type = "unknown"
-                                            if dev.is_bulb: dev_type = "bulb"
-                                            elif dev.is_plug: dev_type = "plug"
-                                            elif dev.is_strip: dev_type = "strip"
-                                            elif dev.is_dimmer: dev_type = "dimmer"
-
-                                            d_info = {
-                                                "ip": ip,
-                                                "alias": dev.alias,
-                                                "model": dev.model,
-                                                "type": dev_type,
-                                                "is_on": dev.is_on,
-                                                "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
-                                                "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
-                                                "has_color": dev.is_color if d.is_bulb else False,
-                                                "has_brightness": dev.is_dimmable if d.is_bulb or d.is_dimmer else False
-                                            }
-                                            updated_list.append(d_info)
-
-                                        if self.on_device_update:
-                                            self.on_device_update(updated_list)
-                                    else:
-                                        # Report Error
-                                        if self.on_error:
-                                            self.on_error(result_msg)
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "discover_printers":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
-                                    printers = await self.printer_agent.discover_printers()
-                                    # Format for model
-                                    if printers:
-                                        printer_list = []
-                                        for p in printers:
-                                            printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
-                                        result_str = "Found Printers:\n" + "\n".join(printer_list)
-                                    else:
-                                        result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "print_stl":
-                                    stl_path = fc.args["stl_path"]
-                                    printer = fc.args["printer"]
-                                    profile = fc.args.get("profile")
-
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
-
-                                    # Resolve 'current' to project STL
-                                    if stl_path.lower() == "current":
-                                        stl_path = "output.stl" # Let printer agent resolve it in root_path
-
-                                    # Get current project path
-                                    project_path = str(self.project_manager.get_current_project_path())
-
-                                    result = await self.printer_agent.print_stl(
-                                        stl_path,
-                                        printer,
-                                        profile,
-                                        root_path=project_path
-                                    )
-                                    result_str = result.get("message", "Unknown result")
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "get_print_status":
-                                    printer = fc.args["printer"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
-
-                                    status = await self.printer_agent.get_print_status(printer)
-                                    if status:
-                                        result_str = f"Printer: {status.printer}\n"
-                                        result_str += f"State: {status.state}\n"
-                                        result_str += f"Progress: {status.progress_percent:.1f}%\n"
-                                        if status.time_remaining:
-                                            result_str += f"Time Remaining: {status.time_remaining}\n"
-                                        if status.time_elapsed:
-                                            result_str += f"Time Elapsed: {status.time_elapsed}\n"
-                                        if status.filename:
-                                            result_str += f"File: {status.filename}\n"
-                                        if status.temperatures:
-                                            temps = status.temperatures
-                                            if "hotend" in temps:
-                                                result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
-                                            if "bed" in temps:
-                                                result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
-                                    else:
-                                        result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "iterate_cad":
-                                    prompt = fc.args["prompt"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
-
-                                    # Emit status
-                                    if self.on_cad_status:
-                                        self.on_cad_status("generating")
-
-                                    # Get project cad folder path
-                                    cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
-
-                                    # Call CadAgent to iterate on the design
-                                    cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
-
-                                    if cad_data:
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
-
-                                        # Dispatch to frontend
-                                        if self.on_cad_data:
-                                            if INCLUDE_RAW_LOGS:
-                                                print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
-                                            self.on_cad_data(cad_data)
-                                            if INCLUDE_RAW_LOGS:
-                                                print(f"[ADA DEBUG] [SENT] Dispatch complete.")
-
-                                        # Save to Project
-                                        self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
-
-                                        result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
-                                    else:
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
-                                        result_str = f"Failed to iterate design with prompt: {prompt}"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "set_timer":
-                                    duration = fc.args["duration"]
-                                    name = fc.args["name"]
-                                    result = await self.timer_agent.set_timer(duration, name)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "modify_timer":
-                                    name = fc.args["name"]
-                                    new_duration = fc.args.get("new_duration")
-                                    new_timestamp = fc.args.get("new_timestamp")
-                                    result = await self.timer_agent.modify_timer(name, new_duration, new_timestamp)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "set_reminder":
-                                    timestamp = fc.args["timestamp"]
-                                    name = fc.args["name"]
-                                    result = await self.timer_agent.set_reminder(timestamp, name)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_timers":
-                                    result = self.timer_agent.list_timers()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "delete_entry":
-                                    name = fc.args["name"]
-                                    result = self.timer_agent.delete_entry(name)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "check_for_updates":
-                                    try:
-                                        print(f"[ADA DEBUG] [TOOL] check_for_updates was called. INCLUDE_RAW_LOGS={INCLUDE_RAW_LOGS}", flush=True)
-                                        result = await self.update_agent.check_for_updates()
-                                        print(f"[ADA DEBUG] [TOOL] check_for_updates result: {result}", flush=True)
-                                    except Exception as update_err:
-                                        print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
-                                        traceback.print_exc()
-                                        result = f"Error checking for updates: {str(update_err)}"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "apply_update":
-                                    try:
-                                        result = await self.update_agent.apply_update()
-                                    except Exception as update_err:
-                                        print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
-                                        traceback.print_exc()
-                                        result = f"Error applying update: {str(update_err)}"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-                        if function_responses:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
-                            await self.session.send_tool_response(function_responses=function_responses)
-                
-                # Turn/Response Loop Finished
-                self.flush_chat()
-
-                while not self.audio_in_queue.empty():
-                    self.audio_in_queue.get_nowait()
-        except Exception as e:
-            if "1011" in str(e) or "CANCELLED" in str(e).upper():
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
-            else:
-                if INCLUDE_RAW_LOGS:
-                    print(f"Error in receive_audio: {e}")
-            traceback.print_exc()
-            # CRITICAL: Re-raise to crash the TaskGroup and trigger outer loop reconnect
-            raise e
-
-    async def play_audio(self):
-        stream = await asyncio.to_thread(
-            pya.open,
-            format=FORMAT,
-            channels=CHANNELS,
-            rate=RECEIVE_SAMPLE_RATE,
-            output=True,
-            output_device_index=self.output_device_index,
-        )
-        while True:
-            bytestream = await self.audio_in_queue.get()
-            if self.on_audio_data:
-                self.on_audio_data(bytestream)
-            await asyncio.to_thread(stream.write, bytestream)
-
-    async def get_frames(self):
-        cap = await asyncio.to_thread(cv2.VideoCapture, 0, cv2.CAP_AVFOUNDATION)
-        while True:
-            if self.paused:
-                await asyncio.sleep(0.1)
+            agent = audio_loop.printer_agent
+            if not agent.printers:
+                await asyncio.sleep(5)
                 continue
-            frame = await asyncio.to_thread(self._get_frame, cap)
-            if frame is None:
-                break
-            await asyncio.sleep(1.0)
-            if self.out_queue:
-                await self.out_queue.put(frame)
-        cap.release()
-
-    def _get_frame(self, cap):
-        ret, frame = cap.read()
-        if not ret:
-            return None
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = PIL.Image.fromarray(frame_rgb)
-        img.thumbnail([1024, 1024])
-        image_io = io.BytesIO()
-        img.save(image_io, format="jpeg")
-        image_io.seek(0)
-        image_bytes = image_io.read()
-        return {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode()}
-
-    async def _get_screen(self):
-        pass 
-    async def get_screen(self):
-         pass
-
-    async def _session_runner(self, start_message=None, is_reconnect=False):
-        """Handles a single connection and run-loop of the voice agent."""
-        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [SESSION] Starting session runner. Reconnect: {is_reconnect}")
-        try:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
-
-            config = self._get_live_connect_config()
 
             tasks = []
-            async with client.aio.live.connect(model=MODEL, config=config) as session:
-                try:
-                    self.session = session
-                    self.timer_agent.session = session
+            for host, printer in agent.printers.items():
+                if printer.printer_type.value != "unknown":
+                    tasks.append(agent.get_print_status(host))
 
-                    self.audio_in_queue = asyncio.Queue()
-                    self.out_queue = asyncio.Queue(maxsize=10)
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for res in results:
+                    if isinstance(res, Exception):
+                        pass # Ignore errors for now
+                    elif res:
+                        # res is PrintStatus object
+                        await sio.emit('print_status_update', res.to_dict())
 
-                    tasks.append(asyncio.create_task(self.send_realtime()))
-                    # Run listen_audio as a separate, non-critical background task
-                    # This prevents the main session from crashing if audio input fails (e.g., in a headless environment)
-                    audio_input_task = asyncio.create_task(self.listen_audio())
-                    tasks.append(audio_input_task) # Still track it for cleanup
+        except asyncio.CancelledError:
+            print("[SERVER] Printer Monitor Cancelled")
+            break
+        except Exception as e:
+            print(f"[SERVER] Monitor Loop Error: {e}")
 
-                    if self.video_mode == "camera":
-                        tasks.append(asyncio.create_task(self.get_frames()))
-                    elif self.video_mode == "screen":
-                        tasks.append(asyncio.create_task(self.get_screen()))
+        await asyncio.sleep(2) # Update every 2 seconds for responsiveness
 
-                    tasks.append(asyncio.create_task(self.receive_audio()))
-                    tasks.append(asyncio.create_task(self.play_audio()))
+@sio.event
+async def stop_audio(sid):
+    global audio_loop
+    if audio_loop:
+        audio_loop.stop()
+        print("Stopping Audio Loop")
+        audio_loop = None
+        await sio.emit('status', {'msg': 'A.D.A Stopped'})
 
-                    if not is_reconnect:
-                        if start_message:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
-                            await self.session.send(input=start_message, end_of_turn=True)
+@sio.event
+async def pause_audio(sid):
+    global audio_loop
+    if audio_loop:
+        audio_loop.set_paused(True)
+        print("Pausing Audio")
+        await sio.emit('status', {'msg': 'Audio Paused'})
 
-                        if self.on_project_update and self.project_manager:
-                            self.on_project_update(self.project_manager.current_project)
-                    else:
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
+@sio.event
+async def resume_audio(sid):
+    global audio_loop
+    if audio_loop:
+        audio_loop.set_paused(False)
+        print("Resuming Audio")
+        await sio.emit('status', {'msg': 'Audio Resumed'})
 
-                    self._last_input_transcription = ""
-                    self._last_output_transcription = ""
-                    self.chat_buffer = {"sender": None, "text": ""}
+@sio.event
+async def confirm_tool(sid, data):
+    # data: { "id": "...", "confirmed": True/False }
+    request_id = data.get('id')
+    confirmed = data.get('confirmed', False)
 
-                    stop_task = asyncio.create_task(self.stop_event.wait())
-                    reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
+    print(f"[SERVER DEBUG] Received confirmation response for {request_id}: {confirmed}")
 
-                    wait_tasks = tasks + [stop_task, reconnect_task]
-                    done, pending = await asyncio.wait(
-                        wait_tasks,
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
+    if audio_loop:
+        audio_loop.resolve_tool_confirmation(request_id, confirmed)
+    else:
+        print("Audio loop not active, cannot resolve confirmation.")
 
-                    # If a signal task is done, cancel the other signal task.
-                    if stop_task in done:
-                        reconnect_task.cancel()
-                    elif reconnect_task in done:
-                        stop_task.cancel()
-                    else:
-                        # A worker task finished (likely crashed). Log and trigger reconnect.
-                        if INCLUDE_RAW_LOGS:
-                            print("[ADA DEBUG] [ERR] A worker task exited unexpectedly. Triggering reconnect.")
-                        # Attempt to find the crashed task and log its exception
-                        for done_task in done:
-                            try:
-                                if done_task.exception():
-                                    print(f"[ADA DEBUG] [ERR] Task exception: {done_task.exception()}")
-                            except asyncio.InvalidStateError:
-                                pass # No exception
-                        reconnect_task.cancel()
-                        stop_task.cancel()
-                        self._reconnect_needed.clear()
-                        return True
+@sio.event
+async def shutdown(sid, data=None):
+    """Gracefully shutdown the server when the application closes."""
+    global audio_loop, loop_task, authenticator
 
-                    if reconnect_task in done:
-                        if INCLUDE_RAW_LOGS:
-                            print("[ADA DEBUG] [RECONNECT] Reconnect event received. Ending session...")
-                        self._reconnect_needed.clear()
-                        return True # Signal for reconnect
+    print("[SERVER] ========================================")
+    print("[SERVER] SHUTDOWN SIGNAL RECEIVED FROM FRONTEND")
+    print("[SERVER] ========================================")
 
-                finally:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [SESSION] Tearing down {len(tasks)} session tasks...")
-                    for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                    if INCLUDE_RAW_LOGS:
-                        print("[ADA DEBUG] [SESSION] All session tasks cancelled.")
-                    # Add small delay as requested
-                    await asyncio.sleep(0.1)
+    # Stop audio loop
+    if audio_loop:
+        print("[SERVER] Stopping Audio Loop...")
+        audio_loop.stop()
+        audio_loop = None
 
-        except (Exception, asyncio.CancelledError) as e:
-            if self.stop_event.is_set():
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [INFO] Session runner stopping.")
-                return False
+    # Cancel the loop task if running
+    if loop_task and not loop_task.done():
+        print("[SERVER] Cancelling loop task...")
+        loop_task.cancel()
+        loop_task = None
 
-            error_msg = str(e)
-            if "429" in error_msg:
-                 print(f"Rate limited (429) for {service_info}.")
+    # Stop authenticator if running
+    if authenticator:
+        print("[SERVER] Stopping Authenticator...")
+        authenticator.stop()
+
+    print("[SERVER] Graceful shutdown complete. Terminating process...")
+
+    # Force exit immediately - os._exit bypasses cleanup but ensures termination
+    if data and data.get("restart"):
+        print("[SERVER] Restarting application...")
+        import subprocess
+        # Use sys.executable to restart the backend with the same python interpreter
+        # and use Popen with a new process group to ensure it survives our exit
+        try:
+            # Re-run the same command that started this script
+            # sys.executable is the path to python.exe
+            # sys.argv[0] is server.py
+            # We want to make sure we are in the right directory
+            backend_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(backend_dir)
+
+            if sys.platform == 'win32':
+                # On Windows, we can use start to launch a new console window or just spawn it detached
+                # npm run dev is what the original code used, maybe it's preferred to restart EVERYTHING
+                # Let's try to stick to what the user had but make it more robust
+                subprocess.Popen("npm run dev", shell=True, cwd=project_root, creationflags=subprocess.CREATE_NEW_CONSOLE)
             else:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Connection Error in session runner ({service_info}): {e}")
+                subprocess.Popen("npm run dev", shell=True, cwd=project_root)
+        except Exception as e:
+            print(f"[SERVER] Failed to restart: {e}")
 
-            if hasattr(e, 'exceptions'):
-                for idx, se in enumerate(e.exceptions):
-                    if INCLUDE_RAW_LOGS:
-                        print(f"  Sub-exception {idx}: {se}")
+        os._exit(0)
+    else:
+        os._exit(0)
 
-            return True
-        finally:
-            if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [SESSION] Session runner cleanup.")
-            if hasattr(self, 'audio_stream') and self.audio_stream:
-                try:
-                    self.audio_stream.close()
-                except:
-                    pass
+@sio.event
+async def restart_request(sid, data=None):
+    """Restart the application after an update."""
+    print("[SERVER] Restart request received.")
+    await shutdown(sid, {"restart": True})
 
-        return False
+@sio.event
+async def user_input(sid, data):
+    text = data.get('text')
+    print(f"[SERVER DEBUG] User input received: '{text}'")
 
-    async def run(self, start_message=None):
-        retry_delay = 1
-        is_reconnect = False
+    if not audio_loop:
+        print("[SERVER DEBUG] [Error] Audio loop is None. Cannot send text.")
+        return
 
-        while not self.stop_event.is_set():
-            if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [RUN] Main loop is running. Starting session runner.")
-            should_reconnect = await self._session_runner(start_message, is_reconnect)
+    if not audio_loop.session:
+        print("[SERVER DEBUG] [Error] Session is None. Cannot send text.")
+        return
 
-            if not should_reconnect:
-                if INCLUDE_RAW_LOGS:
-                    print("[ADA DEBUG] [RUN] Session runner requested no reconnect. Exiting main loop.")
+    if text:
+        print(f"[SERVER DEBUG] Sending message to model: '{text}'")
+
+        # Log User Input to Project History
+        if audio_loop and audio_loop.project_manager:
+            audio_loop.project_manager.log_chat("User", text)
+
+        # Use the same 'send' method that worked for audio, as 'send_realtime_input' and 'send_client_content' seem unstable in this env
+        # INJECT VIDEO FRAME IF AVAILABLE (VAD-style logic for Text Input)
+        if audio_loop and audio_loop._latest_image_payload:
+            print(f"[SERVER DEBUG] Piggybacking video frame with text input.")
+            try:
+                # Send frame first
+                await audio_loop.session.send(input=audio_loop._latest_image_payload, end_of_turn=False)
+            except Exception as e:
+                print(f"[SERVER DEBUG] Failed to send piggyback frame: {e}")
+
+        await audio_loop.session.send(input=text, end_of_turn=True)
+        print(f"[SERVER DEBUG] Message sent to model successfully.")
+
+import json
+from datetime import datetime
+from pathlib import Path
+
+# ... (imports)
+
+@sio.event
+async def video_frame(sid, data):
+    # data should contain 'image' which is binary (blob) or base64 encoded
+    image_data = data.get('image')
+    if image_data and audio_loop:
+        # We don't await this because we don't want to block the socket handler
+        # But send_frame is async, so we create a task
+        asyncio.create_task(audio_loop.send_frame(image_data))
+
+@sio.event
+async def save_memory(sid, data):
+    try:
+        messages = data.get('messages', [])
+        if not messages:
+            print("No messages to save.")
+            return
+
+        # Ensure directory exists
+        memory_dir = Path("long_term_memory")
+        memory_dir.mkdir(exist_ok=True)
+
+        # Generate filename
+        # Use provided filename if available, else timestamp
+        provided_name = data.get('filename')
+
+        if provided_name:
+            # Simple sanitization
+            if not provided_name.endswith('.txt'):
+                provided_name += '.txt'
+            # Prevent directory traversal
+            filename = memory_dir / Path(provided_name).name
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = memory_dir / f"memory_{timestamp}.txt"
+
+        # Write to file
+        with open(filename, 'w', encoding='utf-8') as f:
+            for msg in messages:
+                sender = msg.get('sender', 'Unknown')
+                text = msg.get('text', '')
+        print(f"Conversation saved to {filename}")
+        await sio.emit('status', {'msg': 'Memory Saved Successfully'})
+
+    except Exception as e:
+        print(f"Error saving memory: {e}")
+        await sio.emit('error', {'msg': f"Failed to save memory: {str(e)}"})
+
+@sio.event
+async def upload_memory(sid, data):
+    print(f"Received memory upload request")
+    try:
+        memory_text = data.get('memory', '')
+        if not memory_text:
+            print("No memory data provided.")
+            return
+
+        if not audio_loop:
+             print("[SERVER DEBUG] [Error] Audio loop is None. Cannot load memory.")
+             await sio.emit('error', {'msg': "System not ready (Audio Loop inactive)"})
+             return
+
+        if not audio_loop.session:
+             print("[SERVER DEBUG] [Error] Session is None. Cannot load memory.")
+             await sio.emit('error', {'msg': "System not ready (No active session)"})
+             return
+
+        # Send to model
+        print("Sending memory context to model...")
+        context_msg = f"System Notification: The user has uploaded a long-term memory file. Please load the following context into your understanding. The format is a text log of previous conversations:\n\n{memory_text}"
+
+        await audio_loop.session.send(input=context_msg, end_of_turn=True)
+        print("Memory context sent successfully.")
+        await sio.emit('status', {'msg': 'Memory Loaded into Context'})
+
+    except Exception as e:
+        print(f"Error uploading memory: {e}")
+        await sio.emit('error', {'msg': f"Failed to upload memory: {str(e)}"})
+
+@sio.event
+async def discover_kasa(sid):
+    print(f"Received discover_kasa request")
+    try:
+        devices = await kasa_agent.discover_devices()
+        await sio.emit('kasa_devices', devices)
+        await sio.emit('status', {'msg': f"Found {len(devices)} Kasa devices"})
+
+        # Save to settings
+        # devices is a list of full device info dicts. minimizing for storage.
+        saved_devices = []
+        for d in devices:
+            saved_devices.append({
+                "ip": d["ip"],
+                "alias": d["alias"],
+                "model": d["model"]
+            })
+
+        # Merge with existing to preserve any manual overrides?
+        # For now, just overwrite with latest scan result + previously known if we want to be fancy,
+        # but user asked for "Any new devices that are scanned are added there".
+        # A simple full persistence of current state is safest.
+        SETTINGS["kasa_devices"] = saved_devices
+        save_settings()
+        print(f"[SERVER] Saved {len(saved_devices)} Kasa devices to settings.")
+
+    except Exception as e:
+        print(f"Error discovering kasa: {e}")
+        await sio.emit('error', {'msg': f"Kasa Discovery Failed: {str(e)}"})
+
+@sio.event
+async def iterate_cad(sid, data):
+    # data: { prompt: "make it bigger" }
+    prompt = data.get('prompt')
+    print(f"Received iterate_cad request: '{prompt}'")
+
+    if not audio_loop or not audio_loop.cad_agent:
+        await sio.emit('error', {'msg': "CAD Agent not available"})
+        return
+
+    try:
+        # Notify user work has started
+        await sio.emit('status', {'msg': 'Iterating design...'})
+        await sio.emit('cad_status', {'status': 'generating'})
+
+        # Call the agent with project path
+        cad_output_dir = str(audio_loop.project_manager.get_current_project_path() / "cad")
+        result = await audio_loop.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
+
+        if result:
+            info = f"{len(result.get('data', ''))} bytes (STL)"
+            print(f"Sending updated CAD data: {info}")
+            await sio.emit('cad_data', result)
+            # Save to Project
+            if 'file_path' in result:
+                saved_path = audio_loop.project_manager.save_cad_artifact(result['file_path'], prompt)
+                if saved_path:
+                    print(f"[SERVER] Saved iterated CAD to {saved_path}")
+
+            await sio.emit('status', {'msg': 'Design updated'})
+        else:
+            await sio.emit('error', {'msg': 'Failed to update design'})
+
+    except Exception as e:
+        print(f"Error iterating CAD: {e}")
+        await sio.emit('error', {'msg': f"Iteration Error: {str(e)}"})
+
+@sio.event
+async def generate_cad(sid, data):
+    # data: { prompt: "make a cube" }
+    prompt = data.get('prompt')
+    print(f"Received generate_cad request: '{prompt}'")
+
+    if not audio_loop or not audio_loop.cad_agent:
+        await sio.emit('error', {'msg': "CAD Agent not available"})
+        return
+
+    try:
+        await sio.emit('status', {'msg': 'Generating new design...'})
+        await sio.emit('cad_status', {'status': 'generating'})
+
+        # Use generate_prototype based on prompt with project path
+        cad_output_dir = str(audio_loop.project_manager.get_current_project_path() / "cad")
+        result = await audio_loop.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
+
+        if result:
+            info = f"{len(result.get('data', ''))} bytes (STL)"
+            print(f"Sending newly generated CAD data: {info}")
+            await sio.emit('cad_data', result)
+
+
+            # Save to Project
+            if 'file_path' in result:
+                saved_path = audio_loop.project_manager.save_cad_artifact(result['file_path'], prompt)
+                if saved_path:
+                    print(f"[SERVER] Saved generated CAD to {saved_path}")
+
+            await sio.emit('status', {'msg': 'Design generated'})
+        else:
+            await sio.emit('error', {'msg': 'Failed to generate design'})
+
+    except Exception as e:
+        print(f"Error generating CAD: {e}")
+        await sio.emit('error', {'msg': f"Generation Error: {str(e)}"})
+
+@sio.event
+async def prompt_web_agent(sid, data):
+    # data: { prompt: "find xyz" }
+    prompt = data.get('prompt')
+    print(f"Received web agent prompt: '{prompt}'")
+
+    if not audio_loop or not audio_loop.web_agent:
+        await sio.emit('error', {'msg': "Web Agent not available"})
+        return
+
+    try:
+        await sio.emit('status', {'msg': 'Web Agent running...'})
+
+        # We assume web_agent has a run method or similar.
+        # This might block the loop if not strictly async or offloaded.
+        # Ideally web_agent.run is async.
+        # And it should emit 'browser_snap' and logs automatically via hooks if setup.
+
+        # We might need to launch this as a task if it's long running?
+        # asyncio.create_task(audio_loop.web_agent.run(prompt))
+        # But we want to catch errors here.
+
+        # Based on typical agent design, run() is the entry point.
+        await audio_loop.web_agent.run(prompt)
+
+        await sio.emit('status', {'msg': 'Web Agent finished'})
+
+    except Exception as e:
+        print(f"Error running Web Agent: {e}")
+        await sio.emit('error', {'msg': f"Web Agent Error: {str(e)}"})
+
+@sio.event
+async def discover_printers(sid):
+    print("Received discover_printers request")
+
+    # If audio_loop isn't ready yet, return saved printers from settings
+    if not audio_loop or not audio_loop.printer_agent:
+        saved_printers = SETTINGS.get("printers", [])
+        if saved_printers:
+            # Convert saved printers to the expected format
+            printer_list = []
+            for p in saved_printers:
+                printer_list.append({
+                    "name": p.get("name", p["host"]),
+                    "host": p["host"],
+                    "port": p.get("port", 80),
+                    "printer_type": p.get("type", "unknown"),
+                    "camera_url": p.get("camera_url")
+                })
+            print(f"[SERVER] Returning {len(printer_list)} saved printers (audio_loop not ready)")
+            await sio.emit('printer_list', printer_list)
+            return
+        else:
+            await sio.emit('printer_list', [])
+            await sio.emit('status', {'msg': "Connect to A.D.A to enable printer discovery"})
+            return
+
+    try:
+        printers = await audio_loop.printer_agent.discover_printers()
+        await sio.emit('printer_list', printers)
+        await sio.emit('status', {'msg': f"Found {len(printers)} printers"})
+    except Exception as e:
+        print(f"Error discovering printers: {e}")
+        await sio.emit('error', {'msg': f"Printer Discovery Failed: {str(e)}"})
+
+@sio.event
+async def add_printer(sid, data):
+    # data: { host: "192.168.1.50", name: "My Printer", type: "moonraker" }
+    raw_host = data.get('host')
+    name = data.get('name') or raw_host
+    ptype = data.get('type', "moonraker")
+
+    # Parse port if present
+    if ":" in raw_host:
+        host, port_str = raw_host.split(":")
+        port = int(port_str)
+    else:
+        host = raw_host
+        port = 80
+
+    print(f"Received add_printer request: {host}:{port} ({ptype})")
+
+    if not audio_loop or not audio_loop.printer_agent:
+        await sio.emit('error', {'msg': "Printer Agent not available"})
+        return
+
+    try:
+        # Add manually
+        camera_url = data.get('camera_url')
+        printer = audio_loop.printer_agent.add_printer_manually(name, host, port=port, printer_type=ptype, camera_url=camera_url)
+
+        # Save to settings
+        new_printer_config = {
+            "name": name,
+            "host": host,
+            "port": port,
+            "type": ptype,
+            "camera_url": camera_url
+        }
+
+        # Check if already exists to avoid duplicates
+        exists = False
+        for p in SETTINGS.get("printers", []):
+            if p["host"] == host and p["port"] == port:
+                exists = True
                 break
 
-            is_reconnect = True
-            start_message = None
+        if not exists:
+            if "printers" not in SETTINGS:
+                SETTINGS["printers"] = []
+            SETTINGS["printers"].append(new_printer_config)
+            save_settings()
+            print(f"[SERVER] Saved printer {name} to settings.")
 
-            if not self.stop_event.is_set():
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 10)
+        # Probe to confirm/correct type
+        print(f"Probing {host} to confirm type...")
+        # Try port 7125 (Moonraker) and 4408 (Fluidd/K1)
+        ports_to_try = [80, 7125, 4408]
 
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [INFO] Main run loop has exited.")
+        actual_type = "unknown"
+        for port in ports_to_try:
+             found_type = await audio_loop.printer_agent._probe_printer_type(host, port)
+             if found_type.value != "unknown":
+                 actual_type = found_type
+                 # Update port if different
+                 if port != 80:
+                     printer.port = port
+                 break
 
-def get_input_devices():
-    p = pyaudio.PyAudio()
-    info = p.get_host_api_info_by_index(0)
-    numdevices = info.get('deviceCount')
-    devices = []
-    for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            devices.append((i, p.get_device_info_by_host_api_device_index(0, i).get('name')))
-    p.terminate()
-    return devices
+        if actual_type != "unknown" and actual_type != printer.printer_type:
+             printer.printer_type = actual_type
+             print(f"Corrected type to {actual_type.value} on port {printer.port}")
 
-def get_output_devices():
-    p = pyaudio.PyAudio()
-    info = p.get_host_api_info_by_index(0)
-    numdevices = info.get('deviceCount')
-    devices = []
-    for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxOutputChannels')) > 0:
-            devices.append((i, p.get_device_info_by_host_api_device_index(0, i).get('name')))
-    p.terminate()
-    return devices
+        # Refresh list for everyone
+        printers = [p.to_dict() for p in audio_loop.printer_agent.printers.values()]
+        await sio.emit('printer_list', printers)
+        await sio.emit('status', {'msg': f"Added printer: {name}"})
+
+    except Exception as e:
+        print(f"Error adding printer: {e}")
+        await sio.emit('error', {'msg': f"Failed to add printer: {str(e)}"})
+
+@sio.event
+async def print_stl(sid, data):
+    print(f"Received print_stl request: {data}")
+    # data: { stl_path: "path/to.stl" | "current", printer: "name_or_ip", profile: "optional" }
+
+    if not audio_loop or not audio_loop.printer_agent:
+        await sio.emit('error', {'msg': "Printer Agent not available"})
+        return
+
+    try:
+        stl_path = data.get('stl_path', 'current')
+        printer_name = data.get('printer')
+        profile = data.get('profile')
+
+        if not printer_name:
+             await sio.emit('error', {'msg': "No printer specified"})
+             return
+
+        await sio.emit('status', {'msg': f"Preparing print for {printer_name}..."})
+
+        # Get current project path for resolution
+        current_project_path = None
+        if audio_loop and audio_loop.project_manager:
+            current_project_path = str(audio_loop.project_manager.get_current_project_path())
+            print(f"[SERVER DEBUG] Using project path: {current_project_path}")
+
+        # Resolve STL path before slicing so we can preview it
+        resolved_stl = audio_loop.printer_agent._resolve_file_path(stl_path, current_project_path)
+
+        if resolved_stl and os.path.exists(resolved_stl):
+            # Open the STL in the CAD module for preview
+            try:
+                import base64
+                with open(resolved_stl, 'rb') as f:
+                    stl_data = f.read()
+                stl_b64 = base64.b64encode(stl_data).decode('utf-8')
+                stl_filename = os.path.basename(resolved_stl)
+
+                print(f"[SERVER] Opening STL in CAD module: {stl_filename}")
+                await sio.emit('cad_data', {
+                    'format': 'stl',
+                    'data': stl_b64,
+                    'filename': stl_filename
+                })
+            except Exception as e:
+                print(f"[SERVER] Warning: Could not preview STL: {e}")
+
+        # Progress Callback
+        async def on_slicing_progress(percent, message):
+            await sio.emit('slicing_progress', {
+                'printer': printer_name,
+                'percent': percent,
+                'message': message
+            })
+            if percent < 100:
+                 await sio.emit('status', {'msg': f"Slicing: {percent}%"})
+
+        result = await audio_loop.printer_agent.print_stl(
+            stl_path,
+            printer_name,
+            profile,
+            progress_callback=on_slicing_progress,
+            root_path=current_project_path
+        )
+
+        await sio.emit('print_result', result)
+        await sio.emit('status', {'msg': f"Print Job: {result.get('status', 'unknown')}"})
+
+    except Exception as e:
+        print(f"Error printing STL: {e}")
+        await sio.emit('error', {'msg': f"Print Failed: {str(e)}"})
+
+@sio.event
+async def get_slicer_profiles(sid):
+    """Get available OrcaSlicer profiles for manual selection."""
+    print("Received get_slicer_profiles request")
+    if not audio_loop or not audio_loop.printer_agent:
+        await sio.emit('error', {'msg': "Printer Agent not available"})
+        return
+
+    try:
+        profiles = audio_loop.printer_agent.get_available_profiles()
+        await sio.emit('slicer_profiles', profiles)
+    except Exception as e:
+        print(f"Error getting slicer profiles: {e}")
+        await sio.emit('error', {'msg': f"Failed to get profiles: {str(e)}"})
+
+@sio.event
+async def control_kasa(sid, data):
+    # data: { ip, action: "on"|"off"|"brightness"|"color", value: ... }
+    ip = data.get('ip')
+    action = data.get('action')
+    print(f"Kasa Control: {ip} -> {action}")
+
+    try:
+        success = False
+        if action == "on":
+            success = await kasa_agent.turn_on(ip)
+        elif action == "off":
+            success = await kasa_agent.turn_off(ip)
+        elif action == "brightness":
+            val = data.get('value')
+            success = await kasa_agent.set_brightness(ip, val)
+        elif action == "color":
+            # value is {h, s, v} - convert to tuple for set_color
+            h = data.get('value', {}).get('h', 0)
+            s = data.get('value', {}).get('s', 100)
+            v = data.get('value', {}).get('v', 100)
+            success = await kasa_agent.set_color(ip, (h, s, v))
+
+        if success:
+            await sio.emit('kasa_update', {
+                'ip': ip,
+                'is_on': True if action == "on" else (False if action == "off" else None),
+                'brightness': data.get('value') if action == "brightness" else None,
+            })
+
+        else:
+             await sio.emit('error', {'msg': f"Failed to control device {ip}"})
+
+    except Exception as e:
+         print(f"Error controlling kasa: {e}")
+         await sio.emit('error', {'msg': f"Kasa Control Error: {str(e)}"})
+
+@sio.event
+async def get_settings(sid):
+    await sio.emit('settings', SETTINGS)
+
+@sio.event
+async def update_settings(sid, data):
+    # Generic update
+    print(f"Updating settings: {data}")
+
+    # Handle specific keys if needed
+    if "tool_permissions" in data:
+        SETTINGS["tool_permissions"].update(data["tool_permissions"])
+        if audio_loop:
+            audio_loop.update_permissions(SETTINGS["tool_permissions"])
+
+    if "face_auth_enabled" in data:
+        SETTINGS["face_auth_enabled"] = data["face_auth_enabled"]
+        # If turned OFF, maybe emit auth status true?
+        if not data["face_auth_enabled"]:
+             await sio.emit('auth_status', {'authenticated': True})
+             # Stop auth loop if running?
+             if authenticator:
+                 authenticator.stop()
+
+    if "camera_flipped" in data:
+        SETTINGS["camera_flipped"] = data["camera_flipped"]
+        print(f"[SERVER] Camera flip set to: {data['camera_flipped']}")
+
+    save_settings()
+    # Broadcast new full settings
+    await sio.emit('settings', SETTINGS)
+
+@sio.event
+async def delete_timer(sid, data):
+    """Handles request from frontend to delete a timer or reminder."""
+    name = data.get('name')
+    if name and audio_loop and audio_loop.timer_agent:
+        print(f"Received delete_timer request for: {name}")
+        result = audio_loop.timer_agent.delete_entry(name)
+        # The broadcast loop in TimerAgent will handle updating clients,
+        # but we can send a confirmation or the result back.
+        await sio.emit('status', {'msg': result})
+    else:
+        await sio.emit('error', {'msg': 'Failed to delete timer.'})
+
+@sio.event
+async def get_project_config(sid):
+    if audio_loop and audio_loop.project_manager:
+        config = audio_loop.project_manager.get_project_config()
+        await sio.emit('project_config', config)
+
+@sio.event
+async def update_project_config(sid, data):
+    if audio_loop and audio_loop.project_manager:
+        success, msg = audio_loop.project_manager.update_project_config(data)
+        if success:
+            await sio.emit('status', {'msg': 'Project config updated'})
+            # Re-emit the updated config to all clients
+            config = project_manager.get_project_config()
+            await sio.emit('project_config', config)
+
+            # Check for changes that require action
+            if 'system_prompt' in data or 'voice_name' in data or 'web_agent' in data:
+                if audio_loop:
+                    if 'web_agent' in data:
+                        check_and_manage_vllm_server()
+                    print("[SERVER] Config changed, reconnecting audio loop...")
+                    audio_loop.reconnect()
+        else:
+            await sio.emit('error', {'msg': msg})
+
+@sio.event
+async def switch_project(sid, data):
+    project_name = data.get('project_name')
+    if project_name:
+        success, msg = project_manager.switch_project(project_name)
+        if success:
+            await sio.emit('project_update', {'project': project_name})
+            await sio.emit('status', {'msg': f"Switched to project: {project_name}"})
+            check_and_manage_vllm_server()
+            if audio_loop:
+                audio_loop.reconnect()
+        else:
+            await sio.emit('error', {'msg': msg})
+
+@sio.event
+async def create_project(sid, data):
+    project_name = data.get('project_name')
+    if project_name:
+        success, msg = project_manager.create_project(project_name)
+        if success:
+            # Switch to the new project automatically
+            project_manager.switch_project(project_name)
+            await sio.emit('project_update', {'project': project_name})
+            await sio.emit('status', {'msg': f"Created and switched to project: {project_name}"})
+            if audio_loop:
+                audio_loop.reconnect()
+        else:
+            await sio.emit('error', {'msg': msg})
+
+# Deprecated/Mapped for compatibility if frontend still uses specific events
+@sio.event
+async def get_tool_permissions(sid):
+    await sio.emit('tool_permissions', SETTINGS["tool_permissions"])
+
+@sio.event
+async def update_tool_permissions(sid, data):
+    print(f"Updating permissions (legacy event): {data}")
+    SETTINGS["tool_permissions"].update(data)
+    save_settings()
+
+    if audio_loop:
+        audio_loop.update_permissions(SETTINGS["tool_permissions"])
+    # Broadcast update to all
+    await sio.emit('tool_permissions', SETTINGS["tool_permissions"])
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--mode",
-        type=str,
-        default=DEFAULT_MODE,
-        help="pixels to stream from",
-        choices=["camera", "screen", "none"],
+    uvicorn.run(
+        "server:app_socketio",
+        host="127.0.0.1",
+        port=8000,
+        reload=False, # Reload enabled causes spawn of worker which might miss the event loop policy patch
+        loop="asyncio",
+        reload_excludes=["temp_cad_gen.py", "output.stl", "*.stl"]
     )
-    args = parser.parse_args()
-    main = AudioLoop(video_mode=args.mode)
-    asyncio.run(main.run())
