@@ -2,7 +2,7 @@
 Tests for Trello Agent.
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, AsyncMock
 import os
 
 # Set dummy environment variables for testing
@@ -30,9 +30,8 @@ def test_trello_agent_initialization(trello_agent):
 @pytest.mark.anyio
 async def test_list_boards(trello_agent):
     """Test listing Trello boards."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "board1", "name": "Test Board"}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "board1", "name": "Test Board"}]
 
         boards = await trello_agent.list_boards()
         assert len(boards) > 0
@@ -43,9 +42,8 @@ async def test_list_boards(trello_agent):
 @pytest.mark.anyio
 async def test_get_board(trello_agent):
     """Test getting a specific Trello board."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"id": "board1", "name": "Specific Board"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "board1", "name": "Specific Board"}
 
         board = await trello_agent.get_board("board1")
         assert board["name"] == "Specific Board"
@@ -55,9 +53,8 @@ async def test_get_board(trello_agent):
 @pytest.mark.anyio
 async def test_list_lists(trello_agent):
     """Test listing lists on a board."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "list1", "name": "To Do"}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "list1", "name": "To Do"}]
 
         lists = await trello_agent.list_lists("board1")
         assert len(lists) > 0
@@ -68,9 +65,8 @@ async def test_list_lists(trello_agent):
 @pytest.mark.anyio
 async def test_list_cards(trello_agent):
     """Test listing cards in a list."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "card1", "name": "My Task"}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "card1", "name": "My Task"}]
 
         cards = await trello_agent.list_cards("list1")
         assert len(cards) > 0
@@ -81,9 +77,8 @@ async def test_list_cards(trello_agent):
 @pytest.mark.anyio
 async def test_get_card(trello_agent):
     """Test getting a specific card."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = {"id": "card1", "name": "Specific Task"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "card1", "name": "Specific Task"}
 
         card = await trello_agent.get_card("card1")
         assert card["name"] == "Specific Task"
@@ -93,9 +88,8 @@ async def test_get_card(trello_agent):
 @pytest.mark.anyio
 async def test_list_comments(trello_agent):
     """Test listing comments on a card."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "comment1", "data": {"text": "A comment"}}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "comment1", "data": {"text": "A comment"}}]
 
         comments = await trello_agent.list_comments("card1")
         assert len(comments) > 0
@@ -105,9 +99,8 @@ async def test_list_comments(trello_agent):
 @pytest.mark.anyio
 async def test_list_attachments(trello_agent):
     """Test listing attachments on a card."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "att1", "name": "file.txt"}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "att1", "name": "file.txt"}]
 
         attachments = await trello_agent.list_attachments("card1")
         assert len(attachments) > 0
@@ -117,9 +110,8 @@ async def test_list_attachments(trello_agent):
 @pytest.mark.anyio
 async def test_list_checklists(trello_agent):
     """Test listing checklists on a card."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "cl1", "name": "Sub-tasks"}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "cl1", "name": "Sub-tasks"}]
 
         checklists = await trello_agent.list_checklists("card1")
         assert len(checklists) > 0
@@ -129,9 +121,8 @@ async def test_list_checklists(trello_agent):
 @pytest.mark.anyio
 async def test_list_members(trello_agent):
     """Test listing members of a board."""
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = [{"id": "mem1", "fullName": "Test User"}]
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"id": "mem1", "fullName": "Test User"}]
 
         members = await trello_agent.list_members("board1")
         assert len(members) > 0
@@ -141,9 +132,8 @@ async def test_list_members(trello_agent):
 @pytest.mark.anyio
 async def test_create_board(trello_agent):
     """Test creating a Trello board."""
-    with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"id": "new_board", "name": "New Board"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "new_board", "name": "New Board"}
 
         new_board = await trello_agent.create_board("New Board")
         assert new_board["name"] == "New Board"
@@ -153,9 +143,8 @@ async def test_create_board(trello_agent):
 @pytest.mark.anyio
 async def test_create_list(trello_agent):
     """Test creating a list on a board."""
-    with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"id": "new_list", "name": "New List"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "new_list", "name": "New List"}
 
         new_list = await trello_agent.create_list("board1", "New List")
         assert new_list["name"] == "New List"
@@ -165,9 +154,8 @@ async def test_create_list(trello_agent):
 @pytest.mark.anyio
 async def test_create_card(trello_agent):
     """Test creating a card in a list."""
-    with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"id": "new_card", "name": "New Task"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "new_card", "name": "New Task"}
 
         new_card = await trello_agent.create_card("list1", "New Task")
         assert new_card["name"] == "New Task"
@@ -177,9 +165,8 @@ async def test_create_card(trello_agent):
 @pytest.mark.anyio
 async def test_update_board(trello_agent):
     """Test updating a Trello board."""
-    with patch("httpx.AsyncClient.put") as mock_put:
-        mock_put.return_value.status_code = 200
-        mock_put.return_value.json.return_value = {"id": "board1", "name": "Updated Board"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "board1", "name": "Updated Board"}
 
         updated_board = await trello_agent.update_board("board1", name="Updated Board")
         assert updated_board["name"] == "Updated Board"
@@ -189,9 +176,8 @@ async def test_update_board(trello_agent):
 @pytest.mark.anyio
 async def test_update_list(trello_agent):
     """Test updating a Trello list."""
-    with patch("httpx.AsyncClient.put") as mock_put:
-        mock_put.return_value.status_code = 200
-        mock_put.return_value.json.return_value = {"id": "list1", "name": "Updated List"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "list1", "name": "Updated List"}
 
         updated_list = await trello_agent.update_list("list1", name="Updated List")
         assert updated_list["name"] == "Updated List"
@@ -201,9 +187,8 @@ async def test_update_list(trello_agent):
 @pytest.mark.anyio
 async def test_update_card(trello_agent):
     """Test updating a Trello card."""
-    with patch("httpx.AsyncClient.put") as mock_put:
-        mock_put.return_value.status_code = 200
-        mock_put.return_value.json.return_value = {"id": "card1", "name": "Updated Task"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "card1", "name": "Updated Task"}
 
         updated_card = await trello_agent.update_card("card1", name="Updated Task")
         assert updated_card["name"] == "Updated Task"
@@ -213,9 +198,8 @@ async def test_update_card(trello_agent):
 @pytest.mark.anyio
 async def test_add_comment(trello_agent):
     """Test adding a comment to a card."""
-    with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"id": "new_comment"}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": "new_comment"}
 
         comment = await trello_agent.add_comment("card1", "This is a comment")
         assert "id" in comment
@@ -225,9 +209,8 @@ async def test_add_comment(trello_agent):
 @pytest.mark.anyio
 async def test_delete_card(trello_agent):
     """Test deleting a card."""
-    with patch("httpx.AsyncClient.delete") as mock_delete:
-        mock_delete.return_value.status_code = 200
-        mock_delete.return_value.json.return_value = {}
+    with patch("backend.trello_agent.TrelloAgent._request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {}
 
         response = await trello_agent.delete_card("card1")
         assert response is not None
