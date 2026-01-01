@@ -3,8 +3,8 @@ import re
 
 
 class WritingAgent:
-    def __init__(self, socketio):
-        self.socketio = socketio
+    def __init__(self, sio):
+        self.sio = sio
         self.active_project = None
         self.writing_projects_dir = "writing_projects"
         if not os.path.exists(self.writing_projects_dir):

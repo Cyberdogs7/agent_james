@@ -18,7 +18,7 @@ def writing_agent(tmp_path):
     original_cwd = os.getcwd()
     os.chdir(tmp_path)
 
-    agent = WritingAgent(socketio=None) # socketio is not used in these methods
+    agent = WritingAgent(sio=None) # sio is not used in these methods
 
     yield agent
 
