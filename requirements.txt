@@ -28,4 +28,4 @@ pytest
 httpx
 tzlocal
 pynvml
-vllm
+git+https://github.com/SystemPanic/vllm-windows.git

@@ -107,7 +107,8 @@ class AudioLoop:
 
         project_config = project_manager.get_project_config()
         if project_config.get("web_agent") == "mai-ui":
-            self.web_agent = MAIUI_Agent()
+            model_name = select_model()
+            self.web_agent = MAIUI_Agent(model_name=model_name)
         else:
             self.web_agent = WebAgent()
 
@@ -1252,8 +1253,8 @@ User: "What's the weather in London?"
                                                 "is_on": dev.is_on,
                                                 "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
                                                 "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
-                                                "has_color": dev.is_color if dev.is_bulb else False,
-                                                "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
+                                                "has_color": dev.is_color if d.is_bulb else False,
+                                                "has_brightness": dev.is_dimmable if d.is_bulb or d.is_dimmer else False
                                             }
                                             updated_list.append(d_info)
 
