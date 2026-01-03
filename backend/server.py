@@ -276,7 +276,10 @@ async def start_audio(sid, data=None):
 
     def on_display_content(data):
         print(f"Sending display content to frontend: {data}")
-        asyncio.create_task(sio.emit('display_content', data))
+        if data.get("content_type") == "suggestion":
+            asyncio.create_task(sio.emit('proactive_suggestion', {"suggestion": data.get("suggestion")}))
+        else:
+            asyncio.create_task(sio.emit('display_content', data))
 
     # Initialize ADA
     try:

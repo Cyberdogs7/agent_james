@@ -560,5 +560,19 @@ tools_list = [{"function_declarations": [
             "type": "OBJECT",
             "properties": {}
         }
+    },
+    {
+        "name": "proactive_suggestion",
+        "description": "A tool for the proactive agent to make suggestions to the user.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "suggestion": {
+                    "type": "STRING",
+                    "description": "The suggestion to make to the user."
+                }
+            },
+            "required": ["suggestion"]
+        }
     }
 ]}]

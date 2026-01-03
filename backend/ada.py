@@ -271,7 +271,7 @@ tools = [{'google_search': {}}, {"function_declarations": [
     discover_printers_tool, print_stl_tool, get_print_status_tool,
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
-    set_time_format_tool, get_datetime_tool
+    set_time_format_tool, get_datetime_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 pya = pyaudio.PyAudio()
@@ -285,6 +285,7 @@ from jules_agent import JulesAgent
 from timer_agent import TimerAgent
 from update_agent import UpdateAgent
 from search_agent import SearchAgent
+from proactive_agent import ProactiveAgent
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
@@ -374,6 +375,7 @@ class AudioLoop:
             self.project_manager = ProjectManager(project_root)
         
         self.search_agent = SearchAgent(self.trello_agent, self.project_manager)
+        self.proactive_agent = ProactiveAgent(session=None, project_manager=self.project_manager)
 
         # Sync Initial Project State
         if self.on_project_update:
@@ -1408,10 +1410,23 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "search":
+                                if fc.name == "proactive_suggestion":
+                                    suggestion = fc.args["suggestion"]
+                                    if self.on_display_content:
+                                        self.on_display_content({
+                                            "content_type": "suggestion",
+                                            "suggestion": suggestion,
+                                        })
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": "Suggestion displayed."},
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "search":
                                     query = fc.args["query"]
                                     result = await self.search_agent.search(query)
                                     function_response = types.FunctionResponse(
@@ -2041,6 +2056,7 @@ User: "What's the weather in London?"
                 try:
                     self.session = session
                     self.timer_agent.session = session
+                    self.proactive_agent.session = session
 
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=10)
@@ -2058,6 +2074,7 @@ User: "What's the weather in London?"
 
                     tasks.append(asyncio.create_task(self.receive_audio()))
                     tasks.append(asyncio.create_task(self.play_audio()))
+                    tasks.append(asyncio.create_task(self.proactive_agent.run()))
 
                     if not is_reconnect:
                         if start_message:
