@@ -1452,10 +1452,23 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "proactive_suggestion":
+                                if fc.name == "send_slack_message":
+                                    message = fc.args["message"]
+                                    if self.slack_agent:
+                                        asyncio.create_task(self.slack_agent.send_message(message))
+                                        result = "Message sent to Slack."
+                                    else:
+                                        result = "Slack agent not available."
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "proactive_suggestion":
                                     suggestion = fc.args["suggestion"]
                                     if self.on_display_content:
                                         self.on_display_content({

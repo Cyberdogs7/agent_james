@@ -147,6 +147,7 @@ async def startup_event():
     print("[SERVER] Startup: Initializing Slack Agent...")
     slack_agent = SlackAgent(on_message=handle_slack_message)
     asyncio.create_task(slack_agent.start())
+    print("[SERVER] Slack Agent startup task created.")
 
 @app.get("/status")
 async def status():
