@@ -574,5 +574,19 @@ tools_list = [{"function_declarations": [
             },
             "required": ["suggestion"]
         }
+    },
+    {
+        "name": "send_slack_message",
+        "description": "Sends a message to a Slack channel.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "message": {
+                    "type": "STRING",
+                    "description": "The message to send."
+                }
+            },
+            "required": ["message"]
+        }
     }
 ]}]

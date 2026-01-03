@@ -1,6 +1,5 @@
 import asyncio
-import os
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from slack_sdk.socket_mode.request import SocketModeRequest
