@@ -2056,8 +2056,28 @@ User: "What's the weather in London?"
                         if self.on_project_update and self.project_manager:
                             self.on_project_update(self.project_manager.current_project)
                     else:
+                        # Restore conversation context on reconnect
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Connection restored.")
+                            print(f"[ADA DEBUG] [RECONNECT] Connection restored. Restoring conversation context...")
+                        
+                        # Build context from recent chat history
+                        recent_history = self.project_manager.get_recent_chat_history(limit=20)
+                        if recent_history:
+                            context_lines = ["[SYSTEM: Connection was interrupted. Here is the recent conversation context to maintain continuity:]"]
+                            for entry in recent_history:
+                                sender = entry.get("sender", "Unknown")
+                                text = entry.get("text", "")
+                                if text.strip():
+                                    context_lines.append(f"{sender}: {text}")
+                            context_lines.append("[SYSTEM: Please continue the conversation naturally, acknowledging that you're back online if appropriate.]")
+                            
+                            context_message = "\n".join(context_lines)
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [RECONNECT] Sending context with {len(recent_history)} messages.")
+                            await self.session.send(input=context_message, end_of_turn=True)
+                        else:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [RECONNECT] No chat history to restore.")
 
                     self._last_input_transcription = ""
                     self._last_output_transcription = ""
@@ -2100,6 +2120,8 @@ User: "What's the weather in London?"
                         return True # Signal for reconnect
 
                 finally:
+                    # Flush chat buffer to save any pending conversation before teardown
+                    self.flush_chat()
                     if INCLUDE_RAW_LOGS:
                         print(f"[ADA DEBUG] [SESSION] Tearing down {len(tasks)} session tasks...")
                     for task in tasks:
