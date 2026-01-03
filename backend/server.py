@@ -26,6 +26,7 @@ import ada
 from authenticator import FaceAuthenticator
 from kasa_agent import KasaAgent
 from project_manager import ProjectManager
+from slack_agent import SlackAgent
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -56,7 +57,19 @@ audio_loop = None
 loop_task = None
 authenticator = None
 kasa_agent = KasaAgent()
+slack_agent = None
 SETTINGS_FILE = "settings.json"
+
+async def handle_slack_message(message):
+    """Callback function for the SlackAgent to handle incoming messages."""
+    if audio_loop and audio_loop.session:
+        print(f"[SERVER] Forwarding Slack message to audio loop: {message}")
+        # This function mimics the behavior of the user_input socket event
+        if audio_loop.project_manager:
+            audio_loop.project_manager.log_chat("User", message)
+        await audio_loop.session.send(input=message, end_of_turn=True)
+    else:
+        print("[SERVER] Audio loop not ready, cannot process Slack message.")
 
 # Determine project root and initialize ProjectManager
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -116,6 +129,7 @@ kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 
 @app.on_event("startup")
 async def startup_event():
+    global slack_agent
     import sys
     print(f"[SERVER DEBUG] Startup Event Triggered")
     print(f"[SERVER DEBUG] Python Version: {sys.version}")
@@ -129,6 +143,10 @@ async def startup_event():
 
     print("[SERVER] Startup: Initializing Kasa Agent...")
     await kasa_agent.initialize()
+
+    print("[SERVER] Startup: Initializing Slack Agent...")
+    slack_agent = SlackAgent(on_message=handle_slack_message)
+    asyncio.create_task(slack_agent.start())
 
 @app.get("/status")
 async def status():
@@ -302,7 +320,8 @@ async def start_audio(sid, data=None):
             input_device_index=device_index,
             input_device_name=device_name,
             kasa_agent=kasa_agent,
-            project_manager=project_manager
+            project_manager=project_manager,
+            slack_agent=slack_agent
         )
         print("AudioLoop initialized successfully.")
 
