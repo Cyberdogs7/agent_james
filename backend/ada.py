@@ -284,6 +284,7 @@ from trello_agent import TrelloAgent
 from jules_agent import JulesAgent
 from timer_agent import TimerAgent
 from update_agent import UpdateAgent
+from search_agent import SearchAgent
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
@@ -372,6 +373,8 @@ class AudioLoop:
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
         
+        self.search_agent = SearchAgent(self.trello_agent, self.project_manager)
+
         # Sync Initial Project State
         if self.on_project_update:
             # We need to defer this slightly or just call it. 
@@ -1405,10 +1408,19 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "restart_application":
+                                if fc.name == "search":
+                                    query = fc.args["query"]
+                                    result = await self.search_agent.search(query)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "restart_application":
                                     result = await self.handle_restart_application()
                                     function_response = types.FunctionResponse(
                                         id=fc.id,

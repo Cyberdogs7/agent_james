@@ -251,3 +251,26 @@ class ProjectManager:
             return False, "Invalid time format. Please use '12h' or '24h'."
 
         return self.update_project_config({"time_format": time_format})
+
+    def search_files(self, query: str):
+        """Searches for a query in all text files within the current project."""
+        project_path = self.get_current_project_path()
+        results = []
+        text_extensions = {'.txt', '.py', '.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.html', '.css', '.jsonl'}
+
+        for root, _, files in os.walk(project_path):
+            for file in files:
+                if os.path.splitext(file)[1].lower() in text_extensions:
+                    file_path = Path(root) / file
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            for line_num, line in enumerate(f, 1):
+                                if query.lower() in line.lower():
+                                    results.append({
+                                        "file": str(file_path.relative_to(project_path)),
+                                        "line": line_num,
+                                        "content": line.strip()
+                                    })
+                    except Exception as e:
+                        print(f"[ProjectManager] [ERR] Failed to read file {file_path}: {e}")
+        return results

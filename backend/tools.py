@@ -463,6 +463,17 @@ tools_list = [{"function_declarations": [
     list_jules_activities_tool
 ] + list(trello_tools.values()) + [
     {
+        "name": "search",
+        "description": "Searches for a query across all available tools and local files.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {"type": "STRING", "description": "The search query."}
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "search_gifs",
         "description": "Searches for GIFs.",
         "parameters": {
