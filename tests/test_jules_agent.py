@@ -110,7 +110,7 @@ async def test_send_message_success(jules_agent):
 
 @pytest.mark.asyncio
 async def test_list_sessions_success(jules_agent):
-    """Test successfully listing all sessions with paging."""
+    """Test successfully listing all sessions."""
     mock_sessions = [{"name": f"session{i}", "state": "ACTIVE"} for i in range(15)]
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -118,16 +118,22 @@ async def test_list_sessions_success(jules_agent):
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient.request", new_callable=AsyncMock, return_value=mock_response) as mock_request:
-        # Default limit is 10
+        # Test default limit (should now be 100)
         response = await jules_agent.list_sessions()
-        assert len(response) == 10
+        assert len(response) == 15
         assert response[0] == {"name": "session0", "state": "ACTIVE"}
-        
+        mock_request.assert_called_with(
+            "GET", f"{jules_agent.base_url}/sessions",
+            params={"pageSize": 100}
+        )
+        mock_request.reset_mock()
+
         # Test with custom limit
-        response_custom = await jules_agent.list_sessions(limit=5)
-        assert len(response_custom) == 5
-        
-        mock_request.assert_called()
+        await jules_agent.list_sessions(limit=5)
+        mock_request.assert_called_with(
+            "GET", f"{jules_agent.base_url}/sessions",
+            params={"pageSize": 5}
+        )
 
 
 @pytest.mark.asyncio

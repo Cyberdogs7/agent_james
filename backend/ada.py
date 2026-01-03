@@ -346,6 +346,9 @@ class AudioLoop:
 
         self.update_agent = UpdateAgent(on_log=handle_update_log)
 
+        # Instantiate JulesAgent for session management and monitoring
+        self.jules_agent = JulesAgent()
+
         # Dictionary to keep track of active polling tasks
         self.jules_polling_tasks = {}
 
@@ -421,6 +424,40 @@ class AudioLoop:
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Cleaning up polling task for session: {session_id}")
         self.jules_polling_tasks.pop(session_id, None)
+
+    async def _handle_jules_status_change(self, title, new_state):
+        """Handles UI and voice notifications for Jules session status changes."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES_NOTIFY] Received status change: '{title}' -> {new_state}")
+
+        notification_text = f"Jules task '{title}' has moved to {new_state}."
+
+        # 1. Send UI Notification
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "notification",
+                "data": {"text": notification_text},
+                "duration": 20000  # 20 seconds
+            })
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [JULES_NOTIFY] Sent UI notification.")
+
+        # 2. Send Voice Notification
+        if self.session:
+            try:
+                # Use a system notification prefix to frame the message for the model
+                await asyncio.wait_for(
+                    self.session.send(input=f"System Notification: {notification_text}", end_of_turn=False),
+                    timeout=10.0
+                )
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [JULES_NOTIFY] Sent voice notification message to model.")
+            except asyncio.TimeoutError:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] [JULES_NOTIFY] Timeout sending voice notification.")
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] [JULES_NOTIFY] Failed to send voice notification: {e}")
         
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
@@ -2075,6 +2112,9 @@ User: "What's the weather in London?"
                     tasks.append(asyncio.create_task(self.receive_audio()))
                     tasks.append(asyncio.create_task(self.play_audio()))
                     tasks.append(asyncio.create_task(self.proactive_agent.run()))
+
+                    # Start the Jules session monitoring task
+                    tasks.append(asyncio.create_task(self.jules_agent.start_monitoring(self._handle_jules_status_change)))
 
                     if not is_reconnect:
                         if start_message:
