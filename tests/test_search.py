@@ -4,6 +4,10 @@ import sys
 import os
 import asyncio
 
+# Add the project root to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../backend')))
+
 from backend.project_manager import ProjectManager
 from backend.trello_agent import TrelloAgent
 from backend.search_agent import SearchAgent
