@@ -288,8 +288,9 @@ from search_agent import SearchAgent
 from proactive_agent import ProactiveAgent
 
 class AudioLoop:
-    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
+    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None):
         self.sio = sio
+        self.slack_agent = slack_agent
         self.video_mode = video_mode
         self.on_audio_data = on_audio_data
         self.on_video_frame = on_video_frame
@@ -458,6 +459,10 @@ class AudioLoop:
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [ERR] [JULES_NOTIFY] Failed to send voice notification: {e}")
+
+        # 3. Send Slack Notification
+        if self.slack_agent:
+            asyncio.create_task(self.slack_agent.send_message(notification_text))
         
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
