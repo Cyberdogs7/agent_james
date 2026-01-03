@@ -1401,7 +1401,7 @@ User: "What's the weather in London?"
                             if fc.name.startswith("trello_"):
                                 tool_name = fc.name.replace("trello_", "")
                                 trello_func = getattr(self.trello_agent, tool_name)
-                                result = trello_func(**fc.args)
+                                result = await trello_func(**fc.args)
                                 function_response = types.FunctionResponse(
                                     id=fc.id,
                                     name=fc.name,
