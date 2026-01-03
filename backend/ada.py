@@ -2079,9 +2079,15 @@ User: "What's the weather in London?"
                             for entry in recent_history:
                                 sender = entry.get("sender", "Unknown")
                                 text = entry.get("text", "")
+                                # Skip messages related to restart tool calls to avoid re-triggering restarts
                                 if text.strip():
+                                    text_lower = text.lower()
+                                    if "restart" in text_lower and ("application" in text_lower or "restart signal" in text_lower or "restarting" in text_lower):
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [RECONNECT] Skipping restart-related message from context")
+                                        continue
                                     context_lines.append(f"{sender}: {text}")
-                            context_lines.append("[SYSTEM: Please continue the conversation naturally, acknowledging that you're back online if appropriate.]")
+                            context_lines.append("[SYSTEM: Acknowledge that you're back online if appropriate.]")
                             
                             context_message = "\n".join(context_lines)
                             if INCLUDE_RAW_LOGS:
