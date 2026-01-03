@@ -15,6 +15,7 @@ class JulesAgent:
         self.session = session
         self.active_sessions = set()
         self.sessions_lock = asyncio.Lock()
+        self.monitored_sessions = {}
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
 
     def _log(self, *args, **kwargs):
@@ -105,12 +106,13 @@ class JulesAgent:
         """Sends a message to a session."""
         return await self._request("POST", f"{self.base_url}/{session_id}:sendMessage", tool_name="send_message", json={"prompt": message})
 
-    async def list_sessions(self, limit=10):
-        """Lists all sessions, returning only session name and state, limited to 10."""
-        response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions")
+    async def list_sessions(self, limit=100):
+        """Lists all sessions, returning full session objects."""
+        params = {"pageSize": limit}
+        response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions", params=params)
         if response and "sessions" in response:
-            return [{"name": s.get("name"), "state": s.get("state")} for s in response["sessions"][:limit]]
-        return response
+            return response["sessions"]
+        return []
 
     async def list_sources(self):
         """Lists all sources."""
@@ -119,6 +121,43 @@ class JulesAgent:
     async def list_activities(self, session_id):
         """Lists all activities for a session."""
         return await self._request("GET", f"{self.base_url}/{session_id}/activities", tool_name="list_activities")
+
+    async def start_monitoring(self, status_change_callback):
+        """Starts a background task to monitor all Jules sessions for status changes."""
+        self._log("[JULES_AGENT] Starting background session monitoring...")
+        while True:
+            try:
+                sessions = await self.list_sessions()
+                if sessions:
+                    for session in sessions:
+                        session_id = session.get("name")
+                        current_state = session.get("state")
+                        title = session.get("title", "Untitled Jules Task")
+
+                        # Ignore completed or failed sessions
+                        if current_state in ["COMPLETED", "FAILED"]:
+                            if session_id in self.monitored_sessions:
+                                self._log(f"[JULES_AGENT] Session {session_id} has completed or failed. Removing from monitoring.")
+                                del self.monitored_sessions[session_id]
+                            continue
+
+                        previous_state = self.monitored_sessions.get(session_id)
+
+                        if previous_state is None:
+                            # New session detected, start monitoring
+                            self._log(f"[JULES_AGENT] New active session found: {session_id} ('{title}'). State: {current_state}. Starting to monitor.")
+                            self.monitored_sessions[session_id] = current_state
+                        elif previous_state != current_state:
+                            # State change detected
+                            self._log(f"[JULES_AGENT] Status change for session {session_id} ('{title}'): {previous_state} -> {current_state}")
+                            self.monitored_sessions[session_id] = current_state
+                            if status_change_callback:
+                                # Non-blocking call to the callback
+                                asyncio.create_task(status_change_callback(title, current_state))
+            except Exception as e:
+                self._log(f"[JULES_AGENT] [ERR] Error in monitoring loop: {e}")
+
+            await asyncio.sleep(15) # Poll every 15 seconds
 
     async def poll_for_updates(self, session_id, stop_event):
         """Polls for updates on a session until a stop event is set."""

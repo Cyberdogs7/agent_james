@@ -5,10 +5,19 @@ import pytest
 import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, AsyncMock
 
 # Add backend to path
 BACKEND_DIR = Path(__file__).parent.parent / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
+
+@pytest.fixture(autouse=True)
+def api_keys(monkeypatch):
+    """Set dummy API keys for testing."""
+    monkeypatch.setenv("JULES_API_KEY", "test-jules-key")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    monkeypatch.setenv("TRELLO_API_KEY", "test-trello-key")
+    monkeypatch.setenv("TRELLO_TOKEN", "test-trello-token")
 
 
 class TestToolDefinitions:
@@ -254,3 +263,37 @@ class TestToolConfirmation:
         from ada import AudioLoop
         assert hasattr(AudioLoop, 'resolve_tool_confirmation')
         print("resolve_tool_confirmation method exists")
+
+
+class TestJulesNotifications:
+    """Test Jules notification handler."""
+
+    @pytest.mark.asyncio
+    async def test_handle_jules_status_change(self, monkeypatch):
+        """Test that the Jules status change handler sends correct notifications."""
+        from ada import AudioLoop
+
+        # Create an instance of AudioLoop
+        audio_loop = AudioLoop()
+
+        # Mock the dependencies of the handler method
+        audio_loop.on_display_content = MagicMock()
+        audio_loop.session = AsyncMock()
+        audio_loop.session.send = AsyncMock()
+
+        # Call the handler
+        title = "Fix Login Bug"
+        new_state = "IN_PROGRESS"
+        await audio_loop._handle_jules_status_change(title, new_state)
+
+        # 1. Verify UI Notification
+        audio_loop.on_display_content.assert_called_once()
+        call_args = audio_loop.on_display_content.call_args[0][0]
+        assert call_args["content_type"] == "notification"
+        assert "Jules task 'Fix Login Bug' has moved to IN_PROGRESS" in call_args["data"]["text"]
+        assert call_args["duration"] == 20000
+
+        # 2. Verify Voice Notification
+        audio_loop.session.send.assert_called_once()
+        voice_args = audio_loop.session.send.call_args.kwargs
+        assert "System Notification: Jules task 'Fix Login Bug' has moved to IN_PROGRESS." in voice_args["input"]
