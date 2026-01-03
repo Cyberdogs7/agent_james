@@ -15,6 +15,7 @@ import AuthLock from './components/AuthLock';
 import KasaWindow from './components/KasaWindow';
 import PrinterWindow from './components/PrinterWindow';
 import SettingsWindow from './components/SettingsWindow';
+import Suggestion from './components/Suggestion';
 
 
 
@@ -60,6 +61,7 @@ function App() {
     const [showPrinterWindow, setShowPrinterWindow] = useState(false);
     const [showCadWindow, setShowCadWindow] = useState(false);
     const [showBrowserWindow, setShowBrowserWindow] = useState(false);
+    const [suggestion, setSuggestion] = useState(null);
 
     // Printing workflow status (for top toolbar display)
     const [slicingStatus, setSlicingStatus] = useState({ active: false, percent: 0, message: '' });
@@ -580,6 +582,13 @@ function App() {
         // Listen for timer updates
         socket.on('timers_update', (data) => {
             setTimers(data.timers || []);
+        });
+
+        socket.on('proactive_suggestion', (data) => {
+            setSuggestion(data.suggestion);
+            setTimeout(() => {
+                setSuggestion(null);
+            }, 10000); // Hide after 10 seconds
         });
 
 
@@ -1725,6 +1734,11 @@ function App() {
                     request={confirmationRequest}
                     onConfirm={handleConfirmTool}
                     onDeny={handleDenyTool}
+                />
+
+                <Suggestion
+                    suggestion={suggestion}
+                    onClose={() => setSuggestion(null)}
                 />
             </div>
         </div>
