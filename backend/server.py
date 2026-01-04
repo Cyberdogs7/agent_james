@@ -29,6 +29,7 @@ from kasa_agent import KasaAgent
 from project_manager import ProjectManager
 from slack_agent import SlackAgent
 from scraper_agent import ScraperAgent
+from backend.message_deduplicator import MessageDeduplicator
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -61,6 +62,8 @@ authenticator = None
 kasa_agent = KasaAgent()
 slack_agent = None
 scraper_agent = None
+# Deduplicator for UI inputs (which don't have built-in IDs usually)
+ui_deduplicator = MessageDeduplicator(max_size=500)
 SETTINGS_FILE = "settings.json"
 
 async def handle_slack_message(message):
@@ -536,6 +539,32 @@ async def restart_request(sid, data=None):
 @sio.event
 async def user_input(sid, data):
     text = data.get('text')
+    msg_id = data.get('id')
+
+    # Deduplication for UI Inputs
+    # If frontend sends an ID, use it. Otherwise, hash the content + rough time.
+    # Note: Hashing content alone is risky if user types "hello" twice.
+    # We rely on the fact that if a user re-submits, it's a new intent.
+    # BUT, if the socket reconnects and replays, it will be the SAME text at roughly the same time.
+    # If the frontend is smart, it adds a UUID. If not, we do our best.
+
+    if msg_id:
+        if not ui_deduplicator.check_and_add(msg_id):
+            print(f"[SERVER] Duplicate UI message ID {msg_id}. Ignoring.")
+            return
+    else:
+        # Fallback: Hash content + timestamp (to 1-second precision)
+        # This prevents the EXACT same message arriving in the same second from being processed twice.
+        # This is a heuristic to stop rapid-fire duplicates from network glitches.
+        import time
+        import hashlib
+        # Use 2-second window to be safe against slight network delays
+        timestamp_key = int(time.time() / 2)
+        content_hash = hashlib.sha256(f"{text}-{timestamp_key}".encode()).hexdigest()
+        if not ui_deduplicator.check_and_add(content_hash):
+             print(f"[SERVER] Duplicate UI message content (heuristic) '{text}'. Ignoring.")
+             return
+
     print(f"[SERVER DEBUG] User input received: '{text}'")
     
     if not audio_loop:
