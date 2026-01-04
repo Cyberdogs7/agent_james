@@ -286,10 +286,11 @@ from jules_agent import JulesAgent
 from timer_agent import TimerAgent
 from update_agent import UpdateAgent
 from search_agent import SearchAgent
+from scraper_agent import ScraperAgent
 from proactive_agent import ProactiveAgent
 
 class AudioLoop:
-    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None):
+    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
         self.sio = sio
         self.slack_agent = slack_agent
         self.video_mode = video_mode
@@ -343,6 +344,7 @@ class AudioLoop:
         self.trello_agent = TrelloAgent()
         self.timer_agent = TimerAgent(sio=self.sio)
         self.giphy_client = DefaultApi(ApiClient())
+        self.scraper_agent = scraper_agent if scraper_agent else ScraperAgent()
         
         def handle_update_log(message):
             # Always print to console from the main thread context
@@ -381,7 +383,7 @@ class AudioLoop:
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
         
-        self.search_agent = SearchAgent(self.trello_agent, self.project_manager)
+        self.search_agent = SearchAgent(self.trello_agent, self.project_manager, self.scraper_agent)
         self.proactive_agent = ProactiveAgent(session=None, project_manager=self.project_manager)
 
         # Sync Initial Project State
