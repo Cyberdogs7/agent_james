@@ -20,6 +20,7 @@ class SlackAgent:
         )
         self.on_message = on_message
         self.user_id = None
+        self.bot_id = None
 
     async def send_message(self, text):
         if not self.bot_token or not self.channel_id:
@@ -42,9 +43,14 @@ class SlackAgent:
             event = payload.get("event", {})
             event_type = event.get("type")
             user_id = event.get("user")
+            bot_id = event.get("bot_id")
 
             if user_id == self.user_id:
-                logger.info(f"[SLACK] Ignoring event from self ({user_id})")
+                logger.info(f"[SLACK] Ignoring event from self (user_id match: {user_id})")
+                return
+
+            if self.bot_id and bot_id == self.bot_id:
+                logger.info(f"[SLACK] Ignoring event from self (bot_id match: {bot_id})")
                 return
 
             logger.info(f"[SLACK] Received event payload type: {event_type}")
@@ -67,7 +73,8 @@ class SlackAgent:
         try:
             response = await self.client.auth_test()
             self.user_id = response["user_id"]
-            logger.info(f"[SLACK] Authenticated as user: {self.user_id}")
+            self.bot_id = response.get("bot_id")
+            logger.info(f"[SLACK] Authenticated as user: {self.user_id}, bot_id: {self.bot_id}")
         except Exception as e:
             logger.error(f"[SLACK] Error authenticating with Slack: {e}")
             return
