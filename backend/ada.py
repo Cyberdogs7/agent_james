@@ -312,6 +312,7 @@ class AudioLoop:
         self.out_queue = None
         self.paused = False
 
+        self.message_source = None
         self.chat_buffer = {"sender": None, "text": ""} # For aggregating chunks
         
         # Track last transcription text to calculate deltas (Gemini sends cumulative text)
@@ -1299,6 +1300,12 @@ User: "What's the weather in London?"
                                     if self.on_transcription:
                                         self.on_transcription({"sender": "ADA", "text": text_content})
                                     
+                                    # If the message is from Slack, send the response back to Slack
+                                    if self.message_source == 'slack':
+                                        if self.slack_agent:
+                                            asyncio.create_task(self.slack_agent.send_message(text_content))
+                                        self.message_source = None  # Reset after sending
+
                                     # Update chat buffer for logging
                                     if self.chat_buffer["sender"] != "ADA":
                                         if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():

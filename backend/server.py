@@ -67,6 +67,10 @@ async def handle_slack_message(message):
         # This function mimics the behavior of the user_input socket event
         if audio_loop.project_manager:
             audio_loop.project_manager.log_chat("User", message)
+
+        # Set the source of the message to 'slack'
+        audio_loop.message_source = 'slack'
+
         await audio_loop.session.send(input=message, end_of_turn=True)
     else:
         print("[SERVER] Audio loop not ready, cannot process Slack message.")
