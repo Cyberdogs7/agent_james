@@ -29,7 +29,10 @@ from kasa_agent import KasaAgent
 from project_manager import ProjectManager
 from slack_agent import SlackAgent
 from scraper_agent import ScraperAgent
-from backend.message_deduplicator import MessageDeduplicator
+try:
+    from backend.message_deduplicator import MessageDeduplicator
+except ImportError:
+    from message_deduplicator import MessageDeduplicator
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
