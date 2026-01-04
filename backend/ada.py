@@ -14,6 +14,7 @@ import argparse
 import math
 import struct
 import time
+import random
 import httpx
 from giphy_client.apis.default_api import DefaultApi
 from giphy_client.api_client import ApiClient
@@ -2158,34 +2159,45 @@ User: "What's the weather in London?"
                         if self.on_project_update and self.project_manager:
                             self.on_project_update(self.project_manager.current_project)
                     else:
-                        # Restore conversation context on reconnect
+                        # Display Reconnect GIF and Stay Silent
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Connection restored. Restoring conversation context...")
-                        
-                        # Build context from recent chat history
-                        recent_history = self.project_manager.get_recent_chat_history(limit=20)
-                        if recent_history:
-                            context_lines = ["[SYSTEM: Connection was interrupted. Here is the recent conversation context to maintain continuity:]"]
-                            for entry in recent_history:
-                                sender = entry.get("sender", "Unknown")
-                                text = entry.get("text", "")
-                                # Skip messages related to restart tool calls to avoid re-triggering restarts
-                                if text.strip():
-                                    text_lower = text.lower()
-                                    if "restart" in text_lower and ("application" in text_lower or "restart signal" in text_lower or "restarting" in text_lower):
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [RECONNECT] Skipping restart-related message from context")
-                                        continue
-                                    context_lines.append(f"{sender}: {text}")
-                            context_lines.append("[SYSTEM: Acknowledge that you're back online if appropriate.]")
-                            
-                            context_message = "\n".join(context_lines)
+                            print(f"[ADA DEBUG] [RECONNECT] Connection restored. Fetching reconnect GIF...")
+
+                        try:
+                            api_key = os.getenv("GIPHY_API_KEY")
+                            if api_key:
+                                # Run search in thread to avoid blocking loop
+                                response = await asyncio.to_thread(
+                                    self.giphy_client.gifs_search_get,
+                                    api_key,
+                                    "I'm back",
+                                    limit=25
+                                )
+                                if response.data:
+                                    # Pick a random GIF
+                                    selected_gif = random.choice(response.data)
+                                    gif_url = selected_gif.images.original.url
+
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [RECONNECT] Selected GIF: {gif_url}")
+
+                                    # Display GIF for 10 seconds
+                                    if self.on_display_content:
+                                        self.on_display_content({
+                                            "content_type": "image",
+                                            "url": gif_url,
+                                            "duration": 10000
+                                        })
+                                else:
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [RECONNECT] No GIFs found.")
+                            else:
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] [RECONNECT] Missing Giphy API Key.")
+
+                        except Exception as e:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [RECONNECT] Sending context with {len(recent_history)} messages.")
-                            await self.session.send(input=context_message, end_of_turn=True)
-                        else:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [RECONNECT] No chat history to restore.")
+                                print(f"[ADA DEBUG] [ERR] Failed to display reconnect GIF: {e}")
 
                     self._last_input_transcription = ""
                     self._last_output_transcription = ""
