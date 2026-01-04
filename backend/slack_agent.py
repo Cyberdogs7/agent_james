@@ -39,7 +39,14 @@ class SlackAgent:
         if req.type == "events_api":
             await client.send_socket_mode_response(req.envelope_id)
             payload = req.payload
-            event_type = payload.get("event", {}).get("type")
+            event = payload.get("event", {})
+            event_type = event.get("type")
+            user_id = event.get("user")
+
+            if user_id == self.user_id:
+                logger.info(f"[SLACK] Ignoring event from self ({user_id})")
+                return
+
             logger.info(f"[SLACK] Received event payload type: {event_type}")
 
             if event_type == "app_mention":
