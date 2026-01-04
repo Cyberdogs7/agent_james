@@ -17,13 +17,19 @@ class KasaAgent:
         if self.known_devices_config:
             self._log(f"[KasaAgent] Initializing {len(self.known_devices_config)} known devices...")
             tasks = []
-            for d in self.known_devices_config:
-                if not d: continue
-                ip = d.get('ip')
-                alias = d.get('alias')
-                if ip:
-                    # Create a device instance from IP
-                    tasks.append(self._add_known_device(ip, alias, d))
+            # The config can be a list of dicts from a file, or a dict from the test fixture
+            if isinstance(self.known_devices_config, dict):
+                for ip, info in self.known_devices_config.items():
+                    alias = info.get('alias')
+                    tasks.append(self._add_known_device(ip, alias, info))
+            else:
+                for d in self.known_devices_config:
+                    if not d: continue
+                    ip = d.get('ip')
+                    alias = d.get('alias')
+                    if ip:
+                        # Create a device instance from IP
+                        tasks.append(self._add_known_device(ip, alias, d))
             
             if tasks:
                 await asyncio.gather(*tasks)

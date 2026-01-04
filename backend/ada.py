@@ -308,6 +308,7 @@ class AudioLoop:
         self.input_device_index = input_device_index
         self.input_device_name = input_device_name
         self.output_device_index = output_device_index
+        self.last_input_source = 'ui'  # Default to 'ui'
 
         self.audio_in_queue = None
         self.out_queue = None
@@ -406,6 +407,9 @@ class AudioLoop:
 
     def set_paused(self, paused):
         self.paused = paused
+
+    def set_last_input_source(self, source):
+        self.last_input_source = source
 
     def stop(self):
         self.stop_event.set()
@@ -1273,6 +1277,7 @@ User: "What's the weather in London?"
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
             while True:
+                spoken_response_for_slack = ""
                 try:
                     turn = self.session.receive()
                 except Exception as e:
@@ -1343,6 +1348,7 @@ User: "What's the weather in London?"
                                     if delta:
                                         # User is speaking, so interrupt model playback!
                                         self.clear_audio_queue()
+                                        self.set_last_input_source('ui')
 
                                         # Send to frontend (Streaming)
                                         if self.on_transcription:
@@ -1372,6 +1378,7 @@ User: "What's the weather in London?"
                                     
                                     # Only send if there's new text
                                     if delta:
+                                        spoken_response_for_slack += delta
                                         # Send to frontend (Streaming)
                                         if self.on_transcription:
                                              self.on_transcription({"sender": "ADA", "text": delta})
@@ -1744,14 +1751,14 @@ User: "What's the weather in London?"
                                         # Format for Frontend
                                         frontend_list.append({
                                             "ip": ip,
-                                            "alias": d.alias,
-                                            "model": d.model,
+                                                "alias": d.alias,
+                                                "model": d.model,
                                             "type": dev_type,
-                                            "is_on": d.is_on,
-                                            "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
-                                            "hsv": d.hsv if d.is_bulb and d.is_color else None,
-                                            "has_color": d.is_color if d.is_bulb else False,
-                                            "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
+                                                "is_on": d.is_on,
+                                                "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
+                                                "hsv": d.hsv if d.is_bulb and d.is_color else None,
+                                                "has_color": d.is_color if d.is_bulb else False,
+                                                "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
                                         })
 
                                     result_str = "No devices found in cache."
@@ -2050,6 +2057,10 @@ User: "What's the weather in London?"
                 self.message_source = None
 
                 self.flush_chat()
+                if self.last_input_source == 'slack' and spoken_response_for_slack:
+                    if self.slack_agent:
+                        asyncio.create_task(self.slack_agent.send_message(spoken_response_for_slack))
+                self.set_last_input_source('ui')
 
                 while not self.audio_in_queue.empty():
                     self.audio_in_queue.get_nowait()
