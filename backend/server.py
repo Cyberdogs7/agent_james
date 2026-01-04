@@ -28,6 +28,7 @@ from authenticator import FaceAuthenticator
 from kasa_agent import KasaAgent
 from project_manager import ProjectManager
 from slack_agent import SlackAgent
+from scraper_agent import ScraperAgent
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
@@ -59,6 +60,7 @@ loop_task = None
 authenticator = None
 kasa_agent = KasaAgent()
 slack_agent = None
+scraper_agent = None
 SETTINGS_FILE = "settings.json"
 
 async def handle_slack_message(message):
@@ -144,7 +146,7 @@ kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 
 @app.on_event("startup")
 async def startup_event():
-    global slack_agent
+    global slack_agent, scraper_agent
     import sys
     print(f"[SERVER DEBUG] Startup Event Triggered")
     print(f"[SERVER DEBUG] Python Version: {sys.version}")
@@ -163,6 +165,11 @@ async def startup_event():
     slack_agent = SlackAgent(on_message=handle_slack_message)
     asyncio.create_task(slack_agent.start())
     print("[SERVER] Slack Agent startup task created.")
+
+    print("[SERVER] Startup: Initializing Scraper Agent...")
+    scraper_agent = ScraperAgent()
+    print("[SERVER] Scraper Agent initialized.")
+
 
 @app.get("/status")
 async def status():
@@ -337,7 +344,8 @@ async def start_audio(sid, data=None):
             input_device_name=device_name,
             kasa_agent=kasa_agent,
             project_manager=project_manager,
-            slack_agent=slack_agent
+            slack_agent=slack_agent,
+            scraper_agent=scraper_agent
         )
         print("AudioLoop initialized successfully.")
 
@@ -371,7 +379,7 @@ async def start_audio(sid, data=None):
 
         # Load saved printers
         saved_printers = SETTINGS.get("printers", [])
-        if saved_printers and audio_loop.printer_agent:
+        if audio_loop.printer_agent:
             print(f"[SERVER] Loading {len(saved_printers)} saved printers...")
             for p in saved_printers:
                 audio_loop.printer_agent.add_printer_manually(

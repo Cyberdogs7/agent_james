@@ -28,3 +28,4 @@ pytest
 httpx
 tzlocal
 slack-sdk
+beautifulsoup4
