@@ -3,7 +3,10 @@ import asyncio
 import logging
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.socket_mode.aiohttp import SocketModeClient
-from backend.message_deduplicator import MessageDeduplicator
+try:
+    from backend.message_deduplicator import MessageDeduplicator
+except ImportError:
+    from message_deduplicator import MessageDeduplicator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
