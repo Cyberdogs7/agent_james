@@ -1279,6 +1279,7 @@ User: "What's the weather in London?"
                         print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
                     raise e
 
+                full_turn_text_response = ""
                 async for response in turn:
                     # Access parts directly to avoid 'non-data parts' / 'non-text parts' warnings 
                     # from the SDK's lazy properties (.text, .data, .thought)
@@ -1300,11 +1301,9 @@ User: "What's the weather in London?"
                                     if self.on_transcription:
                                         self.on_transcription({"sender": "ADA", "text": text_content})
                                     
-                                    # If the message is from Slack, send the response back to Slack
+                                    # If the message is from Slack, accumulate the response
                                     if self.message_source == 'slack':
-                                        if self.slack_agent:
-                                            asyncio.create_task(self.slack_agent.send_message(text_content))
-                                        self.message_source = None  # Reset after sending
+                                        full_turn_text_response += text_content + " "
 
                                     # Update chat buffer for logging
                                     if self.chat_buffer["sender"] != "ADA":
@@ -2040,6 +2039,15 @@ User: "What's the weather in London?"
                             await self.session.send_tool_response(function_responses=function_responses)
                 
                 # Turn/Response Loop Finished
+                # Check if we have a Slack message to send
+                if self.message_source == 'slack' and self.slack_agent and full_turn_text_response.strip():
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [SLACK] End of turn. Sending full response to Slack: '{full_turn_text_response.strip()}'")
+                    asyncio.create_task(self.slack_agent.send_message(full_turn_text_response.strip()))
+
+                # Reset the message source after the turn is fully processed
+                self.message_source = None
+
                 self.flush_chat()
 
                 while not self.audio_in_queue.empty():
