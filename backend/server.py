@@ -14,6 +14,7 @@ import threading
 import sys
 import os
 import json
+import copy
 from datetime import datetime
 from pathlib import Path
 
@@ -64,10 +65,13 @@ async def handle_slack_message(message):
     """Callback function for the SlackAgent to handle incoming messages."""
     if audio_loop and audio_loop.session:
         print(f"[SERVER] Forwarding Slack message to audio loop: {message}")
-        audio_loop.set_last_input_source('slack')
         # This function mimics the behavior of the user_input socket event
         if audio_loop.project_manager:
             audio_loop.project_manager.log_chat("User", message)
+
+        # Set the source of the message to 'slack'
+        audio_loop.message_source = 'slack'
+
         await audio_loop.session.send(input=message, end_of_turn=True)
     else:
         print("[SERVER] Audio loop not ready, cannot process Slack message.")
@@ -94,7 +98,22 @@ DEFAULT_SETTINGS = {
     "camera_flipped": False # Invert cursor horizontal direction
 }
 
-SETTINGS = DEFAULT_SETTINGS.copy()
+SETTINGS = copy.deepcopy(DEFAULT_SETTINGS)
+
+def deep_merge(target, source):
+    """
+    Recursively merge source dictionary into target dictionary.
+    """
+    for key, value in source.items():
+        if isinstance(value, dict):
+            node = target.setdefault(key, {})
+            if isinstance(node, dict):
+                deep_merge(node, value)
+            else:
+                target[key] = value
+        else:
+            target[key] = value
+    return target
 
 def load_settings():
     global SETTINGS
@@ -103,12 +122,7 @@ def load_settings():
             with open(SETTINGS_FILE, 'r') as f:
                 loaded = json.load(f)
                 # Merge with defaults to ensure new keys exist
-                # Deep merge for tool_permissions would be better but shallow merge of top keys + tool_permissions check is okay for now
-                for k, v in loaded.items():
-                    if k == "tool_permissions" and isinstance(v, dict):
-                         SETTINGS["tool_permissions"].update(v)
-                    else:
-                        SETTINGS[k] = v
+                deep_merge(SETTINGS, loaded)
             print(f"Loaded settings: {SETTINGS}")
         except Exception as e:
             print(f"Error loading settings: {e}")

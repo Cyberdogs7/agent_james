@@ -14,6 +14,7 @@ import argparse
 import math
 import struct
 import time
+import random
 import httpx
 from giphy_client.apis.default_api import DefaultApi
 from giphy_client.api_client import ApiClient
@@ -313,6 +314,7 @@ class AudioLoop:
         self.out_queue = None
         self.paused = False
 
+        self.message_source = None
         self.chat_buffer = {"sender": None, "text": ""} # For aggregating chunks
         
         # Track last transcription text to calculate deltas (Gemini sends cumulative text)
@@ -1283,6 +1285,7 @@ User: "What's the weather in London?"
                         print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
                     raise e
 
+                full_turn_text_response = ""
                 async for response in turn:
                     # Access parts directly to avoid 'non-data parts' / 'non-text parts' warnings 
                     # from the SDK's lazy properties (.text, .data, .thought)
@@ -1304,6 +1307,10 @@ User: "What's the weather in London?"
                                     if self.on_transcription:
                                         self.on_transcription({"sender": "ADA", "text": text_content})
                                     
+                                    # If the message is from Slack, accumulate the response
+                                    if self.message_source == 'slack':
+                                        full_turn_text_response += text_content + " "
+
                                     # Update chat buffer for logging
                                     if self.chat_buffer["sender"] != "ADA":
                                         if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
@@ -2040,6 +2047,15 @@ User: "What's the weather in London?"
                             await self.session.send_tool_response(function_responses=function_responses)
                 
                 # Turn/Response Loop Finished
+                # Check if we have a Slack message to send
+                if self.message_source == 'slack' and self.slack_agent and full_turn_text_response.strip():
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [SLACK] End of turn. Sending full response to Slack: '{full_turn_text_response.strip()}'")
+                    asyncio.create_task(self.slack_agent.send_message(full_turn_text_response.strip()))
+
+                # Reset the message source after the turn is fully processed
+                self.message_source = None
+
                 self.flush_chat()
                 if self.last_input_source == 'slack' and spoken_response_for_slack:
                     if self.slack_agent:
@@ -2154,34 +2170,45 @@ User: "What's the weather in London?"
                         if self.on_project_update and self.project_manager:
                             self.on_project_update(self.project_manager.current_project)
                     else:
-                        # Restore conversation context on reconnect
+                        # Display Reconnect GIF and Stay Silent
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Connection restored. Restoring conversation context...")
-                        
-                        # Build context from recent chat history
-                        recent_history = self.project_manager.get_recent_chat_history(limit=20)
-                        if recent_history:
-                            context_lines = ["[SYSTEM: Connection was interrupted. Here is the recent conversation context to maintain continuity:]"]
-                            for entry in recent_history:
-                                sender = entry.get("sender", "Unknown")
-                                text = entry.get("text", "")
-                                # Skip messages related to restart tool calls to avoid re-triggering restarts
-                                if text.strip():
-                                    text_lower = text.lower()
-                                    if "restart" in text_lower and ("application" in text_lower or "restart signal" in text_lower or "restarting" in text_lower):
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [RECONNECT] Skipping restart-related message from context")
-                                        continue
-                                    context_lines.append(f"{sender}: {text}")
-                            context_lines.append("[SYSTEM: Acknowledge that you're back online if appropriate.]")
-                            
-                            context_message = "\n".join(context_lines)
+                            print(f"[ADA DEBUG] [RECONNECT] Connection restored. Fetching reconnect GIF...")
+
+                        try:
+                            api_key = os.getenv("GIPHY_API_KEY")
+                            if api_key:
+                                # Run search in thread to avoid blocking loop
+                                response = await asyncio.to_thread(
+                                    self.giphy_client.gifs_search_get,
+                                    api_key,
+                                    "I'm back",
+                                    limit=25
+                                )
+                                if response.data:
+                                    # Pick a random GIF
+                                    selected_gif = random.choice(response.data)
+                                    gif_url = selected_gif.images.original.url
+
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [RECONNECT] Selected GIF: {gif_url}")
+
+                                    # Display GIF for 10 seconds
+                                    if self.on_display_content:
+                                        self.on_display_content({
+                                            "content_type": "image",
+                                            "url": gif_url,
+                                            "duration": 10000
+                                        })
+                                else:
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [RECONNECT] No GIFs found.")
+                            else:
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] [RECONNECT] Missing Giphy API Key.")
+
+                        except Exception as e:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [RECONNECT] Sending context with {len(recent_history)} messages.")
-                            await self.session.send(input=context_message, end_of_turn=True)
-                        else:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [RECONNECT] No chat history to restore.")
+                                print(f"[ADA DEBUG] [ERR] Failed to display reconnect GIF: {e}")
 
                     self._last_input_transcription = ""
                     self._last_output_transcription = ""

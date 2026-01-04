@@ -1045,7 +1045,10 @@ function App() {
 
                         // Update position only if there's actual movement
                         if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-                            updateElementPosition(activeDragElementRef.current, dx, dy);
+                            const currentPos = elementPositionsRef.current[activeDragElementRef.current];
+                            if (currentPos) {
+                                updateElementPosition(activeDragElementRef.current, currentPos.x + dx, currentPos.y + dy);
+                            }
                         }
 
                         // Update last wrist position
@@ -1218,12 +1221,11 @@ function App() {
     };
 
     // Updated Bounds Checking Logic
-    const updateElementPosition = (id, dx, dy) => {
+    const updateElementPosition = (id, x, y) => {
         setElementPositions(prev => {
-            const currentPos = prev[id];
             const size = elementSizes[id] || { w: 100, h: 100 }; // Fallback
-            let newX = currentPos.x + dx;
-            let newY = currentPos.y + dy;
+            let newX = x;
+            let newY = y;
 
             // Bounds Logic
             // Depends on anchor point.
@@ -1320,51 +1322,11 @@ function App() {
         if (!isDraggingRef.current || !activeDragElementRef.current) return;
 
         const id = activeDragElementRef.current;
-        const currentPos = elementPositionsRef.current[id];
-        if (!currentPos) return;
 
-        // Target Position = MousePos - Offset
-        // But we want delta for updateElementPosition??
-        // actually updateElementPosition takes dx, dy.
-        // Let's just set the position directly or calculate delta.
-        // Since updateElementPosition has bounds logic, let's use it, but we need delta from PREVIOUS position?
-        // OR we can refactor updateElementPosition to take absolute.
-        // Let's stick to calculating new position and manually updating state with bounds logic inside a setter.
-
-        // Actually, updateElementPosition uses setElementPositions(prev => ...).
-        // Let's duplicate bounds logic for mouse drag to be precise or reuse.
-        // reusing updateElementPosition requires calculating dx/dy from *current state* which might be lagging in the closure?
-        // No, functional update is fine.
-
-        // But for smooth mouse drag, absolute position is better.
         const rawNewX = e.clientX - dragOffsetRef.current.x;
         const rawNewY = e.clientY - dragOffsetRef.current.y;
 
-        setElementPositions(prev => {
-            const size = elementSizes[id] || { w: 100, h: 100 }; // Fallback
-            let newX = rawNewX;
-            let newY = rawNewY;
-
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            const margin = 0;
-
-            if (id === 'chat') {
-                newX = Math.max(size.w / 2 + margin, Math.min(width - size.w / 2 - margin, newX));
-                newY = Math.max(margin, Math.min(height - size.h - margin, newY));
-            } else if (id === 'video') {
-                newX = Math.max(margin, Math.min(width - size.w - margin, newX));
-                newY = Math.max(margin, Math.min(height - size.h - margin, newY));
-            } else {
-                newX = Math.max(size.w / 2 + margin, Math.min(width - size.w / 2 - margin, newX));
-                newY = Math.max(size.h / 2 + margin, Math.min(height - size.h / 2 - margin, newY));
-            }
-
-            return {
-                ...prev,
-                [id]: { x: newX, y: newY }
-            };
-        });
+        updateElementPosition(id, rawNewX, rawNewY);
     };
 
     const handleMouseUp = () => {
