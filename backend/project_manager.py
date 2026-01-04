@@ -4,6 +4,8 @@ import shutil
 import time
 from pathlib import Path
 
+DEFAULT_SYSTEM_PROMPT = "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant."
+
 class ProjectManager:
     def __init__(self, workspace_root: str):
         self.workspace_root = Path(workspace_root)
@@ -50,7 +52,7 @@ class ProjectManager:
         """Creates a default config.json file in the project directory."""
         config_path = project_path / "config.json"
         DEFAULT_CONFIG = {
-            "system_prompt": "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant.",
+            "system_prompt": DEFAULT_SYSTEM_PROMPT,
             "jules_api_key": "",
             "voice_name": "Sadaltager"
         }
@@ -251,6 +253,22 @@ class ProjectManager:
             return False, "Invalid time format. Please use '12h' or '24h'."
 
         return self.update_project_config({"time_format": time_format})
+
+    def append_system_prompt(self, text: str):
+        """Appends text to the system prompt in config.json."""
+        config = self.get_project_config()
+        current_prompt = config.get("system_prompt", DEFAULT_SYSTEM_PROMPT)
+        new_prompt = f"{current_prompt}\n{text}"
+        return self.update_project_config({"system_prompt": new_prompt})
+
+    def reset_system_prompt(self):
+        """Resets the system prompt to the default."""
+        return self.update_project_config({"system_prompt": DEFAULT_SYSTEM_PROMPT})
+
+    def get_system_prompt(self):
+        """Returns the current system prompt."""
+        config = self.get_project_config()
+        return config.get("system_prompt", DEFAULT_SYSTEM_PROMPT)
 
     def search_files(self, query: str):
         """Searches for a query in all text files within the current project."""

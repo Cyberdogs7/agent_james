@@ -135,6 +135,39 @@ read_file_tool = {
     }
 }
 
+append_system_prompt_tool = {
+    "name": "append_system_prompt",
+    "description": "Appends text to the end of the current project's system prompt. Automatically adds a newline separator.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "text": {
+                "type": "STRING",
+                "description": "The text to append to the system prompt."
+            }
+        },
+        "required": ["text"]
+    }
+}
+
+delete_custom_system_prompt_tool = {
+    "name": "delete_custom_system_prompt",
+    "description": "Resets the project's system prompt to the default value. Requires user confirmation.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
+get_system_prompt_tool = {
+    "name": "get_system_prompt",
+    "description": "Retrieves the current system prompt for the project.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
 trello_tools = {
     "list_boards": {
         "name": "trello_list_boards",
@@ -460,7 +493,10 @@ tools_list = [{"function_declarations": [
     send_jules_feedback_tool,
     list_jules_sources_tool,
     list_jules_sessions_tool,
-    list_jules_activities_tool
+    list_jules_activities_tool,
+    append_system_prompt_tool,
+    delete_custom_system_prompt_tool,
+    get_system_prompt_tool
 ] + list(trello_tools.values()) + [
     {
         "name": "search",

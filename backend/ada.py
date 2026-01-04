@@ -1468,10 +1468,39 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "send_slack_message":
+                                if fc.name == "append_system_prompt":
+                                    text = fc.args["text"]
+                                    success, msg = self.project_manager.append_system_prompt(text)
+                                    if success:
+                                        self.reconnect() # Reconnect to load the new prompt
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "delete_custom_system_prompt":
+                                    success, msg = self.project_manager.reset_system_prompt()
+                                    if success:
+                                        self.reconnect() # Reconnect to load the default prompt
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "get_system_prompt":
+                                    prompt_text = self.project_manager.get_system_prompt()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": prompt_text}
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "send_slack_message":
                                     message = fc.args["message"]
                                     if self.slack_agent:
                                         asyncio.create_task(self.slack_agent.send_message(message))
