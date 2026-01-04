@@ -27,3 +27,4 @@ giphy_client
 pytest
 httpx
 tzlocal
+slack-sdk

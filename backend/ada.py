@@ -288,8 +288,9 @@ from search_agent import SearchAgent
 from proactive_agent import ProactiveAgent
 
 class AudioLoop:
-    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None):
+    def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None):
         self.sio = sio
+        self.slack_agent = slack_agent
         self.video_mode = video_mode
         self.on_audio_data = on_audio_data
         self.on_video_frame = on_video_frame
@@ -306,6 +307,7 @@ class AudioLoop:
         self.input_device_index = input_device_index
         self.input_device_name = input_device_name
         self.output_device_index = output_device_index
+        self.last_input_source = 'ui'  # Default to 'ui'
 
         self.audio_in_queue = None
         self.out_queue = None
@@ -404,6 +406,9 @@ class AudioLoop:
     def set_paused(self, paused):
         self.paused = paused
 
+    def set_last_input_source(self, source):
+        self.last_input_source = source
+
     def stop(self):
         self.stop_event.set()
         if INCLUDE_RAW_LOGS:
@@ -458,6 +463,10 @@ class AudioLoop:
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [ERR] [JULES_NOTIFY] Failed to send voice notification: {e}")
+
+        # 3. Send Slack Notification
+        if self.slack_agent:
+            asyncio.create_task(self.slack_agent.send_message(notification_text))
         
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
@@ -1266,6 +1275,7 @@ User: "What's the weather in London?"
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
             while True:
+                spoken_response_for_slack = ""
                 try:
                     turn = self.session.receive()
                 except Exception as e:
@@ -1331,6 +1341,7 @@ User: "What's the weather in London?"
                                     if delta:
                                         # User is speaking, so interrupt model playback!
                                         self.clear_audio_queue()
+                                        self.set_last_input_source('ui')
 
                                         # Send to frontend (Streaming)
                                         if self.on_transcription:
@@ -1360,6 +1371,7 @@ User: "What's the weather in London?"
                                     
                                     # Only send if there's new text
                                     if delta:
+                                        spoken_response_for_slack += delta
                                         # Send to frontend (Streaming)
                                         if self.on_transcription:
                                              self.on_transcription({"sender": "ADA", "text": delta})
@@ -1447,10 +1459,23 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "proactive_suggestion":
+                                if fc.name == "send_slack_message":
+                                    message = fc.args["message"]
+                                    if self.slack_agent:
+                                        asyncio.create_task(self.slack_agent.send_message(message))
+                                        result = "Message sent to Slack."
+                                    else:
+                                        result = "Slack agent not available."
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+                                elif fc.name == "proactive_suggestion":
                                     suggestion = fc.args["suggestion"]
                                     if self.on_display_content:
                                         self.on_display_content({
@@ -1719,14 +1744,14 @@ User: "What's the weather in London?"
                                         # Format for Frontend
                                         frontend_list.append({
                                             "ip": ip,
-                                            "alias": d.alias,
-                                            "model": d.model,
+                                                "alias": d.alias,
+                                                "model": d.model,
                                             "type": dev_type,
-                                            "is_on": d.is_on,
-                                            "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
-                                            "hsv": d.hsv if d.is_bulb and d.is_color else None,
-                                            "has_color": d.is_color if d.is_bulb else False,
-                                            "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
+                                                "is_on": d.is_on,
+                                                "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
+                                                "hsv": d.hsv if d.is_bulb and d.is_color else None,
+                                                "has_color": d.is_color if d.is_bulb else False,
+                                                "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
                                         })
 
                                     result_str = "No devices found in cache."
@@ -2016,6 +2041,10 @@ User: "What's the weather in London?"
                 
                 # Turn/Response Loop Finished
                 self.flush_chat()
+                if self.last_input_source == 'slack' and spoken_response_for_slack:
+                    if self.slack_agent:
+                        asyncio.create_task(self.slack_agent.send_message(spoken_response_for_slack))
+                self.set_last_input_source('ui')
 
                 while not self.audio_in_queue.empty():
                     self.audio_in_queue.get_nowait()
