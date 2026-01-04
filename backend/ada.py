@@ -2126,6 +2126,9 @@ User: "What's the weather in London?"
 
     async def _session_runner(self, start_message=None, is_reconnect=False):
         """Handles a single connection and run-loop of the voice agent."""
+        # Force reset message_source to ensure clean state on new session/reconnect
+        self.message_source = None
+
         service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [SESSION] Starting session runner. Reconnect: {is_reconnect}")
