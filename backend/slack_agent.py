@@ -3,6 +3,7 @@ import asyncio
 import logging
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.socket_mode.aiohttp import SocketModeClient
+from backend.message_deduplicator import MessageDeduplicator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +22,7 @@ class SlackAgent:
         self.on_message = on_message
         self.user_id = None
         self.bot_id = None
+        self.deduplicator = MessageDeduplicator(max_size=1000)
 
     async def send_message(self, text):
         if not self.bot_token or not self.channel_id:
@@ -40,10 +42,23 @@ class SlackAgent:
         if req.type == "events_api":
             await client.send_socket_mode_response(req.envelope_id)
             payload = req.payload
+            event_id = payload.get("event_id")
             event = payload.get("event", {})
             event_type = event.get("type")
             user_id = event.get("user")
             bot_id = event.get("bot_id")
+
+            # Deduplication
+            if event_id and not self.deduplicator.check_and_add(event_id):
+                logger.info(f"[SLACK] Duplicate event detected (ID: {event_id}). Ignoring.")
+                return
+
+            # Also try event timestamp if event_id is missing (rare)
+            if not event_id:
+                event_ts = event.get("event_ts")
+                if event_ts and not self.deduplicator.check_and_add(event_ts):
+                     logger.info(f"[SLACK] Duplicate event detected (TS: {event_ts}). Ignoring.")
+                     return
 
             if user_id == self.user_id:
                 logger.info(f"[SLACK] Ignoring event from self (user_id match: {user_id})")
