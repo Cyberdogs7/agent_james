@@ -630,6 +630,10 @@ class AudioLoop:
         # VAD Constants
         VAD_THRESHOLD = 800 # Adj based on mic sensitivity (800 is conservative for 16-bit)
         SILENCE_DURATION = 0.5 # Seconds of silence to consider "done speaking"
+        PRE_ROLL_CHUNKS = int(SEND_SAMPLE_RATE / CHUNK_SIZE * 0.5) # 0.5 seconds of pre-roll
+
+        from collections import deque
+        audio_buffer = deque(maxlen=PRE_ROLL_CHUNKS)
         
         while True:
             if self.paused:
@@ -648,13 +652,7 @@ class AudioLoop:
                         mono_shorts = shorts[::stream_channels]
                         data = struct.pack(f"<{count}h", *mono_shorts)
 
-                # 1. Send Audio
-                if self.out_queue:
-                    await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
-                
-                # 2. VAD Logic for Video
-                # rms = audioop.rms(data, 2)
-                # Replacement for audioop.rms(data, 2)
+                # VAD Logic
                 count = len(data) // 2
                 if count > 0:
                     shorts = struct.unpack(f"<{count}h", data)
@@ -663,6 +661,7 @@ class AudioLoop:
                 else:
                     rms = 0
                 
+                # State Machine
                 if rms > VAD_THRESHOLD:
                     # Speech Detected
                     self._silence_start_time = None
@@ -671,27 +670,45 @@ class AudioLoop:
                         # NEW Speech Utterance Started
                         self._is_speaking = True
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Sending Video Frame.")
+                            print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Starting Stream.")
                         
-                        # Send ONE frame
+                        # 1. Send Buffered Pre-roll (catch the start of the word)
+                        while audio_buffer:
+                             buffered_data = audio_buffer.popleft()
+                             if self.out_queue:
+                                 await self.out_queue.put({"data": buffered_data, "mime_type": "audio/pcm"})
+
+                        # 2. Send Video Frame (Once per utterance)
                         if self._latest_image_payload and self.out_queue:
                             await self.out_queue.put(self._latest_image_payload)
                         else:
                             if INCLUDE_RAW_LOGS:
                                 print(f"[ADA DEBUG] [VAD] No video frame available to send.")
+
+                    # Send Current Chunk
+                    if self.out_queue:
+                        await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
                             
                 else:
-                    # Silence
+                    # Silence Detected
                     if self._is_speaking:
+                        # Hangover Period - continue sending until silence duration met
+                        if self.out_queue:
+                            await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+
                         if self._silence_start_time is None:
                             self._silence_start_time = time.time()
                         
                         elif time.time() - self._silence_start_time > SILENCE_DURATION:
-                            # Silence confirmed, reset state
+                            # Silence confirmed, stop sending
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [VAD] Silence detected. Resetting speech state.")
+                                print(f"[ADA DEBUG] [VAD] Silence timeout. Stopping Stream.")
                             self._is_speaking = False
                             self._silence_start_time = None
+                    else:
+                        # Not speaking, buffer audio for pre-roll
+                        audio_buffer.append(data)
+                        # DO NOT SEND TO QUEUE
 
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
