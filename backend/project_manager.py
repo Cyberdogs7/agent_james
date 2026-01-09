@@ -3,6 +3,10 @@ import json
 import shutil
 import time
 from pathlib import Path
+try:
+    from backend.writing_prompts import WRITING_MODE_SYSTEM_PROMPT
+except ImportError:
+    from writing_prompts import WRITING_MODE_SYSTEM_PROMPT
 
 DEFAULT_SYSTEM_PROMPT = "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant."
 
@@ -292,3 +296,45 @@ class ProjectManager:
                     except Exception as e:
                         print(f"[ProjectManager] [ERR] Failed to read file {file_path}: {e}")
         return results
+
+    def enable_writing_mode(self):
+        """Enables Writing Mode for the current project."""
+        config = self.get_project_config()
+        if config.get("mode") == "writing":
+            return True, "Writing Mode is already enabled."
+
+        # Backup current system prompt
+        current_prompt = config.get("system_prompt", DEFAULT_SYSTEM_PROMPT)
+
+        # Create necessary directories
+        project_path = self.get_current_project_path()
+        for folder in ["plot", "characters", "world", "chapters", "research"]:
+            (project_path / folder).mkdir(exist_ok=True)
+
+        # Update config
+        update_data = {
+            "mode": "writing",
+            "backup_system_prompt": current_prompt,
+            "system_prompt": WRITING_MODE_SYSTEM_PROMPT
+        }
+        return self.update_project_config(update_data)
+
+    def disable_writing_mode(self):
+        """Disables Writing Mode and restores previous configuration."""
+        config = self.get_project_config()
+        if config.get("mode") != "writing":
+            return True, "Writing Mode is not enabled."
+
+        # Restore backed up prompt, or default if missing
+        original_prompt = config.get("backup_system_prompt", DEFAULT_SYSTEM_PROMPT)
+
+        # Update config
+        update_data = {
+            "mode": "standard",
+            "system_prompt": original_prompt
+        }
+
+        success, msg = self.update_project_config(update_data)
+        if success:
+             return True, "Writing Mode disabled. Standard configuration restored."
+        return False, msg
