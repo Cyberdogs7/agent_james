@@ -91,7 +91,15 @@ class PrinterDiscoveryListener(ServiceListener):
                 print(f"[PRINTER] Discovered: {printer.name} at {printer.host}:{printer.port} ({printer.printer_type.value})")
 
     def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        pass
+        """Handle service removal."""
+        printer_name = name.replace(f".{type_}", "")
+
+        # Remove printer from list if found
+        initial_count = len(self.printers)
+        self.printers = [p for p in self.printers if p.name != printer_name]
+
+        if len(self.printers) < initial_count:
+            print(f"[PRINTER] Removed: {printer_name}")
     
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         pass
