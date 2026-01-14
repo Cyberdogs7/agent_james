@@ -62,6 +62,21 @@ list_jules_sources_tool = {
     }
 }
 
+toggle_jules_slack_notifications_tool = {
+    "name": "toggle_jules_slack_notifications",
+    "description": "Enables or disables Slack notifications for Jules agent status updates. Default is disabled.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "enabled": {
+                "type": "BOOLEAN",
+                "description": "True to enable notifications, False to disable."
+            }
+        },
+        "required": ["enabled"]
+    }
+}
+
 list_jules_sessions_tool = {
     "name": "list_jules_sessions",
     "description": "Lists all Jules sessions saved in the current project's local memory.",
@@ -496,7 +511,8 @@ tools_list = [{"function_declarations": [
     list_jules_activities_tool,
     append_system_prompt_tool,
     delete_custom_system_prompt_tool,
-    get_system_prompt_tool
+    get_system_prompt_tool,
+    toggle_jules_slack_notifications_tool
 ] + list(trello_tools.values()) + [
     {
         "name": "search",
