@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 
 const ChatModule = ({
     messages,
@@ -13,9 +14,17 @@ const ChatModule = ({
     onMouseDown
 }) => {
     const messagesEndRef = useRef(null);
+    const [copiedKey, setCopiedKey] = useState(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    const handleCopy = (msg) => {
+        navigator.clipboard.writeText(msg.text);
+        const key = msg.time + msg.sender + msg.text;
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey(null), 2000);
     };
 
     useEffect(() => {
@@ -45,9 +54,22 @@ const ChatModule = ({
                 style={{ height: height ? `calc(${height}px - 70px)` : '15rem' }}
             >
                 {messages.slice(-5).map((msg, i) => (
-                    <div key={i} className="text-sm border-l-2 border-gold9/50 pl-3 py-1">
+                    <div key={i} className="group relative text-sm border-l-2 border-gold9/50 pl-3 py-1 pr-8 transition-colors hover:bg-gold9/5 rounded-r-lg">
                         <span className="text-gold8 font-sans text-xs opacity-70">[{msg.time}]</span> <span className="font-bold text-gold9 drop-shadow-sm">{msg.sender}</span>
                         <div className="text-gray11 mt-1 leading-relaxed">{msg.text}</div>
+
+                        <button
+                            onClick={() => handleCopy(msg)}
+                            className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md hover:bg-gold9/20 text-gold9/70 hover:text-gold9"
+                            title="Copy message"
+                            aria-label="Copy message text"
+                        >
+                            {(msg.time + msg.sender + msg.text) === copiedKey ? (
+                                <Check size={14} className="text-green-400" />
+                            ) : (
+                                <Copy size={14} />
+                            )}
+                        </button>
                     </div>
                 ))}
                 <div ref={messagesEndRef} />
