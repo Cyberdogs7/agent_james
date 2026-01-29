@@ -266,13 +266,37 @@ apply_update_tool = {
     }
 }
 
+change_voice_tool = {
+    "name": "change_voice",
+    "description": "Changes the voice of the assistant for the current project. This will cause a brief reconnection.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "voice_name": {"type": "STRING", "description": "The name of the voice to switch to. Valid options are: Puck, Charon, Kore, Fenrir, Aoede, Sadaltager."}
+        },
+        "required": ["voice_name"]
+    }
+}
+
+update_persona_tool = {
+    "name": "update_persona",
+    "description": "Updates the persona (system instructions) for the current project. This effectively changes who the assistant 'is'. Use this to switch roles (e.g., from 'Cheeky Butler' to 'Strict Commander'). This will cause a brief reconnection.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "persona": {"type": "STRING", "description": "The new system prompt description of the persona."}
+        },
+        "required": ["persona"]
+    }
+}
+
 tools = [{'google_search': {}}, {"function_declarations": [
     generate_cad, run_web_agent, create_project_tool, switch_project_tool,
     list_projects_tool, list_smart_devices_tool, control_light_tool,
     discover_printers_tool, print_stl_tool, get_print_status_tool,
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
-    set_time_format_tool, get_datetime_tool,
+    set_time_format_tool, get_datetime_tool, change_voice_tool, update_persona_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 pya = pyaudio.PyAudio()
@@ -2035,6 +2059,34 @@ User: "What's the weather in London?"
                                     result = await self.timer_agent.set_timer(duration, name)
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "change_voice":
+                                    voice_name = fc.args["voice_name"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'change_voice' voice_name='{voice_name}'", flush=True)
+                                    success, msg = self.project_manager.set_voice(voice_name)
+                                    if success:
+                                        self.reconnect()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "update_persona":
+                                    persona = fc.args["persona"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'update_persona' len(persona)='{len(persona)}'", flush=True)
+                                    success, msg = self.project_manager.update_persona(persona)
+                                    if success:
+                                        self.reconnect()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
                                     )
                                     function_responses.append(function_response)
 
