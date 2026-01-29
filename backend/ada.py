@@ -322,6 +322,7 @@ from update_agent import UpdateAgent
 from search_agent import SearchAgent
 from scraper_agent import ScraperAgent
 from proactive_agent import ProactiveAgent
+from git_ops import GitOps
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
@@ -1340,13 +1341,22 @@ class AudioLoop:
                 }
                 printers.append(p_data)
 
+        # 6. Git Ops Data
+        repo_path = self.project_manager.get_current_project_path()
+        git_status = {
+            "branch": GitOps.get_current_branch(repo_path) or "unknown",
+            "branches": GitOps.list_branches(repo_path),
+            "status": GitOps.get_status(repo_path)
+        }
+
         dashboard_data = {
             "project": project,
             "system_status": "ONLINE",
             "trello": trello_cards[:10], # Limit to top 10
             "jules": enriched_sessions[:5],
             "devices": devices,
-            "printers": printers
+            "printers": printers,
+            "git": git_status
         }
 
         if self.on_display_content:
@@ -1615,10 +1625,21 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
-                                if fc.name == "toggle_jules_slack_notifications":
+                                if fc.name == "git_merge_branch":
+                                    branch_name = fc.args["branch_name"]
+                                    repo_path = self.project_manager.get_current_project_path()
+                                    success, msg = GitOps.merge_branch(repo_path, branch_name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "toggle_jules_slack_notifications":
                                     enabled = fc.args["enabled"]
                                     success, msg = self.project_manager.update_project_config({"jules_slack_notifications": enabled})
                                     function_response = types.FunctionResponse(

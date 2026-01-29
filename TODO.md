@@ -38,7 +38,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Python `subprocess` calls. abstracting OS-specific commands (PowerShell for Windows, AppleScript/zsh for macOS). Security permission handling is critical.
   - **Status**: **Idea**
 
-- [ ] **War Room: Fleet Command & Git Ops**
+- [x] **War Room: Fleet Command & Git Ops**
   - **Description**: A visual UI for managing multiple JulesAgents working on tasks across multiple repos. Includes controls for voice-activated or manual git branch merges. Also allows configuring "Jules Worker Nodes"—autonomous agents with specific prompts and schedules (e.g., "Refactor Worker", "Testing Worker").
   - **Triggers**: Users can define triggers for these workers, such as:
     - When a card is added to a Trello list.
@@ -48,7 +48,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Commanding a fleet of agents that code 24/7, even while I sleep."
   - **User Impact**: Orchestrate complex multi-repo development and autonomous background work from a single view.
   - **Technical Notes**: Leverage `JulesAgent` source discovery. Implement simple git merge wrappers. Scheduler for triggers.
-  - **Status**: **Idea**
+  - **Status**: **Implemented**
 
 ---
 

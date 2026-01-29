@@ -16,6 +16,7 @@ import KasaWindow from './components/KasaWindow';
 import PrinterWindow from './components/PrinterWindow';
 import SettingsWindow from './components/SettingsWindow';
 import Suggestion from './components/Suggestion';
+import WarRoomDashboard from './components/WarRoomDashboard';
 
 
 
@@ -61,6 +62,8 @@ function App() {
     const [showPrinterWindow, setShowPrinterWindow] = useState(false);
     const [showCadWindow, setShowCadWindow] = useState(false);
     const [showBrowserWindow, setShowBrowserWindow] = useState(false);
+    const [showWarRoom, setShowWarRoom] = useState(false);
+    const [warRoomData, setWarRoomData] = useState(null);
     const [suggestion, setSuggestion] = useState(null);
 
     // Printing workflow status (for top toolbar display)
@@ -589,6 +592,14 @@ function App() {
             setTimeout(() => {
                 setSuggestion(null);
             }, 10000); // Hide after 10 seconds
+        });
+
+        socket.on('display_content', (data) => {
+            console.log("Received Display Content:", data);
+            if (data.widget_type === 'dashboard') {
+                setWarRoomData(data.data);
+                setShowWarRoom(true);
+            }
         });
 
 
@@ -1702,6 +1713,14 @@ function App() {
                     suggestion={suggestion}
                     onClose={() => setSuggestion(null)}
                 />
+
+                {/* War Room Dashboard Overlay */}
+                {showWarRoom && (
+                    <WarRoomDashboard
+                        data={warRoomData}
+                        onClose={() => setShowWarRoom(false)}
+                    />
+                )}
             </div>
         </div>
     );

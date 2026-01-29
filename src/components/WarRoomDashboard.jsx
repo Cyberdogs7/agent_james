@@ -29,6 +29,7 @@ const WarRoomDashboard = ({ data, onClose }) => {
         jules = [],
         devices = [],
         printers = [],
+        git = { branch: 'unknown', branches: [], status: '' },
         system_status = "ONLINE"
     } = data || {};
 
@@ -195,11 +196,28 @@ const WarRoomDashboard = ({ data, onClose }) => {
                         </div>
                     </motion.div>
 
-                    {/* COL 3: HARDWARE (DEVICES/PRINTERS) - Spans 3 cols, full height */}
+                    {/* COL 3: HARDWARE (DEVICES/PRINTERS/GIT) - Spans 3 cols, full height */}
                     <motion.div
                         variants={itemVariants}
-                        className="col-span-3 row-span-6 flex flex-col gap-6"
+                        className="col-span-3 row-span-6 flex flex-col gap-4"
                     >
+                        {/* GIT OPS */}
+                        <div className="bg-black/40 border border-gold9/20 rounded-xl p-4 relative overflow-hidden">
+                             <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-2">
+                                <span className="text-gold9">GIT OPS</span>
+                            </h2>
+                            <div className="text-xs space-y-2">
+                                <div className="flex justify-between">
+                                    <span className="text-gold9/60">BRANCH</span>
+                                    <span className="font-bold text-green-400">{git.branch}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gold9/60">STATUS</span>
+                                    <span className="font-mono text-[10px]">{git.status ? 'MODIFIED' : 'CLEAN'}</span>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* PRINTERS */}
                         <div className="flex-1 bg-black/40 border border-gold9/20 rounded-xl p-4 relative overflow-hidden">
                              <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-4">
