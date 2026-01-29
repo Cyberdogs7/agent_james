@@ -17,12 +17,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Requires installing `@pixiv/three-vrm`. Need to map audio amplitude/visemes to blend shapes and head rotation to MediaPipe face tracking coordinates. Must gracefully degrade if camera is unavailable.
   - **Status**: **Idea** (Dependencies missing)
 
-- [ ] **Self-Healing Codebase (Jules Auto-PR)**
+- [x] **Self-Healing Codebase (Jules Auto-PR)**
   - **Description**: Allow James to autonomously fix runtime errors or implement requested features by generating code and opening a Pull Request.
   - **Wow Factor**: "Sir, I noticed a crash in the `kasa_agent`. I've analyzed the logs and prepared a fix for your review."
   - **User Impact**: Automated maintenance; the assistant fixes itself.
   - **Technical Notes**: Leverage `JulesAgent` with `automationMode="AUTO_CREATE_PR"`. Needs a log monitoring service that triggers Jules on specific exception patterns.
-  - **Status**: **Partially Implemented** (`JulesAgent` exists; trigger logic missing)
+  - **Status**: **Implemented** (Log monitoring service triggers proactive voice notification; `JulesAgent` creates PRs on demand)
 
 - [x] **The "War Room" Dashboard**
   - **Description**: A voice-activated "command center" view that aggregates Trello tickets, active GitHub PRs, and system status into a sci-fi style grid layout.
