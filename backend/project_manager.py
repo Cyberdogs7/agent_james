@@ -58,7 +58,8 @@ class ProjectManager:
         DEFAULT_CONFIG = {
             "system_prompt": DEFAULT_SYSTEM_PROMPT,
             "jules_api_key": "",
-            "voice_name": "Sadaltager"
+            "voice_name": "Sadaltager",
+            "jules_slack_notifications": False
         }
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4)
