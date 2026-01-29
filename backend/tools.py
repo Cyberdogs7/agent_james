@@ -612,6 +612,20 @@ tools_list = [{"function_declarations": [
             "type": "OBJECT",
             "properties": {}
         }
+},
+{
+    "name": "git_merge_branch",
+    "description": "Merges a git branch into the current branch.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "branch_name": {
+                "type": "STRING",
+                "description": "The name of the branch to merge."
+            }
+        },
+        "required": ["branch_name"]
+    }
     },
     {
         "name": "proactive_suggestion",
