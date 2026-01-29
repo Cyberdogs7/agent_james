@@ -39,10 +39,15 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Status**: **Idea**
 
 - [ ] **War Room: Fleet Command & Git Ops**
-  - **Description**: A visual UI for managing multiple JulesAgents working on tasks across multiple repos. Includes controls for voice-activated or manual git branch merges.
-  - **Wow Factor**: "Commanding a fleet of agents across the entire codebase ecosystem."
-  - **User Impact**: Orchestrate complex multi-repo development from a single view.
-  - **Technical Notes**: Leverage `JulesAgent` source discovery. Implement simple git merge wrappers (conflict-free). React UI extensions.
+  - **Description**: A visual UI for managing multiple JulesAgents working on tasks across multiple repos. Includes controls for voice-activated or manual git branch merges. Also allows configuring "Jules Worker Nodes"—autonomous agents with specific prompts and schedules (e.g., "Refactor Worker", "Testing Worker").
+  - **Triggers**: Users can define triggers for these workers, such as:
+    - When a card is added to a Trello list.
+    - When another Jules agent marks a task done.
+    - When a git branch is merged.
+    - Time-based schedules (e.g., every 30 minutes, or at 2 AM).
+  - **Wow Factor**: "Commanding a fleet of agents that code 24/7, even while I sleep."
+  - **User Impact**: Orchestrate complex multi-repo development and autonomous background work from a single view.
+  - **Technical Notes**: Leverage `JulesAgent` source discovery. Implement simple git merge wrappers. Scheduler for triggers.
   - **Status**: **Idea**
 
 ---
