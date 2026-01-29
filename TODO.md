@@ -38,6 +38,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Python `subprocess` calls. abstracting OS-specific commands (PowerShell for Windows, AppleScript/zsh for macOS). Security permission handling is critical.
   - **Status**: **Idea**
 
+- [ ] **War Room: Fleet Command & Git Ops**
+  - **Description**: A visual UI for managing multiple JulesAgents working on tasks across multiple repos. Includes controls for voice-activated or manual git branch merges.
+  - **Wow Factor**: "Commanding a fleet of agents across the entire codebase ecosystem."
+  - **User Impact**: Orchestrate complex multi-repo development from a single view.
+  - **Technical Notes**: Leverage `JulesAgent` source discovery. Implement simple git merge wrappers (conflict-free). React UI extensions.
+  - **Status**: **Idea**
+
 ---
 
 ## 🧩 Smart Enhancements (Coding Focus)
