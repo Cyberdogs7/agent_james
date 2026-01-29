@@ -10,6 +10,8 @@ except ImportError:
 
 DEFAULT_SYSTEM_PROMPT = "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant."
 
+VALID_VOICES = ["Puck", "Charon", "Kore", "Fenrir", "Aoede", "Sadaltager"]
+
 class ProjectManager:
     def __init__(self, workspace_root: str):
         self.workspace_root = Path(workspace_root)
@@ -258,6 +260,17 @@ class ProjectManager:
             return False, "Invalid time format. Please use '12h' or '24h'."
 
         return self.update_project_config({"time_format": time_format})
+
+    def set_voice(self, voice_name: str):
+        """Sets the voice for the current project."""
+        if voice_name not in VALID_VOICES:
+             return False, f"Invalid voice name '{voice_name}'. Valid voices are: {', '.join(VALID_VOICES)}"
+
+        return self.update_project_config({"voice_name": voice_name})
+
+    def update_persona(self, persona: str):
+         """Updates the system prompt (persona) for the current project."""
+         return self.update_project_config({"system_prompt": persona})
 
     def append_system_prompt(self, text: str):
         """Appends text to the system prompt in config.json."""

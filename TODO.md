@@ -41,6 +41,11 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Reduces the need to "explain" the context to the AI.
   - **Technical Notes**: Add a `LocalGitAgent` or extend `JulesAgent` to read `.git` status/diffs locally and prepend to the prompt.
   - **Status**: **Partially Implemented** (Basic source context exists, local state is missing)
+  - **Questions (Blocking)**:
+    - Should we impose a hard character/file count limit on diffs?
+    - Should we assume the repo root is the parent of `backend/` or implement dynamic root discovery?
+    - Should this context be always-on or triggered by "code" intent?
+    - Are `subprocess` calls sufficient, avoiding `GitPython` dependency?
 
 - [ ] **Visual Task Scheduling**
   - **Description**: When a Jules task is long-running (e.g., "Refactor the backend"), show a dedicated progress bar or "working" visualization in the UI, rather than just a spinner.
@@ -72,10 +77,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Faster debugging.
   - **Status**: **Idea**
 
-- [ ] **Project-Specific Voice Settings**
+- [x] **Project-Specific Voice Settings**
   - **Description**: Persist the "Voice Name" and "Persona" per project in `project_manager.py`.
   - **User Impact**: "Writing Mode" feels different from "Coding Mode".
-  - **Status**: **Partially Implemented** (Settings exist, UI for switching is basic)
+  - **Status**: **Implemented**
 
 - [ ] **Video Feed Optimization**
   - **Description**: Ensure the camera feed doesn't freeze when the agent is "thinking" (blocking main thread).
