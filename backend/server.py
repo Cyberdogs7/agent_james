@@ -65,9 +65,29 @@ authenticator = None
 kasa_agent = KasaAgent()
 slack_agent = None
 scraper_agent = None
+log_monitor = None
 # Deduplicator for UI inputs (which don't have built-in IDs usually)
 ui_deduplicator = MessageDeduplicator(max_size=500)
 SETTINGS_FILE = "settings.json"
+
+async def handle_runtime_error(error_log):
+    """Callback for LogMonitor to notify the model of runtime crashes."""
+    print(f"[SERVER] Handling runtime error: {len(error_log)} bytes detected")
+    if audio_loop and audio_loop.session:
+        # Construct a clear prompt for the model
+        msg = (
+            f"System Notification: A runtime error was detected in the backend logs:\n"
+            f"```\n{error_log}\n```\n"
+            f"Please inform the user about this crash immediately. "
+            f"Ask them: 'I detected a runtime error. Would you like me to attempt a fix?' "
+            f"If they say yes, use the 'run_jules_agent' tool with the error details."
+        )
+        try:
+            # We must await the send operation
+            await audio_loop.session.send(input=msg, end_of_turn=True)
+            print("[SERVER] Sent runtime error notification to model.")
+        except Exception as e:
+            print(f"[SERVER] Failed to send error notification: {e}")
 
 async def handle_slack_message(message):
     """Callback function for the SlackAgent to handle incoming messages."""
@@ -152,7 +172,7 @@ kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 
 @app.on_event("startup")
 async def startup_event():
-    global slack_agent, scraper_agent
+    global slack_agent, scraper_agent, log_monitor
     import sys
     print(f"[SERVER DEBUG] Startup Event Triggered")
     print(f"[SERVER DEBUG] Python Version: {sys.version}")
@@ -163,6 +183,19 @@ async def startup_event():
         print(f"[SERVER DEBUG] Current Policy: {type(policy)}")
     except Exception as e:
         print(f"[SERVER DEBUG] Error checking loop: {e}")
+
+    # Initialize Log Monitor
+    try:
+        from log_monitor import LogMonitor
+        print("[SERVER] Startup: Initializing Log Monitor...")
+        # Get the running loop to pass to the monitor for thread-safe callbacks
+        current_loop = asyncio.get_running_loop()
+        log_monitor = LogMonitor(callback=handle_runtime_error, loop=current_loop)
+        log_monitor.install()
+    except Exception as e:
+        print(f"[SERVER] Failed to install LogMonitor: {e}")
+        import traceback
+        traceback.print_exc()
 
     print("[SERVER] Startup: Initializing Kasa Agent...")
     await kasa_agent.initialize()
