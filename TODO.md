@@ -3,6 +3,7 @@
 This document serves as the single source of truth for the evolution of the A.D.A (Advanced Design Assistant) platform. It outlines the roadmap towards a "JARVIS-level" intelligence, prioritizing cinematic interactions, proactive assistance, and deep integration with development workflows.
 
 **North Star:** "Proactive, context-aware, cinematic, useful, and occasionally delightful."
+**Persona:** James (British, witty, professional).
 
 ---
 
@@ -13,15 +14,15 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Replace the static UI with a reactive 3D avatar (using `three-vrm`) that lip-syncs to ADA's voice, tracks the user's face (via camera), and displays emotions (thinking, listening, happy).
   - **Wow Factor**: Transforms the assistant from a voice in a box to a "physical" presence in the room. The avatar looks at you when you speak.
   - **User Impact**: Higher engagement and immediate visual feedback on the agent's state (listening vs. processing).
-  - **Technical Notes**: Requires installing `@pixiv/three-vrm`. Need to map audio amplitude/visemes to blend shapes and head rotation to MediaPipe face tracking coordinates.
+  - **Technical Notes**: Requires installing `@pixiv/three-vrm`. Need to map audio amplitude/visemes to blend shapes and head rotation to MediaPipe face tracking coordinates. Must gracefully degrade if camera is unavailable.
   - **Status**: **Idea** (Dependencies missing)
 
-- [ ] **"Jules" Self-Evolution (Meta-Programming)**
-  - **Description**: Allow the user to ask ADA to modify its own source code to add simple features or fix bugs, handling the git flow automatically.
-  - **Wow Factor**: "James, add a dark mode toggle to your interface." -> "Consider it done, Sir." (Screen flickers, UI updates).
-  - **User Impact**: infinite customizability without leaving the flow.
-  - **Technical Notes**: leveraged existing `JulesAgent` but needs a safe "sandbox" or specific "self-improvement" mode where the context is the `ada_v2` repo itself.
-  - **Status**: **Idea** (Foundation exists in `JulesAgent`)
+- [ ] **Self-Healing Codebase (Jules Auto-PR)**
+  - **Description**: Allow James to autonomously fix runtime errors or implement requested features by generating code and opening a Pull Request.
+  - **Wow Factor**: "Sir, I noticed a crash in the `kasa_agent`. I've analyzed the logs and prepared a fix for your review."
+  - **User Impact**: Automated maintenance; the assistant fixes itself.
+  - **Technical Notes**: Leverage `JulesAgent` with `automationMode="AUTO_CREATE_PR"`. Needs a log monitoring service that triggers Jules on specific exception patterns.
+  - **Status**: **Partially Implemented** (`JulesAgent` exists; trigger logic missing)
 
 - [ ] **The "War Room" Dashboard**
   - **Description**: A voice-activated "command center" view that aggregates Trello tickets, active GitHub PRs, and system status into a sci-fi style grid layout.
@@ -30,22 +31,24 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: React component using CSS Grid/bento-box style. Needs to aggregate data from `TrelloAgent` and `JulesAgent` concurrently.
   - **Status**: **Idea**
 
+- [ ] **Deep OS Control (Cross-Platform)**
+  - **Description**: Give James control over the operating system beyond the app window. "James, turn off WiFi", "Open Spotify", "Organize my desktop".
+  - **Wow Factor**: True digital assistant capabilities; breaking out of the "sandbox".
+  - **User Impact**: Redefines the assistant as an OS interface rather than just an app.
+  - **Technical Notes**: Python `subprocess` calls. abstracting OS-specific commands (PowerShell for Windows, AppleScript/zsh for macOS). Security permission handling is critical.
+  - **Status**: **Idea**
+
 ---
 
 ## 🧩 Smart Enhancements (Coding Focus)
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
 - [ ] **Deep Git Context Awareness**
-  - **Description**: ADA should know the *current* local state—which branch is active, what files are staged, and the diff of the working directory—before sending a request to Jules.
-  - **Wow Factor**: "James, why is this failing?" (ADA reads the local error log and the specific file diff you just made).
+  - **Description**: James should know the *current* local state—which branch is active, what files are staged, and the diff of the working directory—before sending a request to Jules.
+  - **Wow Factor**: "James, why is this failing?" (James reads the local error log and the specific file diff you just made).
   - **User Impact**: Reduces the need to "explain" the context to the AI.
-  - **Technical Notes**: Add a `LocalGitAgent` or extend `JulesAgent` to read `.git` status/diffs locally and prepend to the prompt.
-  - **Status**: **Partially Implemented** (Basic source context exists, local state is missing)
-  - **Questions (Blocking)**:
-    - Should we impose a hard character/file count limit on diffs?
-    - Should we assume the repo root is the parent of `backend/` or implement dynamic root discovery?
-    - Should this context be always-on or triggered by "code" intent?
-    - Are `subprocess` calls sufficient, avoiding `GitPython` dependency?
+  - **Technical Notes**: Extend `JulesAgent` to read `.git` status/diffs locally via `subprocess` (avoiding heavy `GitPython` dependency if possible) and prepend to the prompt.
+  - **Status**: **Partially Implemented** (Basic repo source linking exists, local diffs missing)
 
 - [ ] **Visual Task Scheduling**
   - **Description**: When a Jules task is long-running (e.g., "Refactor the backend"), show a dedicated progress bar or "working" visualization in the UI, rather than just a spinner.
@@ -54,8 +57,15 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Parse the streaming `activities` from `JulesAgent` to update a dynamic UI list of "Completed Steps".
   - **Status**: **Designed**
 
+- [ ] **Architectural Memory (RAG)**
+  - **Description**: A long-term memory system where James stores architectural decisions, project constraints, and "lessons learned" to avoid repeating mistakes.
+  - **Wow Factor**: "Sir, remember we decided against using `requests` in favor of `httpx` last week."
+  - **User Impact**: Consistency across long development cycles.
+  - **Technical Notes**: Vector store (ChromaDB or simple JSONL) for retrieving relevant context based on current task.
+  - **Status**: **Idea**
+
 - [ ] **Proactive "Bug Hunting" Mode**
-  - **Description**: A background mode where ADA watches for file saves, runs the relevant tests silently, and speaks up *only* if something breaks.
+  - **Description**: A background mode where James watches for file saves, runs the relevant tests silently, and speaks up *only* if something breaks.
   - **Wow Factor**: "Sir, that last edit to `server.py` seems to have broken the login test."
   - **User Impact**: Catch regressions immediately.
   - **Technical Notes**: File watcher -> `pytest` runner -> Voice notification trigger.
@@ -66,26 +76,26 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
+- [ ] **Smart Error Interception**
+  - **Description**: If a terminal command run by the user (or agent) fails, James automatically parses the stderr and offers a one-sentence explanation/fix.
+  - **User Impact**: Faster debugging.
+  - **Status**: **Idea**
+
 - [ ] **Voice-Controlled Git Actions**
   - **Description**: Simple voice commands for routine git operations. "James, commit this as 'Fix login bug' and push."
   - **User Impact**: Hands-free version control.
   - **Technical Notes**: Wrap `git` CLI commands in `AudioLoop` tools.
   - **Status**: **Idea**
 
-- [ ] **Smart Error Interception**
-  - **Description**: If a terminal command run by the user (or agent) fails, ADA automatically parses the stderr and offers a one-sentence explanation/fix.
-  - **User Impact**: Faster debugging.
-  - **Status**: **Idea**
-
-- [x] **Project-Specific Voice Settings**
-  - **Description**: Persist the "Voice Name" and "Persona" per project in `project_manager.py`.
-  - **User Impact**: "Writing Mode" feels different from "Coding Mode".
-  - **Status**: **Implemented**
-
 - [ ] **Video Feed Optimization**
   - **Description**: Ensure the camera feed doesn't freeze when the agent is "thinking" (blocking main thread).
   - **Technical Notes**: Move video processing to a WebWorker or optimize the Python asyncio loop.
   - **Status**: **Idea** (Optimization)
+
+- [ ] **Offline Fallback Mode**
+  - **Description**: When the internet is down, James should not crash but switch to a limited "Offline" mode (e.g., simple timer/local file commands only).
+  - **User Impact**: Reliability. Prevents the "I'm sorry, I can't do that" frustration loop.
+  - **Status**: **Idea**
 
 ---
 
