@@ -290,6 +290,15 @@ update_persona_tool = {
     }
 }
 
+display_dashboard_tool = {
+    "name": "display_dashboard",
+    "description": "Displays the 'War Room' dashboard, aggregating project status, Trello tickets, active agents, and device health into a unified view.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
 tools = [{'google_search': {}}, {"function_declarations": [
     generate_cad, run_web_agent, create_project_tool, switch_project_tool,
     list_projects_tool, list_smart_devices_tool, control_light_tool,
@@ -297,6 +306,7 @@ tools = [{'google_search': {}}, {"function_declarations": [
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
     set_time_format_tool, get_datetime_tool, change_voice_tool, update_persona_tool,
+    display_dashboard_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 pya = pyaudio.PyAudio()
@@ -1255,6 +1265,99 @@ class AudioLoop:
         else:
             return "Failed to list Jules activities."
 
+    async def handle_display_dashboard(self):
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [DASHBOARD] Gathering data for War Room...")
+
+        # 1. Project Info
+        project = self.project_manager.current_project
+
+        # 2. Trello Data (Active Cards)
+        trello_cards = []
+        try:
+            # Attempt to get the first board and its cards
+            # This is a simplification; ideally we'd search or have a config
+            boards = await self.trello_agent.list_boards()
+            if boards:
+                board_id = boards[0]['id']
+                # Get lists to filter for "Doing" / "To Do"
+                lists = await self.trello_agent.list_lists(board_id)
+                active_list_ids = {l['id']: l['name'] for l in lists if 'done' not in l['name'].lower()}
+
+                # Fetch cards from all active lists (parallel)
+                tasks = [self.trello_agent.list_cards(lid) for lid in active_list_ids.keys()]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                for i, res in enumerate(results):
+                    if isinstance(res, list):
+                        lid = list(active_list_ids.keys())[i]
+                        lname = active_list_ids[lid]
+                        for card in res:
+                            trello_cards.append({
+                                "name": card['name'],
+                                "idShort": card['idShort'],
+                                "listName": lname
+                            })
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to fetch Trello data: {e}")
+
+        # 3. Jules Data (Local Session Memory)
+        jules_sessions = self.project_manager.get_jules_sessions()
+        # Enrich with live state if possible?
+        # For now, just pass the local record which has {id, title, timestamp}
+        # Ideally we'd map this to current monitored sessions to get "state"
+
+        enriched_sessions = []
+        for s in jules_sessions:
+            state = "UNKNOWN"
+            if s['id'] in self.jules_agent.monitored_sessions:
+                state = self.jules_agent.monitored_sessions[s['id']]
+            enriched_sessions.append({
+                "id": s['id'],
+                "title": s['title'],
+                "state": state
+            })
+
+        # 4. Device Data (Kasa)
+        devices = []
+        for ip, d in self.kasa_agent.devices.items():
+             devices.append({
+                 "alias": d.alias,
+                 "is_on": d.is_on
+             })
+
+        # 5. Printer Data
+        printers = []
+        if self.printer_agent:
+            for host, p in self.printer_agent.printers.items():
+                status = await self.printer_agent.get_print_status(host)
+                p_data = {
+                    "name": p.name,
+                    "state": status.state if status else "OFFLINE",
+                    "temp": status.temperatures.get('hotend', {}).get('current', 0) if status and status.temperatures else 0,
+                    "progress": status.progress_percent if status else 0
+                }
+                printers.append(p_data)
+
+        dashboard_data = {
+            "project": project,
+            "system_status": "ONLINE",
+            "trello": trello_cards[:10], # Limit to top 10
+            "jules": enriched_sessions[:5],
+            "devices": devices,
+            "printers": printers
+        }
+
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "widget",
+                "widget_type": "dashboard",
+                "data": dashboard_data
+            })
+            return "War Room Dashboard displayed."
+        return "Failed to display dashboard."
+
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
 
@@ -1270,6 +1373,9 @@ This is a strict, multi-step tool use process. You must follow it exactly.
 3.  If `get_weather` returns a numbered list of locations, you **must** ask the user to clarify by selecting a number.
 4.  If `get_weather` returns weather data, your next action **must** be to call `display_content` to show the widget.
 5.  Only after the `display_content` tool call is complete may you speak a summary of the weather.
+
+**War Room / Dashboard:**
+If the user asks for a "status report", "situation report", "war room", or "dashboard", use the `display_dashboard` tool immediately. This tool aggregates all project, device, and agent status into a single visual view.
 
 **Example 1: Ambiguous Location**
 User: "What's the weather in Paris?"
@@ -2057,6 +2163,15 @@ User: "What's the weather in London?"
                                     duration = fc.args["duration"]
                                     name = fc.args["name"]
                                     result = await self.timer_agent.set_timer(duration, name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "display_dashboard":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'display_dashboard'")
+                                    result = await self.handle_display_dashboard()
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )
