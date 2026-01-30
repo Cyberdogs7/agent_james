@@ -15,13 +15,17 @@ import {
     Plus,
     Trash2,
     Play,
-    Terminal
+    Terminal,
+    MessageSquare,
+    Send,
+    ThumbsUp
 } from 'lucide-react';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [activeTab, setActiveTab] = useState('tasks'); // 'trello' or 'tasks'
+    const [selectedSession, setSelectedSession] = useState(null);
 
     // Stream control
     useEffect(() => {
@@ -78,6 +82,20 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
 
     const handleDismissJules = (id) => {
         if (socket) socket.emit('dismiss_jules_session', { id });
+    };
+
+    const openSessionDetails = (session) => {
+        setSelectedSession(session);
+        if (socket) {
+            socket.emit('set_focused_session', { id: session.id });
+        }
+    };
+
+    const closeSessionDetails = () => {
+        setSelectedSession(null);
+        if (socket) {
+            socket.emit('clear_focused_session');
+        }
     };
 
     return (
@@ -245,7 +263,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             ) : (
                                 <div className="grid grid-cols-1 gap-3">
                                     {jules.map((session, i) => (
-                                        <div key={i} className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item">
+                                        <div
+                                            key={i}
+                                            onClick={() => openSessionDetails(session)}
+                                            className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item"
+                                        >
                                             <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
                                             <div className="flex-1">
                                                 <div className="text-sm font-bold text-gold9">{session.title || session.id}</div>
@@ -381,8 +403,127 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                     />
                 )}
 
+                {/* SESSION DETAIL MODAL */}
+                {selectedSession && (
+                    <SessionDetailModal
+                        session={selectedSession}
+                        onClose={closeSessionDetails}
+                        socket={socket}
+                    />
+                )}
+
             </motion.div>
         </AnimatePresence>
+    );
+};
+
+const SessionDetailModal = ({ session, onClose, socket }) => {
+    const [activities, setActivities] = useState([]);
+    const [message, setMessage] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (socket) {
+            socket.emit('get_jules_activities', { id: session.id });
+            setLoading(true);
+
+            const handleData = (data) => {
+                if (data.id === session.id) {
+                    setActivities(data.activities);
+                    setLoading(false);
+                }
+            };
+
+            socket.on('jules_activities', handleData);
+            return () => socket.off('jules_activities', handleData);
+        }
+    }, [socket, session.id]);
+
+    const handleSend = (e) => {
+        e.preventDefault();
+        if (!message.trim()) return;
+
+        if (socket) {
+            socket.emit('send_jules_message', { id: session.id, message });
+            // Optimistic update
+            const newMsg = {
+                userMessage: { content: message },
+                createTime: new Date().toISOString()
+            };
+            setActivities(prev => [...prev, newMsg]);
+            setMessage('');
+        }
+    };
+
+    const handleApprove = () => {
+        if (socket) {
+            socket.emit('send_jules_message', { id: session.id, message: "Plan approved. Proceed." });
+        }
+    };
+
+    return (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-8">
+            <div className="bg-black border border-gold9 rounded-xl w-full max-w-4xl h-[80vh] flex flex-col relative shadow-[0_0_50px_rgba(255,215,0,0.2)]">
+                {/* Header */}
+                <div className="flex justify-between items-center p-4 border-b border-gold9/20 bg-gold9/5">
+                    <div>
+                        <h2 className="text-xl font-bold text-gold9 flex items-center gap-2">
+                            <Terminal size={18} />
+                            SESSION: {session.title || session.id}
+                        </h2>
+                        <div className="text-xs text-gold9/60 font-mono">ID: {session.id} | STATE: {session.state}</div>
+                    </div>
+                    <button onClick={onClose} className="text-gold9/50 hover:text-gold9 p-2">✕</button>
+                </div>
+
+                {/* Chat Area */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-black/50 scrollbar-hide">
+                    {loading ? (
+                        <div className="text-center text-gold9/40 py-20 animate-pulse">Initializing Uplink...</div>
+                    ) : (
+                        activities.length === 0 ? (
+                            <div className="text-center text-gold9/40 py-20 italic">No telemetry data.</div>
+                        ) : (
+                            activities.map((act, i) => {
+                                const isAgent = !!act.agentMessage;
+                                const content = isAgent ? act.agentMessage.content : (act.userMessage ? act.userMessage.content : JSON.stringify(act));
+                                return (
+                                    <div key={i} className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}>
+                                        <div className={`max-w-[70%] p-3 rounded-lg border ${isAgent ? 'bg-gold9/10 border-gold9/30 text-gold9' : 'bg-blue-500/10 border-blue-500/30 text-blue-200'}`}>
+                                            <div className="text-[10px] opacity-50 mb-1">{isAgent ? 'JULES' : 'OPERATOR'}</div>
+                                            <div className="whitespace-pre-wrap text-sm">{content}</div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )
+                    )}
+                </div>
+
+                {/* Input Area */}
+                <div className="p-4 border-t border-gold9/20 bg-gold9/5">
+                    <form onSubmit={handleSend} className="flex gap-2">
+                        <input
+                            type="text"
+                            value={message}
+                            onChange={(e) => setMessage(e.target.value)}
+                            className="flex-1 bg-black border border-gold9/30 rounded p-3 text-gold9 focus:border-gold9 outline-none"
+                            placeholder="Transmit instructions..."
+                        />
+                        <button type="submit" className="bg-gold9/20 border border-gold9 text-gold9 p-3 rounded hover:bg-gold9 hover:text-black transition-colors">
+                            <Send size={18} />
+                        </button>
+                        <button type="button" onClick={handleApprove} className="bg-green-500/20 border border-green-500 text-green-400 px-4 rounded hover:bg-green-500 hover:text-black transition-colors flex items-center gap-2 text-xs font-bold tracking-widest">
+                            <ThumbsUp size={14} />
+                            APPROVE
+                        </button>
+                    </form>
+                    <div className="mt-2 text-[10px] text-center text-gold9/30">
+                        VOICE CHANNEL ACTIVE: Speak to inject context directly.
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 };
 

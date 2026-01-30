@@ -1342,6 +1342,43 @@ async def dismiss_jules_session(sid, data):
         await sio.emit('error', {'msg': "System not ready"})
 
 @sio.event
+async def get_jules_activities(sid, data):
+    session_id = data.get('id')
+    if audio_loop:
+        activities = await audio_loop.handle_list_jules_activities(session_id)
+        if isinstance(activities, list):
+            await sio.emit('jules_activities', {'id': session_id, 'activities': activities})
+        else:
+            await sio.emit('error', {'msg': str(activities)})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
+async def send_jules_message(sid, data):
+    session_id = data.get('id')
+    message = data.get('message')
+    if audio_loop:
+        result = await audio_loop.handle_jules_feedback(session_id, message)
+        await sio.emit('status', {'msg': result})
+        # Re-fetch activities to update UI
+        activities = await audio_loop.handle_list_jules_activities(session_id)
+        if isinstance(activities, list):
+            await sio.emit('jules_activities', {'id': session_id, 'activities': activities})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
+async def set_focused_session(sid, data):
+    session_id = data.get('id')
+    if audio_loop:
+        asyncio.create_task(audio_loop.handle_focused_session(session_id))
+
+@sio.event
+async def clear_focused_session(sid):
+    if audio_loop:
+        asyncio.create_task(audio_loop.handle_clear_focused_session())
+
+@sio.event
 async def list_projects(sid):
     """Returns a list of all available projects."""
     projects = project_manager.list_projects()
