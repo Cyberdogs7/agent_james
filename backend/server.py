@@ -1268,72 +1268,116 @@ async def delete_task(sid, data):
 
 @sio.event
 async def get_fleet_status(sid):
-    """Fetches the current status of all git repos."""
+    """Fetches the current status of all git repos via GitHub API."""
     print(f"[SERVER] Client {sid} requested fleet status.")
     if audio_loop and audio_loop.project_manager:
-        repos = audio_loop.project_manager.list_git_projects()
+        fleet = audio_loop.project_manager.load_fleet()
+        token = audio_loop.project_manager.get_github_token()
+
+        if not token:
+            await sio.emit('error', {'msg': "No GitHub Token found. Please Authenticate.", 'code': 'AUTH_REQUIRED'})
+            return
+
+        from backend.github_client import GitHubClient
+        client = GitHubClient(token)
+
         fleet_status = []
-        for repo in repos:
-            repo_path = audio_loop.project_manager.get_project_path(repo)
-            current_branch = GitOps.get_current_branch(repo_path)
-            status = GitOps.get_status(repo_path)
-            last_commit = GitOps.get_last_commit_info(repo_path)
+        for repo in fleet:
+            owner = repo['owner']
+            name = repo['name']
+
+            # Fetch details (basic check if exists and default branch)
+            details = await client.get_repo_details(owner, name)
+            if not details:
+                fleet_status.append({"name": f"{owner}/{name}", "status": "Error accessing repo"})
+                continue
+
+            default_branch = details.get('default_branch', 'main')
 
             fleet_status.append({
-                "name": repo,
-                "branch": current_branch,
-                "status": "dirty" if status else "clean",
-                "last_commit": last_commit
+                "name": f"{owner}/{name}",
+                "branch": default_branch,
+                "status": "Remote", # "Clean" concept doesn't apply to remote
+                "last_commit": None # Could fetch, but list_commits is extra call. Omit for speed or fetch later.
             })
         await sio.emit('fleet_status_update', fleet_status, to=sid)
 
 @sio.event
+async def get_repo_branches(sid, data):
+    repo_full_name = data.get('repo') # "owner/name"
+    if not repo_full_name: return
+
+    print(f"[SERVER] Fetching branches for {repo_full_name}")
+    if audio_loop and audio_loop.project_manager:
+        token = audio_loop.project_manager.get_github_token()
+        if not token: return
+
+        from backend.github_client import GitHubClient
+        client = GitHubClient(token)
+
+        parts = repo_full_name.split('/')
+        if len(parts) != 2: return
+        owner, name = parts
+
+        branches = await client.get_branches(owner, name)
+        details = await client.get_repo_details(owner, name)
+        default_branch = details.get('default_branch', 'main')
+
+        result = []
+        if branches:
+            for b in branches:
+                b_name = b['name']
+                is_default = b_name == default_branch
+
+                # Check ahead/behind against default
+                stats = {"ahead": 0, "behind": 0}
+                if not is_default:
+                    # Compare
+                    cmp = await client.compare_commits(owner, name, default_branch, b_name)
+                    if cmp:
+                        stats["ahead"] = cmp.get("ahead_by", 0)
+                        stats["behind"] = cmp.get("behind_by", 0)
+
+                result.append({
+                    "name": b_name,
+                    "is_default": is_default,
+                    "ahead": stats["ahead"],
+                    "behind": stats["behind"]
+                })
+
+        await sio.emit('repo_branches', {"repo": repo_full_name, "branches": result})
+
+@sio.event
 async def perform_git_merge(sid, data):
-    """Merges a specific repo's current branch into main/master."""
-    repo_name = data.get('repo')
-    print(f"[SERVER] Client {sid} requested merge for repo: {repo_name}")
+    """Merges a specific repo's branch into main/master via GitHub API."""
+    repo_full_name = data.get('repo')
+    branch = data.get('branch')
+    target = data.get('target', 'main') # Default target if not specified?
+    # UI should provide target, but let's default safe.
+
+    print(f"[SERVER] Client {sid} requested remote merge for {repo_full_name}: {branch} -> {target}")
 
     if audio_loop and audio_loop.project_manager:
-        repo_path = audio_loop.project_manager.get_project_path(repo_name)
-        # Assuming we want to merge current branch INTO main
-        current_branch = GitOps.get_current_branch(repo_path)
+        token = audio_loop.project_manager.get_github_token()
+        if not token:
+             await sio.emit('error', {'msg': "Authentication Required"})
+             return
 
-        if current_branch in ['main', 'master']:
-            await sio.emit('error', {'msg': f"Already on {current_branch}. Nothing to merge into itself."})
-            return
+        from backend.github_client import GitHubClient
+        client = GitHubClient(token)
 
-        # Simple Merge Workflow:
-        # 1. Checkout main
-        # 2. Merge feature branch
-        # 3. Checkout feature branch again? Or stay on main? usually stay on main after merge.
+        parts = repo_full_name.split('/')
+        if len(parts) != 2: return
+        owner, name = parts
 
-        # We need subprocess calls here since GitOps doesn't expose checkout directly yet
-        # and we want to keep GitOps clean or use a new method if we added it.
-        # Since we can't edit git_ops in this step easily without replanning, we use subprocess.
-        # Wait, we can use `subprocess` directly here as we import it in `server.py`? No, import locally.
-        import subprocess
+        result = await client.merge_branch(owner, name, target, branch)
 
-        try:
-            # 1. Checkout main
-            subprocess.run(["git", "checkout", "main"], cwd=repo_path, check=True, capture_output=True)
-            target_branch = "main"
-        except subprocess.CalledProcessError:
-            try:
-                subprocess.run(["git", "checkout", "master"], cwd=repo_path, check=True, capture_output=True)
-                target_branch = "master"
-            except subprocess.CalledProcessError:
-                await sio.emit('error', {'msg': "Could not checkout main or master."})
-                return
-
-        # 2. Merge
-        success, msg = GitOps.merge_branch(repo_path, current_branch)
-
-        if success:
-            await sio.emit('status', {'msg': f"Merged {current_branch} into {target_branch}."})
-            # Refresh fleet status
-            await get_fleet_status(sid)
+        if result:
+            await sio.emit('status', {'msg': f"Merged {branch} into {target} successfully."})
+            # Trigger refresh of branches
+            await get_repo_branches(sid, data)
         else:
-            await sio.emit('error', {'msg': f"Merge failed: {msg}"})
+            await sio.emit('error', {'msg': "Merge failed via API."})
 
 
 @sio.event
