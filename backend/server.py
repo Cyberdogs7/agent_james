@@ -1259,10 +1259,93 @@ async def delete_task(sid, data):
              await sio.emit('error', {'msg': 'Task not found'})
 
 @sio.event
+async def run_task(sid, data):
+    task_id = data.get('id')
+    print(f"[SERVER] Run Task: {task_id}")
+    if not (audio_loop and audio_loop.task_manager):
+        await sio.emit('error', {'msg': "System not ready"})
+        return
+
+    # Find the task
+    tasks = audio_loop.task_manager.list_tasks()
+    task = next((t for t in tasks if t['id'] == task_id), None)
+
+    if not task:
+        await sio.emit('error', {'msg': "Task not found"})
+        return
+
+    # Execute Action
+    action = task.get('action', {})
+    act_type = action.get('type')
+    act_value = action.get('value')
+
+    try:
+        if act_type == 'notify':
+            # Send notification
+            msg = f"Task '{task['title']}' triggered notification: {act_value}"
+            await sio.emit('status', {'msg': msg})
+            if audio_loop.slack_agent and SETTINGS.get("jules_slack_notifications"):
+                 asyncio.create_task(audio_loop.slack_agent.send_message(msg))
+
+        elif act_type == 'jules_task':
+            # Run Jules Agent
+            # Value might be JSON string or dict
+            prompt = ""
+            source = None
+
+            if isinstance(act_value, dict):
+                prompt = act_value.get('prompt')
+                source = act_value.get('source')
+            else:
+                # Legacy or string
+                prompt = str(act_value)
+                # Try to parse if it looks like JSON
+                try:
+                    parsed = json.loads(prompt)
+                    if isinstance(parsed, dict):
+                        prompt = parsed.get('prompt', prompt)
+                        source = parsed.get('source')
+                except:
+                    pass
+
+            await sio.emit('status', {'msg': f"Starting Jules Task: {task['title']}..."})
+            result = await audio_loop.handle_jules_request(prompt, source)
+            # handle_jules_request returns a string message about starting
+            # Note: It launches a background task for the actual session creation
+            await sio.emit('status', {'msg': f"Jules Agent: {result}"})
+
+        elif act_type == 'run_script':
+            # Placeholder for running a script
+            await sio.emit('status', {'msg': f"Simulated script execution: {act_value}"})
+
+        # Update last run time
+        # We need a method in TaskManager to update specific fields or just reload/save
+        # For simplicity, we just set it here if we had a method, but TaskManager.update_task_status only does status.
+        # Let's assume successful trigger is enough feedback for now.
+
+    except Exception as e:
+        print(f"Error executing task: {e}")
+        await sio.emit('error', {'msg': f"Task Execution Failed: {str(e)}"})
+
+@sio.event
 async def list_projects(sid):
     """Returns a list of all available projects."""
     projects = project_manager.list_projects()
     await sio.emit('project_list', projects)
+
+@sio.event
+async def get_jules_sources(sid):
+    """Fetches available Jules sources and emits them back to the client."""
+    print("[SERVER] Fetching Jules sources...")
+    if audio_loop:
+        sources = await audio_loop.handle_list_jules_sources()
+        # handle_list_jules_sources returns either a list of dicts/strings OR a string error message
+        if isinstance(sources, list):
+            await sio.emit('jules_sources', sources)
+        else:
+            await sio.emit('error', {'msg': f"Failed to fetch sources: {sources}"})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
 
 @sio.event
 async def toggle_writing_mode(sid, data):
