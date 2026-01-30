@@ -1328,6 +1328,20 @@ async def run_task(sid, data):
         await sio.emit('error', {'msg': f"Task Execution Failed: {str(e)}"})
 
 @sio.event
+async def dismiss_jules_session(sid, data):
+    session_id = data.get('id')
+    print(f"[SERVER] Dismiss Jules Session: {session_id}")
+    if audio_loop:
+        msg = await audio_loop.handle_dismiss_jules_session(session_id)
+        await sio.emit('status', {'msg': msg})
+        # Force dashboard update
+        if dashboard_task:
+            data = await audio_loop.get_dashboard_data()
+            await sio.emit('dashboard_update', data)
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
 async def list_projects(sid):
     """Returns a list of all available projects."""
     projects = project_manager.list_projects()
