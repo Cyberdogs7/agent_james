@@ -21,7 +21,7 @@ import ProjectWindow from './components/ProjectWindow';
 
 
 
-const port = import.meta.env.VITE_SERVER_PORT || 8180;
+const port = import.meta.env.SERVER_PORT || 8180;
 const socket = io(`http://localhost:${port}`);
 // Mock ipcRenderer for browser development/testing
 const { ipcRenderer } = window.require

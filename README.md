@@ -208,11 +208,9 @@ By default, the backend server runs on port **8180**. You can customize this if 
 1. Open your `.env` file.
 2. Add the following lines:
    ```env
-   # Change these to your desired port (e.g., 9000)
+   # Change this to your desired port (e.g., 9000)
    SERVER_PORT=9000
-   VITE_SERVER_PORT=9000
    ```
-3. **Note**: Both variables must match for the frontend to connect to the backend correctly.
 4. Restart the application for changes to take effect.
 
 ---

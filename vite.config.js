@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
     plugins: [react()],
     base: './', // Important for Electron
+    envPrefix: ['VITE_', 'SERVER_PORT'],
     server: {
         port: 5173,
     }
