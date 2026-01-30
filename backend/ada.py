@@ -1773,13 +1773,44 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "git_merge_branch":
                                     branch_name = fc.args["branch_name"]
                                     repo_path = self.project_manager.get_current_project_path()
                                     success, msg = GitOps.merge_branch(repo_path, branch_name)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "git_commit":
+                                    message = fc.args["message"]
+                                    repo_path = self.project_manager.get_current_project_path()
+                                    success, msg = GitOps.commit_changes(repo_path, message)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "git_push":
+                                    repo_path = self.project_manager.get_current_project_path()
+                                    success, msg = GitOps.push_changes(repo_path)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "git_pull":
+                                    repo_path = self.project_manager.get_current_project_path()
+                                    success, msg = GitOps.pull_changes(repo_path)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,

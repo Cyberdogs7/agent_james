@@ -48,5 +48,47 @@ class TestGitOps(unittest.TestCase):
             self.assertFalse(success)
             self.assertIn("does not exist", msg)
 
+    @patch('subprocess.run')
+    def test_commit_changes_success(self, mock_run):
+        mock_run.return_value = MagicMock(stdout="[main 1234567] message", returncode=0)
+        success, msg = GitOps.commit_changes("/tmp/repo", "test commit")
+        self.assertTrue(success)
+        self.assertIn("Committed changes", msg)
+        mock_run.assert_called_with(
+            ["git", "commit", "-a", "-m", "test commit"],
+            cwd="/tmp/repo",
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+    @patch('subprocess.run')
+    def test_push_changes_success(self, mock_run):
+        mock_run.return_value = MagicMock(stdout="Everything up-to-date", returncode=0)
+        success, msg = GitOps.push_changes("/tmp/repo")
+        self.assertTrue(success)
+        self.assertIn("Successfully pushed changes", msg)
+        mock_run.assert_called_with(
+            ["git", "push"],
+            cwd="/tmp/repo",
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+    @patch('subprocess.run')
+    def test_pull_changes_success(self, mock_run):
+        mock_run.return_value = MagicMock(stdout="Already up to date.", returncode=0)
+        success, msg = GitOps.pull_changes("/tmp/repo")
+        self.assertTrue(success)
+        self.assertIn("Successfully pulled changes", msg)
+        mock_run.assert_called_with(
+            ["git", "pull"],
+            cwd="/tmp/repo",
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
 if __name__ == '__main__':
     unittest.main()

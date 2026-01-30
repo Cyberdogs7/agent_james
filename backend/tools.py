@@ -628,6 +628,36 @@ tools_list = [{"function_declarations": [
     }
     },
     {
+        "name": "git_commit",
+        "description": "Commits all modified and deleted files (git commit -a) with a message.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "message": {
+                    "type": "STRING",
+                    "description": "The commit message."
+                }
+            },
+            "required": ["message"]
+        }
+    },
+    {
+        "name": "git_push",
+        "description": "Pushes commits to the remote repository.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "git_pull",
+        "description": "Pulls changes from the remote repository.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
         "name": "proactive_suggestion",
         "description": "A tool for the proactive agent to make suggestions to the user.",
         "parameters": {
