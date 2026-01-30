@@ -50,7 +50,8 @@ class ProjectManager:
     def create_project(self, name: str):
         """Creates a new project directory with subfolders."""
         # Sanitize name to be safe for filesystem
-        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        # Allow dots for repo names like node.js
+        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
         project_path = self.projects_dir / safe_name
         
         if not project_path.exists():
@@ -61,6 +62,106 @@ class ProjectManager:
             print(f"[ProjectManager] Created project: {safe_name}")
             return True, f"Project '{safe_name}' created."
         return False, f"Project '{safe_name}' already exists."
+
+    def set_github_token(self, token: str):
+        """Saves the GitHub token to settings.json in the workspace root."""
+        settings_path = self.workspace_root / "settings.json"
+        settings = {}
+        if settings_path.exists():
+            try:
+                with open(settings_path, "r") as f:
+                    content = f.read().strip()
+                    if content:
+                        settings = json.load(f)
+            except Exception as e:
+                print(f"[ProjectManager] Error reading settings.json: {e}")
+
+        settings["github_token"] = token
+
+        with open(settings_path, "w") as f:
+            json.dump(settings, f, indent=4)
+        return True
+
+    def get_github_token(self):
+        """Retrieves the GitHub token from settings.json."""
+        settings_path = self.workspace_root / "settings.json"
+        if settings_path.exists():
+            try:
+                with open(settings_path, "r") as f:
+                    settings = json.load(f)
+                    return settings.get("github_token")
+            except:
+                pass
+        return None
+
+    def sync_jules_repos(self, sources):
+        """
+        Syncs local repositories with the list of sources from Jules.
+        Clones missing repositories.
+        """
+        import subprocess
+
+        token = self.get_github_token()
+        results = []
+
+        # Env to prevent interactive prompts
+        env = os.environ.copy()
+        env["GIT_TERMINAL_PROMPT"] = "0"
+
+        for source_obj in sources:
+            # Source object might be a dict or string depending on API version
+            # Assuming dict: {name: 'sources/github/owner/repo', displayName: '...'}
+            source_name = source_obj.get("name") if isinstance(source_obj, dict) else source_obj
+
+            if not source_name or not source_name.startswith("sources/github/"):
+                continue
+
+            # Parse owner/repo
+            # Format: sources/github/owner/repo
+            parts = source_name.split('/')
+            if len(parts) < 4:
+                continue
+
+            repo_owner = parts[2]
+            repo_name = parts[3]
+            full_repo_name = f"{repo_owner}/{repo_name}"
+            # Use repo_name as folder name to keep it simple, or owner_repo to avoid collisions?
+            # User likely wants "repo_name" if unique. Let's stick to repo_name for now.
+            target_dir = self.projects_dir / repo_name
+
+            if target_dir.exists():
+                results.append(f"Exists: {repo_name}")
+                continue
+
+            # Clone
+            clone_url = f"https://github.com/{repo_owner}/{repo_name}.git"
+            if token:
+                clone_url = f"https://oauth2:{token}@github.com/{repo_owner}/{repo_name}.git"
+
+            try:
+                print(f"[ProjectManager] Cloning {full_repo_name}...")
+                subprocess.run(
+                    ["git", "clone", clone_url, str(target_dir)],
+                    check=True,
+                    capture_output=True,
+                    env=env
+                )
+
+                # Initialize project structure if needed (config.json)
+                self._create_default_config(target_dir)
+                (target_dir / "cad").mkdir(exist_ok=True)
+                (target_dir / "browser").mkdir(exist_ok=True)
+
+                results.append(f"Cloned: {repo_name}")
+            except subprocess.CalledProcessError as e:
+                err_msg = e.stderr.decode() if e.stderr else str(e)
+                if "Authentication failed" in err_msg or "403" in err_msg:
+                    return results, "AUTH_REQUIRED"
+                results.append(f"Failed: {repo_name} ({err_msg})")
+            except Exception as e:
+                results.append(f"Error: {repo_name} ({str(e)})")
+
+        return results, "OK"
 
     def _create_default_config(self, project_path):
         """Creates a default config.json file in the project directory."""
@@ -117,7 +218,7 @@ class ProjectManager:
 
     def get_project_path(self, name: str):
         """Returns the path for a specific project."""
-        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
         return self.projects_dir / safe_name
 
     def list_git_projects(self):

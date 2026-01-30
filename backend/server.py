@@ -1514,6 +1514,44 @@ async def update_tool_permissions(sid, data):
     # Broadcast update to all
     await sio.emit('tool_permissions', SETTINGS["tool_permissions"])
 
+@sio.event
+async def save_github_token(sid, data):
+    token = data.get('token')
+    if token:
+        project_manager.set_github_token(token)
+        await sio.emit('status', {'msg': "GitHub token saved securely."})
+    else:
+        await sio.emit('error', {'msg': "No token provided."})
+
+@sio.event
+async def sync_fleet(sid):
+    """Syncs local repositories with Jules Agent sources."""
+    print(f"[SERVER] Client {sid} requested fleet sync.")
+    if not audio_loop:
+        await sio.emit('error', {'msg': "System not ready"})
+        return
+
+    # 1. Fetch sources from Jules
+    sources = await audio_loop.handle_list_jules_sources()
+    if not isinstance(sources, list):
+        await sio.emit('error', {'msg': f"Failed to fetch sources: {sources}"})
+        return
+
+    await sio.emit('status', {'msg': f"Found {len(sources)} sources. Syncing..."})
+
+    # 2. Sync (Clone missing)
+    # Use executor to prevent blocking
+    results, status = await asyncio.to_thread(project_manager.sync_jules_repos, sources)
+
+    if status == "AUTH_REQUIRED":
+        await sio.emit('error', {'code': 'AUTH_REQUIRED', 'msg': "GitHub Authentication Failed. Please provide a token."})
+    else:
+        # Report results
+        summary = ", ".join(results) if results else "All up to date."
+        await sio.emit('status', {'msg': f"Sync Complete: {summary}"})
+        # Refresh fleet view
+        await get_fleet_status(sid)
+
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
     print(f"[SERVER] Starting server on port {port}")

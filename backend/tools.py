@@ -684,6 +684,14 @@ tools_list = [{"function_declarations": [
         }
     },
     {
+        "name": "sync_git_repos",
+        "description": "Syncs the local fleet with the sources available to Jules. Clones any missing repositories.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
         "name": "git_pull",
         "description": "Pulls changes from the remote repository.",
         "parameters": {

@@ -33,6 +33,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedArtifact, setSelectedArtifact] = useState(null);
     const [fleetStatus, setFleetStatus] = useState([]);
+    const [showAuthModal, setShowAuthModal] = useState(false);
 
     // Stream control
     useEffect(() => {
@@ -44,9 +45,17 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
             const handleFleetStatus = (data) => {
                 setFleetStatus(data);
             };
+            const handleError = (err) => {
+                if (err.code === 'AUTH_REQUIRED') {
+                    setShowAuthModal(true);
+                }
+            };
+
             socket.on('fleet_status_update', handleFleetStatus);
+            socket.on('error', handleError);
             return () => {
                 socket.off('fleet_status_update', handleFleetStatus);
+                socket.off('error', handleError);
                 socket.emit('stop_dashboard_stream');
             };
         }
@@ -114,6 +123,12 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const handleMerge = (repo) => {
         if (socket && confirm(`Merge '${repo}' branch to main?`)) {
             socket.emit('perform_git_merge', { repo });
+        }
+    };
+
+    const handleSyncFleet = () => {
+        if (socket) {
+            socket.emit('sync_fleet');
         }
     };
 
@@ -332,10 +347,19 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         variants={itemVariants}
                         className="col-span-4 row-span-6 flex flex-col gap-4 bg-black/40 border border-gold9/20 rounded-xl p-4 overflow-hidden"
                     >
-                        <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-2">
-                            <GitBranch className="w-4 h-4 text-gold9" />
-                            <span className="text-gold9">FLEET COMMAND</span>
-                        </h2>
+                        <div className="flex items-center justify-between border-b border-gold9/10 pb-2 mb-2">
+                            <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest">
+                                <GitBranch className="w-4 h-4 text-gold9" />
+                                <span className="text-gold9">FLEET COMMAND</span>
+                            </h2>
+                            <button
+                                onClick={handleSyncFleet}
+                                className="text-[10px] text-gold9/60 hover:text-gold9 flex items-center gap-1 border border-gold9/20 px-2 py-1 rounded hover:bg-gold9/10 transition-colors"
+                            >
+                                <Activity size={10} />
+                                SYNC REPOS
+                            </button>
+                        </div>
 
                         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
                             {fleetStatus.length === 0 ? (
@@ -419,6 +443,54 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         artifact={selectedArtifact}
                         onClose={() => setSelectedArtifact(null)}
                     />
+                )}
+
+                {/* AUTH MODAL */}
+                {showAuthModal && (
+                    <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center">
+                        <div className="bg-black border border-gold9 p-6 rounded-xl w-[400px] shadow-[0_0_50px_rgba(255,215,0,0.2)]">
+                            <h2 className="text-xl font-bold text-gold9 mb-4 flex items-center gap-2">
+                                <Shield size={18} />
+                                AUTHENTICATION REQUIRED
+                            </h2>
+                            <p className="text-xs text-gold9/60 mb-4">
+                                Access to one or more repositories requires a GitHub Personal Access Token (classic).
+                            </p>
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                const token = e.target.token.value;
+                                if (socket && token) {
+                                    socket.emit('save_github_token', { token });
+                                    setShowAuthModal(false);
+                                    // Retry sync immediately?
+                                    socket.emit('sync_fleet');
+                                }
+                            }}>
+                                <input
+                                    name="token"
+                                    type="password"
+                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none mb-4"
+                                    placeholder="ghp_..."
+                                    autoFocus
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAuthModal(false)}
+                                        className="px-4 py-2 text-xs text-gold9/50 hover:text-gold9"
+                                    >
+                                        CANCEL
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-gold9 text-black text-xs font-bold rounded hover:bg-yellow-400"
+                                    >
+                                        SAVE & SYNC
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 )}
 
             </motion.div>
