@@ -216,43 +216,70 @@ class ProjectManager:
             print(f"[ProjectManager] [ERR] Failed to read chat history: {e}")
             return []
 
-    def save_jules_session(self, session_id: str, title: str):
-        """Saves Jules session information to local memory."""
-        sessions_file = self.get_current_project_path() / "jules_sessions.json"
-        sessions = []
-        if sessions_file.exists():
-            try:
-                with open(sessions_file, "r", encoding="utf-8") as f:
-                    sessions = json.load(f)
-            except Exception as e:
-                print(f"[ProjectManager] [ERR] Failed to read jules sessions: {e}")
+    def _get_jules_ui_state_path(self):
+        return self.get_current_project_path() / "jules_ui_state.json"
 
-        # Check if session already exists
-        for s in sessions:
-            if s['id'] == session_id:
-                s['title'] = title
-                break
-        else:
-            sessions.append({"id": session_id, "title": title, "timestamp": time.time()})
-
+    def _load_jules_ui_state(self):
+        path = self._get_jules_ui_state_path()
+        if not path.exists():
+            return {}
         try:
-            with open(sessions_file, "w", encoding="utf-8") as f:
-                json.dump(sessions, f, indent=4)
-            print(f"[ProjectManager] Saved Jules session: {title} ({session_id})")
-        except Exception as e:
-            print(f"[ProjectManager] [ERR] Failed to save jules session: {e}")
-
-    def get_jules_sessions(self):
-        """Returns the list of saved Jules sessions for the current project."""
-        sessions_file = self.get_current_project_path() / "jules_sessions.json"
-        if not sessions_file.exists():
-            return []
-        try:
-            with open(sessions_file, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"[ProjectManager] [ERR] Failed to read jules sessions: {e}")
-            return []
+            print(f"[ProjectManager] [ERR] Failed to read jules UI state: {e}")
+            return {}
+
+    def _save_jules_ui_state(self, state):
+        path = self._get_jules_ui_state_path()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(state, f, indent=4)
+        except Exception as e:
+            print(f"[ProjectManager] [ERR] Failed to save jules UI state: {e}")
+
+    def mark_jules_session_seen(self, session_id: str):
+        """Marks a Jules session as seen by the user."""
+        self.batch_mark_jules_sessions_seen([session_id])
+
+    def batch_mark_jules_sessions_seen(self, session_ids: list):
+        """Marks multiple Jules sessions as seen in one I/O operation."""
+        if not session_ids:
+            return
+
+        state = self._load_jules_ui_state()
+        changed = False
+        now = time.time()
+
+        for session_id in session_ids:
+            if session_id not in state:
+                state[session_id] = {}
+
+            if "seen_at" not in state[session_id]:
+                state[session_id]["seen_at"] = now
+                changed = True
+
+        if changed:
+            self._save_jules_ui_state(state)
+
+    def dismiss_jules_session(self, session_id: str):
+        """Marks a Jules session as dismissed (hidden)."""
+        state = self._load_jules_ui_state()
+        if session_id not in state:
+            state[session_id] = {}
+
+        state[session_id]["dismissed"] = True
+        self._save_jules_ui_state(state)
+        return True, "Session dismissed."
+
+    def get_jules_session_state(self, session_id: str):
+        """Returns the UI state (seen_at, dismissed) for a session."""
+        state = self._load_jules_ui_state()
+        return state.get(session_id, {})
+
+    def get_all_jules_session_states(self):
+        """Returns the entire UI state dictionary."""
+        return self._load_jules_ui_state()
 
     def set_time_format(self, time_format: str):
         """Sets the time format for the project."""

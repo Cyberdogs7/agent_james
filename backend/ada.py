@@ -16,6 +16,7 @@ import struct
 import time
 import random
 import httpx
+from datetime import datetime, timezone
 from giphy_client.apis.default_api import DefaultApi
 from giphy_client.api_client import ApiClient
 
@@ -105,6 +106,18 @@ switch_project_tool = {
             "name": {"type": "STRING", "description": "The name of the project to switch to."}
         },
         "required": ["name"]
+    }
+}
+
+dismiss_jules_session_tool = {
+    "name": "dismiss_jules_session",
+    "description": "Dismisses (hides) a Jules session from the dashboard.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {"type": "STRING", "description": "The ID of the session to dismiss."}
+        },
+        "required": ["session_id"]
     }
 }
 
@@ -306,7 +319,7 @@ tools = [{'google_search': {}}, {"function_declarations": [
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
     set_time_format_tool, get_datetime_tool, change_voice_tool, update_persona_tool,
-    display_dashboard_tool,
+    display_dashboard_tool, dismiss_jules_session_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 pya = pyaudio.PyAudio()
@@ -1205,8 +1218,6 @@ class AudioLoop:
                     jules_agent.poll_for_updates(session_id, stop_event)
                 )
                 self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
-                title = session.get('title', f"Jules: {prompt[:50]}")
-                self.project_manager.save_jules_session(session_id, title)
                 polling_task.add_done_callback(
                     lambda task: self._cleanup_jules_task(session_id, task)
                 )
@@ -1269,12 +1280,12 @@ class AudioLoop:
 
     async def handle_list_jules_sessions(self):
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [JULES] Listing saved sessions from local memory")
-        sessions = self.project_manager.get_jules_sessions()
+            print("[ADA DEBUG] [JULES] Listing sessions from API")
+        sessions = await self.jules_agent.list_sessions()
         if sessions:
             return sessions
         else:
-            return "No Jules sessions found in local memory for this project."
+            return "No Jules sessions found."
 
     async def handle_list_jules_activities(self, session_id):
         if INCLUDE_RAW_LOGS:
@@ -1287,6 +1298,12 @@ class AudioLoop:
             return response["activities"]
         else:
             return "Failed to list Jules activities."
+
+    async def handle_dismiss_jules_session(self, session_id):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Dismissing session: {session_id}")
+        success, msg = self.project_manager.dismiss_jules_session(session_id)
+        return msg
 
     async def get_dashboard_data(self):
         """Gathers all data for the War Room Dashboard."""
@@ -1345,16 +1362,66 @@ class AudioLoop:
                 print(f"[ADA DEBUG] [ERR] Failed to fetch Trello data: {e}")
 
         # 5. Jules Data
-        jules_sessions = self.project_manager.get_jules_sessions()
+        jules_sessions = await self.jules_agent.list_sessions()
         enriched_sessions = []
+        now = time.time()
+
+        # Efficiently manage local state
+        all_states = self.project_manager.get_all_jules_session_states()
+        new_session_ids = []
+
+        # Identify new sessions
         for s in jules_sessions:
-            state = "UNKNOWN"
-            if s['id'] in self.jules_agent.monitored_sessions:
-                state = self.jules_agent.monitored_sessions[s['id']]
+            s_id = s['name']
+            if s_id not in all_states or "seen_at" not in all_states[s_id]:
+                new_session_ids.append(s_id)
+
+        # Batch update new sessions
+        if new_session_ids:
+            self.project_manager.batch_mark_jules_sessions_seen(new_session_ids)
+            for nid in new_session_ids:
+                if nid not in all_states: all_states[nid] = {}
+                all_states[nid]["seen_at"] = now
+
+        for s in jules_sessions:
+            s_id = s['name']
+            s_state = s.get('state', 'UNKNOWN')
+            s_title = s.get('title', 'Untitled')
+
+            # Local State Check (Dismissal / Seen)
+            ui_state = all_states.get(s_id, {})
+            if ui_state.get('dismissed'):
+                continue
+
+            seen_at = ui_state.get('seen_at', now)
+
+            # Auto-Archive Logic for Completed Sessions
+            if s_state in ['COMPLETED', 'FAILED']:
+                completion_time_str = s.get('updateTime') or s.get('createTime')
+                is_old = False
+                if completion_time_str:
+                    try:
+                        # Handle 'Z' if present (Python <3.11 fromisoformat doesn't like Z, but 3.11+ does.
+                        # We are on 3.12, but to be safe/standard)
+                        if completion_time_str.endswith('Z'):
+                             completion_time_str = completion_time_str[:-1] + '+00:00'
+                        dt = datetime.fromisoformat(completion_time_str)
+                        completion_ts = dt.timestamp()
+                        if (now - completion_ts) > (2 * 3600):
+                            is_old = True
+                    except Exception as e:
+                        if INCLUDE_RAW_LOGS:
+                             print(f"[ADA DEBUG] Failed to parse time {completion_time_str}: {e}")
+
+                # Hide if old AND has been viewed for at least 5 minutes (to avoid flashing new discoveries)
+                if is_old:
+                    if (now - seen_at) > 300:
+                        continue
+
             enriched_sessions.append({
-                "id": s['id'],
-                "title": s['title'],
-                "state": state
+                "id": s_id,
+                "title": s_title,
+                "state": s_state
             })
 
         # 6. Device Data
@@ -1844,6 +1911,18 @@ User: "What's the weather in London?"
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
                                     source = fc.args.get("source")
                                     result = await self.handle_jules_request(prompt, source)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "dismiss_jules_session":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'dismiss_jules_session'")
+                                    session_id = fc.args.get("session_id")
+                                    result = await self.handle_dismiss_jules_session(session_id)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,

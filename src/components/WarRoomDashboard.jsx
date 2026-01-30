@@ -76,6 +76,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         if (socket) socket.emit('run_task', { id });
     };
 
+    const handleDismissJules = (id) => {
+        if (socket) socket.emit('dismiss_jules_session', { id });
+    };
+
     return (
         <AnimatePresence>
             <motion.div
@@ -241,15 +245,18 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             ) : (
                                 <div className="grid grid-cols-1 gap-3">
                                     {jules.map((session, i) => (
-                                        <div key={i} className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors">
-                                            <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
+                                        <div key={i} className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item">
+                                            <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
                                             <div className="flex-1">
                                                 <div className="text-sm font-bold text-gold9">{session.title || session.id}</div>
                                                 <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
                                             </div>
-                                            <div className="text-xs font-mono text-gold9/40">
+                                            <div className="text-xs font-mono text-gold9/40 mr-2">
                                                 ID: {session.id.substring(0,6)}
                                             </div>
+                                            <button onClick={(e) => { e.stopPropagation(); handleDismissJules(session.id); }} className="text-gold9/20 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100">
+                                                <Trash2 size={14} />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
