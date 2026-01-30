@@ -1773,7 +1773,7 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status", "sync_git_repos"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "git_merge_branch":
@@ -1890,6 +1890,48 @@ User: "What's the weather in London?"
                                         id=fc.id,
                                         name=fc.name,
                                         response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "sync_git_repos":
+                                    # Trigger the sync via a background task so we don't block
+                                    async def perform_sync_and_respond():
+                                        sources = await self.handle_list_jules_sources()
+                                        if not isinstance(sources, list):
+                                            # If error fetching sources
+                                            return f"Failed to fetch sources: {sources}"
+
+                                        # Use executor for blocking git operations
+                                        results, status = await asyncio.to_thread(self.project_manager.sync_jules_repos, sources)
+
+                                        if status == "AUTH_REQUIRED":
+                                            if self.on_display_content:
+                                                # Trigger frontend modal via notification or special type
+                                                # Actually, we should emit the socket event for auth, but here we are in tool logic.
+                                                # We can use display_content to tell user.
+                                                self.on_display_content({
+                                                    "content_type": "notification",
+                                                    "data": {"text": "GitHub Authentication Required. Please provide your token in the dashboard settings or modal."},
+                                                    "duration": 10000
+                                                })
+                                            return "I need a GitHub token to access some repositories. Please provide it in the dashboard."
+
+                                        summary = ", ".join(results) if results else "All up to date."
+                                        return f"Sync Complete: {summary}"
+
+                                    # Run it
+                                    # Since we need to return a tool response, we await it.
+                                    # Ideally sync is fast enough or we accept a small delay. Cloning can be slow.
+                                    # So we should probably kick it off and return "Started".
+
+                                    asyncio.create_task(perform_sync_and_respond())
+
+                                    # We can't easily return the result if we background it.
+                                    # Let's say "Syncing started..."
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": "Sync initiated. I will notify you if authentication is required."}
                                     )
                                     function_responses.append(function_response)
 
@@ -2622,7 +2664,8 @@ User: "What's the weather in London?"
             print("[ADA DEBUG] [GIT] Starting fleet monitoring...")
         while not self.stop_event.is_set():
             try:
-                events = self.project_manager.monitor_git_repos()
+                # Use executor to prevent blocking the event loop
+                events = await asyncio.to_thread(self.project_manager.monitor_git_repos)
                 for event in events:
                     if event['type'] == 'git_commit':
                         msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
