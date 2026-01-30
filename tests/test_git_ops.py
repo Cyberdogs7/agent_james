@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import sys
 import os
+import subprocess
 
 # Add backend to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
@@ -25,6 +26,29 @@ class TestGitOps(unittest.TestCase):
             text=True,
             check=True
         )
+
+    @patch('subprocess.run')
+    def test_get_last_commit_info(self, mock_run):
+        mock_run.return_value = MagicMock(stdout="a1b2c3d|Author Name|2 hours ago|Commit message", returncode=0)
+        info = GitOps.get_last_commit_info("/tmp/repo")
+        self.assertIsNotNone(info)
+        self.assertEqual(info["hash"], "a1b2c3d")
+        self.assertEqual(info["author"], "Author Name")
+        self.assertEqual(info["date"], "2 hours ago")
+        self.assertEqual(info["message"], "Commit message")
+        mock_run.assert_called_with(
+            ["git", "log", "-1", "--format=%h|%an|%ar|%s"],
+            cwd="/tmp/repo",
+            capture_output=True,
+            text=True,
+            check=True
+        )
+
+    @patch('subprocess.run')
+    def test_get_last_commit_info_fail(self, mock_run):
+        mock_run.side_effect = subprocess.CalledProcessError(1, cmd=["git", "log"])
+        info = GitOps.get_last_commit_info("/tmp/repo")
+        self.assertIsNone(info)
 
     @patch('subprocess.run')
     def test_list_branches(self, mock_run):

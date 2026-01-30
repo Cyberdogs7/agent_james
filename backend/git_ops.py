@@ -65,6 +65,31 @@ class GitOps:
             return "Failed to get status."
 
     @staticmethod
+    def get_last_commit_info(repo_path):
+        try:
+            # Format: hash|author|date|message
+            result = subprocess.run(
+                ["git", "log", "-1", "--format=%h|%an|%ar|%s"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            output = result.stdout.strip()
+            if output:
+                parts = output.split('|', 3)
+                if len(parts) == 4:
+                    return {
+                        "hash": parts[0],
+                        "author": parts[1],
+                        "date": parts[2],
+                        "message": parts[3]
+                    }
+            return None
+        except subprocess.CalledProcessError:
+            return None
+
+    @staticmethod
     def commit_changes(repo_path, message):
         try:
             # We use -a to stage all modified/deleted files.

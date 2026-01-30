@@ -663,6 +663,27 @@ tools_list = [{"function_declarations": [
         }
     },
     {
+        "name": "git_status",
+        "description": "Gets the detailed status of a specific repository (branch, changes, last commit).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "Optional: The name of the project/repo to get status for. Defaults to current project."
+                }
+            }
+        }
+    },
+    {
+        "name": "git_fleet_status",
+        "description": "Generates a high-level status report for ALL git repositories (branch, clean/dirty state, last commit summary). Use this to give an 'Engineering Manager' style overview.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
         "name": "git_pull",
         "description": "Pulls changes from the remote repository.",
         "parameters": {
