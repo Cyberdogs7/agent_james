@@ -83,11 +83,11 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [ ] **Voice-Controlled Git Actions (Full Suite)**
+- [x] **Voice-Controlled Git Actions (Full Suite)**
   - **Description**: Expand voice git controls beyond simple merging. "James, commit this as 'Fix login bug' and push."
   - **User Impact**: Hands-free version control.
   - **Technical Notes**: Wrap `git commit`, `git push`, `git pull` in `AudioLoop` tools.
-  - **Status**: **Partially Implemented** (Merge tool exists)
+  - **Status**: **Implemented**
 
 - [ ] **Smart Error Interception (Terminal)**
   - **Description**: If a user runs a terminal command that fails, James parses the stderr and offers a one-sentence explanation/fix proactively.

@@ -63,3 +63,47 @@ class GitOps:
             return result.stdout.strip()
         except subprocess.CalledProcessError:
             return "Failed to get status."
+
+    @staticmethod
+    def commit_changes(repo_path, message):
+        try:
+            # We use -a to stage all modified/deleted files.
+            # Note: This does not add untracked files.
+            result = subprocess.run(
+                ["git", "commit", "-a", "-m", message],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True, f"Committed changes: {result.stdout}"
+        except subprocess.CalledProcessError as e:
+            return False, f"Commit failed:\n{e.stderr}"
+
+    @staticmethod
+    def push_changes(repo_path):
+        try:
+            result = subprocess.run(
+                ["git", "push"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True, f"Successfully pushed changes.\n{result.stdout}"
+        except subprocess.CalledProcessError as e:
+            return False, f"Push failed:\n{e.stderr}"
+
+    @staticmethod
+    def pull_changes(repo_path):
+        try:
+            result = subprocess.run(
+                ["git", "pull"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return True, f"Successfully pulled changes.\n{result.stdout}"
+        except subprocess.CalledProcessError as e:
+            return False, f"Pull failed:\n{e.stderr}"
