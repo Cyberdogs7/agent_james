@@ -605,10 +605,12 @@ async def user_input(sid, data):
     
     if not audio_loop:
         print("[SERVER DEBUG] [Error] Audio loop is None. Cannot send text.")
+        await sio.emit('error', {'msg': 'System not ready (Audio Loop inactive)'})
         return
 
     if not audio_loop.session:
         print("[SERVER DEBUG] [Error] Session is None. Cannot send text.")
+        await sio.emit('error', {'msg': 'System not ready (No active session)'})
         return
 
     if text:
@@ -627,9 +629,18 @@ async def user_input(sid, data):
                 await audio_loop.session.send(input=audio_loop._latest_image_payload, end_of_turn=False)
             except Exception as e:
                 print(f"[SERVER DEBUG] Failed to send piggyback frame: {e}")
-                
-        await audio_loop.session.send(input=text, end_of_turn=True)
-        print(f"[SERVER DEBUG] Message sent to model successfully.")
+
+        # Explicitly flush/interrupt audio queue to simulate "interrupt" behavior for text input
+        # This mirrors what happens when VAD detects speech
+        audio_loop.clear_audio_queue()
+        audio_loop.set_last_input_source('ui')
+
+        try:
+            await audio_loop.session.send(input=text, end_of_turn=True)
+            print(f"[SERVER DEBUG] Message sent to model successfully.")
+        except Exception as e:
+             print(f"[SERVER DEBUG] Failed to send text to model: {e}")
+             await sio.emit('error', {'msg': f"Failed to send message: {e}"})
 
 import json
 from datetime import datetime
@@ -1182,6 +1193,34 @@ async def create_project(sid, data):
                 audio_loop.reconnect()
         else:
             await sio.emit('error', {'msg': msg})
+
+@sio.event
+async def list_projects(sid):
+    """Returns a list of all available projects."""
+    projects = project_manager.list_projects()
+    await sio.emit('project_list', projects)
+
+@sio.event
+async def toggle_writing_mode(sid, data):
+    """Toggles Writing Mode on/off."""
+    enable = data.get('enable', True)
+    print(f"[SERVER] Toggle Writing Mode: {enable}")
+
+    if enable:
+        success, msg = project_manager.enable_writing_mode()
+    else:
+        success, msg = project_manager.disable_writing_mode()
+
+    if success:
+        await sio.emit('status', {'msg': msg})
+        # Reconnect to apply system prompt changes
+        if audio_loop:
+            audio_loop.reconnect()
+        # Broadcast config update so frontend knows mode changed
+        config = project_manager.get_project_config()
+        await sio.emit('project_config', config)
+    else:
+        await sio.emit('error', {'msg': msg})
 
 # Deprecated/Mapped for compatibility if frontend still uses specific events
 @sio.event
