@@ -1,6 +1,28 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
+
+// Function to read port from .env manually
+function getServerPort() {
+    try {
+        const envPath = path.join(__dirname, '../.env');
+        if (fs.existsSync(envPath)) {
+            const content = fs.readFileSync(envPath, 'utf8');
+            const match = content.match(/^SERVER_PORT=(.*)$/m);
+            if (match && match[1]) {
+                const port = parseInt(match[1].trim(), 10);
+                if (!isNaN(port)) return port;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to read .env file:', e);
+    }
+    return 8180; // Default port
+}
+
+const SERVER_PORT = getServerPort();
+console.log(`[Electron] Using backend port: ${SERVER_PORT}`);
 
 // Use ANGLE D3D11 backend - more stable on Windows while keeping WebGL working
 // This fixes "GPU state invalid after WaitForGetOffsetInRange" error
@@ -129,9 +151,9 @@ app.whenReady().then(() => {
         });
     });
 
-    checkBackendPort(8000).then((isTaken) => {
+    checkBackendPort(SERVER_PORT).then((isTaken) => {
         if (isTaken) {
-            console.log('Port 8000 is taken. Assuming backend is already running manually.');
+            console.log(`Port ${SERVER_PORT} is taken. Assuming backend is already running manually.`);
             waitForBackend().then(createWindow);
         } else {
             startPythonBackend();
@@ -170,7 +192,7 @@ function waitForBackend() {
     return new Promise((resolve) => {
         const check = () => {
             const http = require('http');
-            http.get('http://127.0.0.1:8000/status', (res) => {
+            http.get(`http://127.0.0.1:${SERVER_PORT}/status`, (res) => {
                 if (res.statusCode === 200) {
                     console.log('Backend is ready!');
                     resolve();

@@ -201,6 +201,22 @@ The system creates a `settings.json` file on first run. You can modify this to c
 
 ---
 
+## 🔧 Custom Server Port
+
+By default, the backend server runs on port **8180**. You can customize this if you have a conflict.
+
+1. Open your `.env` file.
+2. Add the following lines:
+   ```env
+   # Change these to your desired port (e.g., 9000)
+   SERVER_PORT=9000
+   VITE_SERVER_PORT=9000
+   ```
+3. **Note**: Both variables must match for the frontend to connect to the backend correctly.
+4. Restart the application for changes to take effect.
+
+---
+
 ### 5. 🖨️ 3D Printer Setup
 ADA V2 can slice STL files and send them directly to your 3D printer.
 
