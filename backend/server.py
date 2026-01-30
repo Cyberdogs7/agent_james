@@ -61,6 +61,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 # Global state
 audio_loop = None
 loop_task = None
+dashboard_task = None # Task for streaming dashboard updates
 authenticator = None
 kasa_agent = KasaAgent()
 slack_agent = None
@@ -1193,6 +1194,69 @@ async def create_project(sid, data):
                 audio_loop.reconnect()
         else:
             await sio.emit('error', {'msg': msg})
+
+async def dashboard_stream_loop():
+    """Background task to push dashboard updates."""
+    print("[SERVER] Starting Dashboard Stream Loop")
+    try:
+        while True:
+            if audio_loop:
+                data = await audio_loop.get_dashboard_data()
+                await sio.emit('dashboard_update', data)
+            await asyncio.sleep(2) # Update every 2 seconds
+    except asyncio.CancelledError:
+        print("[SERVER] Dashboard Stream Cancelled")
+    except Exception as e:
+        print(f"[SERVER] Dashboard Stream Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+@sio.event
+async def start_dashboard_stream(sid):
+    global dashboard_task
+    print("[SERVER] Client requested dashboard stream")
+    if dashboard_task is None or dashboard_task.done():
+        dashboard_task = asyncio.create_task(dashboard_stream_loop())
+
+@sio.event
+async def stop_dashboard_stream(sid):
+    global dashboard_task
+    print("[SERVER] Client stopped dashboard stream")
+    if dashboard_task and not dashboard_task.done():
+        dashboard_task.cancel()
+        dashboard_task = None
+
+@sio.event
+async def create_task(sid, data):
+    # data: { title, trigger_type, trigger_value, action_type, action_value }
+    print(f"[SERVER] Create Task: {data}")
+    if audio_loop and audio_loop.task_manager:
+        audio_loop.task_manager.create_task(
+            title=data.get('title'),
+            trigger_type=data.get('trigger_type', 'manual'),
+            trigger_value=data.get('trigger_value'),
+            action_type=data.get('action_type', 'none'),
+            action_value=data.get('action_value')
+        )
+        await sio.emit('status', {'msg': 'Task created'})
+        # Force an immediate push if streaming
+        if dashboard_task:
+            data = await audio_loop.get_dashboard_data()
+            await sio.emit('dashboard_update', data)
+
+@sio.event
+async def delete_task(sid, data):
+    task_id = data.get('id')
+    print(f"[SERVER] Delete Task: {task_id}")
+    if audio_loop and audio_loop.task_manager:
+        if audio_loop.task_manager.delete_task(task_id):
+            await sio.emit('status', {'msg': 'Task deleted'})
+            # Force update
+            if dashboard_task:
+                data = await audio_loop.get_dashboard_data()
+                await sio.emit('dashboard_update', data)
+        else:
+             await sio.emit('error', {'msg': 'Task not found'})
 
 @sio.event
 async def list_projects(sid):

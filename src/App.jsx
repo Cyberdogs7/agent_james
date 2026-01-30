@@ -627,6 +627,11 @@ function App() {
             }
         });
 
+        // Live dashboard updates
+        socket.on('dashboard_update', (data) => {
+            setWarRoomData(data);
+        });
+
 
         // Get All Media Devices (Microphones, Speakers, Webcams)
         navigator.mediaDevices.enumerateDevices().then(devs => {
@@ -1775,14 +1780,16 @@ function App() {
                     onClose={() => setSuggestion(null)}
                 />
 
-                {/* War Room Dashboard Overlay */}
-                {showWarRoom && (
-                    <WarRoomDashboard
-                        data={warRoomData}
-                        onClose={() => setShowWarRoom(false)}
-                    />
-                )}
             </div>
+
+            {/* War Room Dashboard Overlay */}
+            {showWarRoom && (
+                <WarRoomDashboard
+                    data={warRoomData}
+                    socket={socket}
+                    onClose={() => setShowWarRoom(false)}
+                />
+            )}
         </div>
     );
 }
