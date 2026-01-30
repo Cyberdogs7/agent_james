@@ -554,7 +554,12 @@ class AudioLoop:
             await self.session.send(input=msg, end_of_turn=False)
 
     async def listen_audio(self):
-        mic_info = pya.get_default_input_device_info()
+        try:
+            mic_info = pya.get_default_input_device_info()
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA] [WARN] No default input device found: {e}")
+            mic_info = {"index": -1}
 
         # Resolve Input Device by Name if provided
         resolved_input_device_index = None
@@ -604,8 +609,16 @@ class AudioLoop:
                  print("[ADA] Using Default Input Device")
 
         # Determine actual channels to use
-        actual_input_device_index = resolved_input_device_index if resolved_input_device_index is not None else mic_info["index"]
+        actual_input_device_index = resolved_input_device_index if resolved_input_device_index is not None else mic_info.get("index")
         
+        if actual_input_device_index == -1 or actual_input_device_index is None:
+             if INCLUDE_RAW_LOGS:
+                 print("[ADA] [WARN] No valid input device index. Audio input disabled (Waiting loop).")
+             # Keep the task alive but idle to prevent session teardown
+             while not self.stop_event.is_set():
+                 await asyncio.sleep(1)
+             return
+
         # Try to open with requested CHANNELS, fallback if needed
         self.audio_stream = None
         stream_channels = CHANNELS

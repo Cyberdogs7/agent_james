@@ -17,11 +17,15 @@ import PrinterWindow from './components/PrinterWindow';
 import SettingsWindow from './components/SettingsWindow';
 import Suggestion from './components/Suggestion';
 import WarRoomDashboard from './components/WarRoomDashboard';
+import ProjectWindow from './components/ProjectWindow';
 
 
 
 const socket = io('http://localhost:8000');
-const { ipcRenderer } = window.require('electron');
+// Mock ipcRenderer for browser development/testing
+const { ipcRenderer } = window.require
+    ? window.require('electron')
+    : { ipcRenderer: { send: () => {} } };
 
 function App() {
     const [status, setStatus] = useState('Disconnected');
@@ -63,6 +67,8 @@ function App() {
     const [showCadWindow, setShowCadWindow] = useState(false);
     const [showBrowserWindow, setShowBrowserWindow] = useState(false);
     const [showWarRoom, setShowWarRoom] = useState(false);
+    const [showProjectWindow, setShowProjectWindow] = useState(false);
+    const [isWritingMode, setIsWritingMode] = useState(false);
     const [warRoomData, setWarRoomData] = useState(null);
     const [suggestion, setSuggestion] = useState(null);
 
@@ -101,6 +107,7 @@ function App() {
         browser: { x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 },
         kasa: { x: window.innerWidth / 2 + 350, y: window.innerHeight / 2 - 100 },
         printer: { x: window.innerWidth / 2 - 350, y: window.innerHeight / 2 - 100 },
+        project_window: { x: window.innerWidth / 2 - 350, y: window.innerHeight / 2 + 100 },
         tools: { x: window.innerWidth / 2, y: window.innerHeight - 100 } // Fixed bottom OFFSET
     });
 
@@ -112,13 +119,14 @@ function App() {
         browser: { w: 550, h: 380 },
         video: { w: 320, h: 180 },
         kasa: { w: 300, h: 380 }, // Approx
-        printer: { w: 380, h: 380 } // Approx
+        printer: { w: 380, h: 380 }, // Approx
+        project_window: { w: 300, h: 300 } // Approx
     });
     const [activeDragElement, setActiveDragElement] = useState(null);
 
     // Z-Index Stacking Order (last element = highest z-index)
     const [zIndexOrder, setZIndexOrder] = useState([
-        'visualizer', 'chat', 'tools', 'video', 'cad', 'browser', 'kasa', 'printer'
+        'visualizer', 'chat', 'tools', 'video', 'cad', 'browser', 'kasa', 'printer', 'project_window'
     ]);
 
     // Hand Control State
@@ -297,8 +305,9 @@ function App() {
 
     // Auto-Connect Model on Start (Only after Auth and devices loaded)
     useEffect(() => {
-        // Only auto-connect once: when socket connected, authenticated, and devices loaded
-        if (isConnected && isAuthenticated && socketConnected && micDevices.length > 0 && !hasAutoConnectedRef.current) {
+        // Only auto-connect once: when socket connected, authenticated.
+        // We do NOT require micDevices > 0 anymore to support text-only mode.
+        if (isConnected && isAuthenticated && socketConnected && !hasAutoConnectedRef.current) {
             hasAutoConnectedRef.current = true;
 
             // Trigger Kasa and Printer Discovery
@@ -307,9 +316,15 @@ function App() {
 
             // Connect to model with small delay for socket stability
             const timer = setTimeout(() => {
-                const index = micDevices.findIndex(d => d.deviceId === selectedMicId);
-                const queryDevice = micDevices.find(d => d.deviceId === selectedMicId);
-                const deviceName = queryDevice ? queryDevice.label : null;
+                let index = -1;
+                let deviceName = null;
+
+                if (micDevices.length > 0) {
+                    index = micDevices.findIndex(d => d.deviceId === selectedMicId);
+                    const queryDevice = micDevices.find(d => d.deviceId === selectedMicId);
+                    deviceName = queryDevice ? queryDevice.label : null;
+                }
+
                 console.log("Auto-connecting to model with device:", deviceName, "Index:", index);
 
                 setStatus('Connecting...');
@@ -541,6 +556,16 @@ function App() {
             console.log("Project Update:", data.project);
             setCurrentProject(data.project);
             addMessage('System', `Switched to project: ${data.project}`);
+            // Fetch fresh config on project switch
+            socket.emit('get_project_config');
+        });
+
+        socket.on('project_config', (config) => {
+            if (config && config.mode === 'writing') {
+                setIsWritingMode(true);
+            } else {
+                setIsWritingMode(false);
+            }
         });
 
         // Track printer count for toolbar display
@@ -693,6 +718,7 @@ function App() {
             socket.off('printer_list');
             socket.off('slicing_progress');
             socket.off('print_status_update');
+            socket.off('project_config');
             socket.off('error');
 
             stopMicVisualizer();
@@ -705,6 +731,7 @@ function App() {
         if (socket.connected) {
             setStatus('Connected');
             socket.emit('get_settings');
+            socket.emit('get_project_config');
         }
     }, []);
 
@@ -1363,6 +1390,19 @@ function App() {
         setShowPrinterWindow(!showPrinterWindow);
     };
 
+    const handleToggleWritingMode = () => {
+        socket.emit('toggle_writing_mode', { enable: !isWritingMode });
+        // Optimistic update
+        setIsWritingMode(!isWritingMode);
+    };
+
+    const toggleProjectWindow = () => {
+        if (!showProjectWindow) {
+            // Trigger fetch list
+            socket.emit('list_projects');
+        }
+        setShowProjectWindow(!showProjectWindow);
+    };
 
 
     return (
@@ -1667,6 +1707,14 @@ function App() {
                         showCadWindow={showCadWindow}
                         onToggleBrowser={() => setShowBrowserWindow(!showBrowserWindow)}
                         showBrowserWindow={showBrowserWindow}
+
+                        onToggleWritingMode={handleToggleWritingMode}
+                        isWritingMode={isWritingMode}
+                        onToggleProjectWindow={toggleProjectWindow}
+                        showProjectWindow={showProjectWindow}
+                        onToggleWarRoom={() => setShowWarRoom(!showWarRoom)}
+                        showWarRoom={showWarRoom}
+
                         activeDragElement={activeDragElement}
                         position={elementPositions.tools}
                         onMouseDown={(e) => handleMouseDown(e, 'tools')}
@@ -1697,6 +1745,19 @@ function App() {
                         activeDragElement={activeDragElement}
                         setActiveDragElement={setActiveDragElement}
                         zIndex={getZIndex('printer')}
+                    />
+                )}
+
+                {/* Project Window */}
+                {showProjectWindow && (
+                    <ProjectWindow
+                        socket={socket}
+                        onClose={() => setShowProjectWindow(false)}
+                        position={elementPositions.project_window}
+                        onMouseDown={(e) => handleMouseDown(e, 'project_window')}
+                        activeDragElement={activeDragElement}
+                        zIndex={getZIndex('project_window')}
+                        currentProject={currentProject}
                     />
                 )}
 

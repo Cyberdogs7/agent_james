@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, MicOff, Settings, Power, Video, VideoOff, Hand, Lightbulb, Printer, Globe, Box } from 'lucide-react';
+import { Mic, MicOff, Settings, Power, Video, VideoOff, Hand, Lightbulb, Printer, Globe, Box, Pen, Folder, Layout } from 'lucide-react';
 
 const ToolsModule = ({
     isConnected,
@@ -21,6 +21,14 @@ const ToolsModule = ({
     showCadWindow,
     onToggleBrowser,
     showBrowserWindow,
+
+    onToggleWritingMode,
+    isWritingMode,
+    onToggleProjectWindow,
+    showProjectWindow,
+    onToggleWarRoom,
+    showWarRoom,
+
     activeDragElement,
 
     position,
@@ -158,6 +166,45 @@ const ToolsModule = ({
                         } `}
                 >
                     <Globe size={24} />
+                </button>
+
+                {/* Project Switching */}
+                <button
+                    onClick={onToggleProjectWindow}
+                    title="Switch Project"
+                    aria-label="Switch Project"
+                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showProjectWindow
+                        ? 'border-indigo-400 bg-indigo-400/10 text-indigo-400 hover:bg-indigo-400/20 shadow-[0_0_15px_rgba(129,140,248,0.3)]'
+                        : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
+                        } `}
+                >
+                    <Folder size={24} />
+                </button>
+
+                {/* Writing Mode */}
+                <button
+                    onClick={onToggleWritingMode}
+                    title={isWritingMode ? "Disable Writing Mode" : "Enable Writing Mode"}
+                    aria-label={isWritingMode ? "Disable Writing Mode" : "Enable Writing Mode"}
+                    className={`p-3 rounded-full border-2 transition-all duration-300 ${isWritingMode
+                        ? 'border-pink-500 bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 shadow-[0_0_15px_rgba(236,72,153,0.3)]'
+                        : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
+                        } `}
+                >
+                    <Pen size={24} />
+                </button>
+
+                 {/* War Room / Dashboard */}
+                 <button
+                    onClick={onToggleWarRoom}
+                    title="Toggle War Room"
+                    aria-label="Toggle War Room"
+                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showWarRoom
+                        ? 'border-red-600 bg-red-600/10 text-red-600 hover:bg-red-600/20 shadow-[0_0_15px_rgba(220,38,38,0.3)]'
+                        : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
+                        } `}
+                >
+                    <Layout size={24} />
                 </button>
             </div>
         </div>
