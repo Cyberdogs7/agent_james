@@ -72,6 +72,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         if (socket) socket.emit('delete_task', { id });
     };
 
+    const handleRunTask = (id) => {
+        if (socket) socket.emit('run_task', { id });
+    };
+
     return (
         <AnimatePresence>
             <motion.div
@@ -176,9 +180,20 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                         <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors group/item">
                                             <div className="flex justify-between items-start mb-1">
                                                 <div className="text-sm font-bold text-gold9">{task.title}</div>
-                                                <button onClick={() => handleDeleteTask(task.id)} className="text-gold9/20 hover:text-red-500 transition-colors">
-                                                    <Trash2 size={12} />
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    {task.trigger.type === 'manual' && (
+                                                        <button
+                                                            onClick={() => handleRunTask(task.id)}
+                                                            className="text-green-400 hover:text-green-300 p-1 rounded hover:bg-green-500/20 transition-colors"
+                                                            title="Run Now"
+                                                        >
+                                                            <Play size={12} fill="currentColor" />
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => handleDeleteTask(task.id)} className="text-gold9/20 hover:text-red-500 transition-colors">
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div className="text-[10px] text-gold9/50 flex gap-2">
                                                 <span className="bg-gold9/10 px-1 rounded">TRIG: {task.trigger.type.toUpperCase()}</span>
@@ -368,18 +383,47 @@ const CommandModal = ({ onClose, socket }) => {
     const [title, setTitle] = useState('');
     const [triggerType, setTriggerType] = useState('manual');
     const [triggerValue, setTriggerValue] = useState('');
-    const [actionType, setActionType] = useState('notify');
+    const [actionType, setActionType] = useState('jules_task');
     const [actionValue, setActionValue] = useState('');
+    const [selectedSource, setSelectedSource] = useState('');
+    const [availableSources, setAvailableSources] = useState([]);
+
+    // Fetch sources on mount
+    useEffect(() => {
+        if (socket) {
+            socket.emit('get_jules_sources');
+
+            const handleSources = (sources) => {
+                // sources can be a list of strings or objects. normalize.
+                // handle_list_jules_sources usually returns dicts like {name: '...', displayName: '...'}
+                const normalized = sources.map(s => typeof s === 'string' ? s : (s.name || s.id));
+                setAvailableSources(normalized);
+                if (normalized.length > 0) setSelectedSource(normalized[0]);
+            };
+
+            socket.on('jules_sources', handleSources);
+            return () => socket.off('jules_sources', handleSources);
+        }
+    }, [socket]);
 
     const handleSubmit = (e) => {
         e.preventDefault();
+
+        let finalActionValue = actionValue;
+        if (actionType === 'jules_task') {
+            finalActionValue = {
+                prompt: actionValue,
+                source: selectedSource
+            };
+        }
+
         if (socket) {
             socket.emit('create_task', {
                 title,
                 trigger_type: triggerType,
                 trigger_value: triggerValue,
                 action_type: actionType,
-                action_value: actionValue
+                action_value: finalActionValue
             });
         }
         onClose();
@@ -404,7 +448,7 @@ const CommandModal = ({ onClose, socket }) => {
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
                             className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
-                            placeholder="e.g. Daily Backup"
+                            placeholder="e.g. Bug Fix Routine"
                         />
                     </div>
 
@@ -429,9 +473,9 @@ const CommandModal = ({ onClose, socket }) => {
                                 onChange={(e) => setActionType(e.target.value)}
                                 className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 outline-none"
                             >
+                                <option value="jules_task">JULES TASK</option>
                                 <option value="notify">NOTIFY</option>
                                 <option value="run_script">RUN SCRIPT</option>
-                                <option value="jules_task">JULES TASK</option>
                             </select>
                         </div>
                     </div>
@@ -451,17 +495,45 @@ const CommandModal = ({ onClose, socket }) => {
                         </div>
                     )}
 
-                    {(actionType === 'run_script' || actionType === 'jules_task') && (
+                    {actionType === 'jules_task' && (
+                        <>
+                            <div>
+                                <label className="block text-xs text-gold9/60 mb-1">SOURCE / REPO</label>
+                                <select
+                                    value={selectedSource}
+                                    onChange={(e) => setSelectedSource(e.target.value)}
+                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 outline-none"
+                                >
+                                    <option value="">-- Select Source --</option>
+                                    {availableSources.map((s, i) => (
+                                        <option key={i} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gold9/60 mb-1">TASK PROMPT</label>
+                                <textarea
+                                    required
+                                    value={actionValue}
+                                    onChange={(e) => setActionValue(e.target.value)}
+                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none h-20 resize-none"
+                                    placeholder="Describe the task for Jules..."
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    {(actionType === 'run_script' || actionType === 'notify') && (
                         <div>
                             <label className="block text-xs text-gold9/60 mb-1">
-                                {actionType === 'run_script' ? 'SCRIPT PATH' : 'PROMPT'}
+                                {actionType === 'run_script' ? 'SCRIPT PATH' : 'MESSAGE'}
                             </label>
                             <input
                                 type="text"
                                 value={actionValue}
                                 onChange={(e) => setActionValue(e.target.value)}
                                 className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
-                                placeholder={actionType === 'run_script' ? './scripts/backup.sh' : 'Analyze git diff'}
+                                placeholder={actionType === 'run_script' ? './scripts/backup.sh' : 'Notification Text'}
                             />
                         </div>
                     )}
@@ -470,7 +542,7 @@ const CommandModal = ({ onClose, socket }) => {
                         type="submit"
                         className="w-full bg-gold9 text-black font-bold py-2 rounded hover:bg-yellow-400 transition-colors tracking-widest mt-4"
                     >
-                        INITIALIZE ROUTINE
+                        {triggerType === 'manual' ? 'SAVE ROUTINE' : 'INITIALIZE ROUTINE'}
                     </button>
                 </form>
             </div>
