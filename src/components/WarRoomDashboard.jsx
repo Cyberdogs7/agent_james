@@ -11,11 +11,29 @@ import {
     Clock,
     Globe,
     Shield,
-    AlertCircle
+    AlertCircle,
+    Plus,
+    Trash2,
+    Play,
+    Terminal
 } from 'lucide-react';
 
-const WarRoomDashboard = ({ data, onClose }) => {
+const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
+    const [showCommandModal, setShowCommandModal] = useState(false);
+    const [activeTab, setActiveTab] = useState('tasks'); // 'trello' or 'tasks'
+
+    // Stream control
+    useEffect(() => {
+        if (socket) {
+            socket.emit('start_dashboard_stream');
+        }
+        return () => {
+            if (socket) {
+                socket.emit('stop_dashboard_stream');
+            }
+        };
+    }, [socket]);
 
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date()), 1000);
@@ -26,11 +44,13 @@ const WarRoomDashboard = ({ data, onClose }) => {
     const {
         project = "UNKNOWN",
         trello = [],
+        tasks = [],
         jules = [],
         devices = [],
         printers = [],
         git = { branch: 'unknown', branches: [], status: '' },
-        system_status = "ONLINE"
+        system_status = "ONLINE",
+        system_stats = { cpu: 0, ram: 0, net_sent: 0, net_recv: 0 }
     } = data || {};
 
     const containerVariants = {
@@ -46,6 +66,10 @@ const WarRoomDashboard = ({ data, onClose }) => {
     const itemVariants = {
         hidden: { opacity: 0, y: 20 },
         visible: { opacity: 1, y: 0 }
+    };
+
+    const handleDeleteTask = (id) => {
+        if (socket) socket.emit('delete_task', { id });
     };
 
     return (
@@ -88,7 +112,14 @@ const WarRoomDashboard = ({ data, onClose }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-6">
-                        <div className="text-right">
+                        <button
+                            onClick={() => setShowCommandModal(true)}
+                            className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                        >
+                            <Terminal size={14} />
+                            COMMAND
+                        </button>
+                        <div className="text-right hidden md:block">
                             <div className="text-2xl font-bold tracking-widest">
                                 {time.toLocaleTimeString([], { hour12: false })}
                             </div>
@@ -108,7 +139,7 @@ const WarRoomDashboard = ({ data, onClose }) => {
                 {/* MAIN GRID */}
                 <div className="relative z-10 grid grid-cols-12 grid-rows-6 gap-6 flex-1 min-h-0">
 
-                    {/* COL 1: INTEL (TRELLO) - Spans 4 cols, full height */}
+                    {/* COL 1: INTEL (TASKS / TRELLO) - Spans 4 cols, full height */}
                     <motion.div
                         variants={itemVariants}
                         className="col-span-4 row-span-6 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden group hover:border-gold9/40 transition-colors"
@@ -116,23 +147,60 @@ const WarRoomDashboard = ({ data, onClose }) => {
                         <div className="absolute top-0 right-0 p-2 opacity-50">
                             <Layers className="w-24 h-24 text-gold9/5" />
                         </div>
-                        <h2 className="flex items-center gap-2 text-lg font-bold tracking-widest border-b border-gold9/10 pb-2 mb-4">
-                            <CheckSquare className="w-5 h-5 text-gold9" />
-                            ACTIVE OBJECTIVES
-                        </h2>
+
+                        {/* Tabs */}
+                        <div className="flex items-center gap-4 border-b border-gold9/10 pb-2 mb-4">
+                            <button
+                                onClick={() => setActiveTab('tasks')}
+                                className={`text-sm font-bold tracking-widest transition-colors ${activeTab === 'tasks' ? 'text-gold9' : 'text-gold9/40 hover:text-gold9/70'}`}
+                            >
+                                AUTOMATIONS
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('trello')}
+                                className={`text-sm font-bold tracking-widest transition-colors ${activeTab === 'trello' ? 'text-gold9' : 'text-gold9/40 hover:text-gold9/70'}`}
+                            >
+                                OBJECTIVES
+                            </button>
+                        </div>
+
                         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
-                            {trello.length === 0 ? (
-                                <div className="text-center text-gold9/40 py-10 italic">No active objectives detected.</div>
-                            ) : (
-                                trello.map((card, i) => (
-                                    <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors">
-                                        <div className="text-xs text-gold9/50 mb-1 flex justify-between">
-                                            <span>{card.listName || 'PENDING'}</span>
-                                            <span>#{card.idShort}</span>
-                                        </div>
-                                        <div className="font-medium text-sm text-gray-200">{card.name}</div>
+                            {activeTab === 'tasks' ? (
+                                tasks.length === 0 ? (
+                                    <div className="text-center text-gold9/40 py-10 italic text-xs">
+                                        No active worker nodes.
+                                        <br/>Click COMMAND to deploy.
                                     </div>
-                                ))
+                                ) : (
+                                    tasks.map((task, i) => (
+                                        <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors group/item">
+                                            <div className="flex justify-between items-start mb-1">
+                                                <div className="text-sm font-bold text-gold9">{task.title}</div>
+                                                <button onClick={() => handleDeleteTask(task.id)} className="text-gold9/20 hover:text-red-500 transition-colors">
+                                                    <Trash2 size={12} />
+                                                </button>
+                                            </div>
+                                            <div className="text-[10px] text-gold9/50 flex gap-2">
+                                                <span className="bg-gold9/10 px-1 rounded">TRIG: {task.trigger.type.toUpperCase()}</span>
+                                                <span className="bg-blue-500/10 text-blue-400 px-1 rounded">ACT: {task.action.type.toUpperCase()}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                )
+                            ) : (
+                                trello.length === 0 ? (
+                                    <div className="text-center text-gold9/40 py-10 italic">No active objectives detected.</div>
+                                ) : (
+                                    trello.map((card, i) => (
+                                        <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors">
+                                            <div className="text-xs text-gold9/50 mb-1 flex justify-between">
+                                                <span>{card.listName || 'PENDING'}</span>
+                                                <span>#{card.idShort}</span>
+                                            </div>
+                                            <div className="font-medium text-sm text-gray-200">{card.name}</div>
+                                        </div>
+                                    ))
+                                )
                             )}
                         </div>
                     </motion.div>
@@ -158,8 +226,8 @@ const WarRoomDashboard = ({ data, onClose }) => {
                             ) : (
                                 <div className="grid grid-cols-1 gap-3">
                                     {jules.map((session, i) => (
-                                        <div key={i} className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded">
-                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                        <div key={i} className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors">
+                                            <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
                                             <div className="flex-1">
                                                 <div className="text-sm font-bold text-gold9">{session.title || session.id}</div>
                                                 <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
@@ -180,18 +248,21 @@ const WarRoomDashboard = ({ data, onClose }) => {
                         className="col-span-5 row-span-2 grid grid-cols-3 gap-4"
                     >
                         <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">LATENCY</div>
-                            <div className="text-2xl font-bold text-green-400">24ms</div>
+                            <div className="text-xs text-gold9/60">RAM LOAD</div>
+                            <div className="text-2xl font-bold text-green-400">{system_stats.ram.toFixed(1)}%</div>
                             <Activity className="w-4 h-4 self-end text-gold9/30" />
                         </div>
                         <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
                             <div className="text-xs text-gold9/60">CPU LOAD</div>
-                            <div className="text-2xl font-bold text-gold9">12%</div>
+                            <div className="text-2xl font-bold text-gold9">{system_stats.cpu.toFixed(1)}%</div>
                             <Cpu className="w-4 h-4 self-end text-gold9/30" />
                         </div>
                         <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
                             <div className="text-xs text-gold9/60">NETWORK</div>
-                            <div className="text-2xl font-bold text-blue-400">1Gbps</div>
+                            <div className="text-[10px] font-bold text-blue-400 font-mono">
+                                <div>TX: {(system_stats.net_sent / 1024 / 1024).toFixed(1)} MB</div>
+                                <div>RX: {(system_stats.net_recv / 1024 / 1024).toFixed(1)} MB</div>
+                            </div>
                             <Globe className="w-4 h-4 self-end text-gold9/30" />
                         </div>
                     </motion.div>
@@ -280,8 +351,130 @@ const WarRoomDashboard = ({ data, onClose }) => {
                     <div>A.D.A OS v2.0 // AUTH: JAMES</div>
                 </motion.div>
 
+                {/* COMMAND MODAL */}
+                {showCommandModal && (
+                    <CommandModal
+                        onClose={() => setShowCommandModal(false)}
+                        socket={socket}
+                    />
+                )}
+
             </motion.div>
         </AnimatePresence>
+    );
+};
+
+const CommandModal = ({ onClose, socket }) => {
+    const [title, setTitle] = useState('');
+    const [triggerType, setTriggerType] = useState('manual');
+    const [triggerValue, setTriggerValue] = useState('');
+    const [actionType, setActionType] = useState('notify');
+    const [actionValue, setActionValue] = useState('');
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (socket) {
+            socket.emit('create_task', {
+                title,
+                trigger_type: triggerType,
+                trigger_value: triggerValue,
+                action_type: actionType,
+                action_value: actionValue
+            });
+        }
+        onClose();
+    };
+
+    return (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-black border border-gold9 p-6 rounded-xl w-[400px] relative shadow-[0_0_50px_rgba(255,215,0,0.2)]">
+                <button onClick={onClose} className="absolute top-2 right-2 text-gold9/50 hover:text-gold9">
+                    ✕
+                </button>
+                <h2 className="text-xl font-bold text-gold9 mb-4 flex items-center gap-2">
+                    <Terminal size={18} />
+                    NEW AUTOMATION
+                </h2>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-xs text-gold9/60 mb-1">TASK TITLE</label>
+                        <input
+                            type="text"
+                            required
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
+                            placeholder="e.g. Daily Backup"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gold9/60 mb-1">TRIGGER</label>
+                            <select
+                                value={triggerType}
+                                onChange={(e) => setTriggerType(e.target.value)}
+                                className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 outline-none"
+                            >
+                                <option value="manual">MANUAL</option>
+                                <option value="schedule">SCHEDULE</option>
+                                <option value="git">GIT EVENT</option>
+                                <option value="trello">TRELLO CARD</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gold9/60 mb-1">ACTION</label>
+                            <select
+                                value={actionType}
+                                onChange={(e) => setActionType(e.target.value)}
+                                className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 outline-none"
+                            >
+                                <option value="notify">NOTIFY</option>
+                                <option value="run_script">RUN SCRIPT</option>
+                                <option value="jules_task">JULES TASK</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {(triggerType === 'schedule' || triggerType === 'git' || triggerType === 'trello') && (
+                        <div>
+                            <label className="block text-xs text-gold9/60 mb-1">
+                                {triggerType === 'schedule' ? 'CRON / TIME' : 'EVENT DETAIL'}
+                            </label>
+                            <input
+                                type="text"
+                                value={triggerValue}
+                                onChange={(e) => setTriggerValue(e.target.value)}
+                                className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
+                                placeholder={triggerType === 'schedule' ? '0 12 * * *' : 'Trigger Value'}
+                            />
+                        </div>
+                    )}
+
+                    {(actionType === 'run_script' || actionType === 'jules_task') && (
+                        <div>
+                            <label className="block text-xs text-gold9/60 mb-1">
+                                {actionType === 'run_script' ? 'SCRIPT PATH' : 'PROMPT'}
+                            </label>
+                            <input
+                                type="text"
+                                value={actionValue}
+                                onChange={(e) => setActionValue(e.target.value)}
+                                className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
+                                placeholder={actionType === 'run_script' ? './scripts/backup.sh' : 'Analyze git diff'}
+                            />
+                        </div>
+                    )}
+
+                    <button
+                        type="submit"
+                        className="w-full bg-gold9 text-black font-bold py-2 rounded hover:bg-yellow-400 transition-colors tracking-widest mt-4"
+                    >
+                        INITIALIZE ROUTINE
+                    </button>
+                </form>
+            </div>
+        </div>
     );
 };
 

@@ -323,6 +323,11 @@ from search_agent import SearchAgent
 from scraper_agent import ScraperAgent
 from proactive_agent import ProactiveAgent
 from git_ops import GitOps
+import psutil
+try:
+    from backend.task_manager import TaskManager
+except ImportError:
+    from task_manager import TaskManager
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
@@ -418,6 +423,7 @@ class AudioLoop:
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
         
+        self.task_manager = TaskManager(self.project_manager.get_current_project_path())
         self.search_agent = SearchAgent(self.trello_agent, self.project_manager, self.scraper_agent)
         self.proactive_agent = ProactiveAgent(session=None, project_manager=self.project_manager)
 
@@ -1282,28 +1288,47 @@ class AudioLoop:
         else:
             return "Failed to list Jules activities."
 
-    async def handle_display_dashboard(self):
+    async def get_dashboard_data(self):
+        """Gathers all data for the War Room Dashboard."""
         if INCLUDE_RAW_LOGS:
             print("[ADA DEBUG] [DASHBOARD] Gathering data for War Room...")
 
         # 1. Project Info
         project = self.project_manager.current_project
 
-        # 2. Trello Data (Active Cards)
+        # 2. System Stats (Real-time)
+        try:
+            cpu = psutil.cpu_percent(interval=None)
+            ram = psutil.virtual_memory().percent
+            net = psutil.net_io_counters()
+            # Calculate a rough "speed" or just show total bytes for now.
+            # Ideally we'd store prev value to calc rate, but for stateless call just sending totals/percent is safer.
+            # Using net.bytes_recv + net.bytes_sent doesn't give speed without time delta.
+            # Let's send raw values and let UI handle or just be static "Active"
+            system_stats = {
+                "cpu": cpu,
+                "ram": ram,
+                "net_sent": net.bytes_sent,
+                "net_recv": net.bytes_recv
+            }
+        except Exception:
+            system_stats = {"cpu": 0, "ram": 0, "net_sent": 0, "net_recv": 0}
+
+        # 3. Tasks (Worker Nodes)
+        tasks = self.task_manager.list_tasks()
+
+        # 4. Trello Data (Active Cards)
         trello_cards = []
         try:
             # Attempt to get the first board and its cards
-            # This is a simplification; ideally we'd search or have a config
             boards = await self.trello_agent.list_boards()
             if boards:
                 board_id = boards[0]['id']
-                # Get lists to filter for "Doing" / "To Do"
                 lists = await self.trello_agent.list_lists(board_id)
                 active_list_ids = {l['id']: l['name'] for l in lists if 'done' not in l['name'].lower()}
 
-                # Fetch cards from all active lists (parallel)
-                tasks = [self.trello_agent.list_cards(lid) for lid in active_list_ids.keys()]
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                tasks_coros = [self.trello_agent.list_cards(lid) for lid in active_list_ids.keys()]
+                results = await asyncio.gather(*tasks_coros, return_exceptions=True)
 
                 for i, res in enumerate(results):
                     if isinstance(res, list):
@@ -1316,15 +1341,11 @@ class AudioLoop:
                                 "listName": lname
                             })
         except Exception as e:
-            if INCLUDE_RAW_LOGS:
+             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to fetch Trello data: {e}")
 
-        # 3. Jules Data (Local Session Memory)
+        # 5. Jules Data
         jules_sessions = self.project_manager.get_jules_sessions()
-        # Enrich with live state if possible?
-        # For now, just pass the local record which has {id, title, timestamp}
-        # Ideally we'd map this to current monitored sessions to get "state"
-
         enriched_sessions = []
         for s in jules_sessions:
             state = "UNKNOWN"
@@ -1336,7 +1357,7 @@ class AudioLoop:
                 "state": state
             })
 
-        # 4. Device Data (Kasa)
+        # 6. Device Data
         devices = []
         for ip, d in self.kasa_agent.devices.items():
              devices.append({
@@ -1344,7 +1365,7 @@ class AudioLoop:
                  "is_on": d.is_on
              })
 
-        # 5. Printer Data
+        # 7. Printer Data
         printers = []
         if self.printer_agent:
             for host, p in self.printer_agent.printers.items():
@@ -1357,7 +1378,7 @@ class AudioLoop:
                 }
                 printers.append(p_data)
 
-        # 6. Git Ops Data
+        # 8. Git Ops Data
         repo_path = self.project_manager.get_current_project_path()
         git_status = {
             "branch": GitOps.get_current_branch(repo_path) or "unknown",
@@ -1365,15 +1386,20 @@ class AudioLoop:
             "status": GitOps.get_status(repo_path)
         }
 
-        dashboard_data = {
+        return {
             "project": project,
             "system_status": "ONLINE",
-            "trello": trello_cards[:10], # Limit to top 10
+            "system_stats": system_stats,
+            "tasks": tasks,
+            "trello": trello_cards[:10],
             "jules": enriched_sessions[:5],
             "devices": devices,
             "printers": printers,
             "git": git_status
         }
+
+    async def handle_display_dashboard(self):
+        dashboard_data = await self.get_dashboard_data()
 
         if self.on_display_content:
             self.on_display_content({
