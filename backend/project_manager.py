@@ -107,6 +107,19 @@ class ProjectManager:
     def get_current_project_path(self):
         return self.projects_dir / self.current_project
 
+    def get_project_path(self, name: str):
+        """Returns the path for a specific project."""
+        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        return self.projects_dir / safe_name
+
+    def list_git_projects(self):
+        """Returns a list of projects that are git repositories."""
+        git_projects = []
+        for d in self.projects_dir.iterdir():
+            if d.is_dir() and (d / ".git").exists():
+                git_projects.append(d.name)
+        return git_projects
+
     def log_chat(self, sender: str, text: str):
         """Appends a chat message to the current project's history."""
         log_file = self.get_current_project_path() / "chat_history.jsonl"
