@@ -34,6 +34,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [selectedArtifact, setSelectedArtifact] = useState(null);
     const [fleetStatus, setFleetStatus] = useState([]);
     const [showAuthModal, setShowAuthModal] = useState(false);
+    const [selectedRepo, setSelectedRepo] = useState(null);
 
     // Stream control
     useEffect(() => {
@@ -117,12 +118,6 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         setSelectedSession(null);
         if (socket) {
             socket.emit('clear_focused_session');
-        }
-    };
-
-    const handleMerge = (repo) => {
-        if (socket && confirm(`Merge '${repo}' branch to main?`)) {
-            socket.emit('perform_git_merge', { repo });
         }
     };
 
@@ -368,7 +363,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                 </div>
                             ) : (
                                 fleetStatus.map((repo, i) => (
-                                    <div key={i} className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors">
+                                    <div
+                                        key={i}
+                                        onClick={() => setSelectedRepo(repo)}
+                                        className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer"
+                                    >
                                         <div className="flex justify-between items-start mb-2">
                                             <div>
                                                 <div className="text-sm font-bold text-gold9">{repo.name}</div>
@@ -377,24 +376,12 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                                         {repo.branch}
                                                     </span>
                                                     <span className="text-gold9/30">|</span>
-                                                    <span className={repo.status ? 'text-yellow-500' : 'text-gray-500'}>
-                                                        {repo.status ? 'DIRTY' : 'CLEAN'}
-                                                    </span>
+                                                    <span className="text-gray-500">REMOTE</span>
                                                 </div>
                                             </div>
-                                            {repo.branch !== 'main' && repo.branch !== 'master' && (
-                                                <button
-                                                    onClick={() => handleMerge(repo.name)}
-                                                    className="bg-green-500/20 hover:bg-green-500/40 text-green-400 border border-green-500/50 rounded px-2 py-1 flex items-center gap-1 text-[10px] font-bold tracking-wider transition-all"
-                                                    title="Merge to Main"
-                                                >
-                                                    <GitMerge size={10} />
-                                                    MERGE
-                                                </button>
-                                            )}
                                         </div>
 
-                                        {repo.last_commit ? (
+                                        {repo.last_commit && (
                                             <div className="text-[10px] bg-black/30 p-2 rounded border border-white/5">
                                                 <div className="text-gold9/70 font-bold mb-0.5 truncate">{repo.last_commit.message}</div>
                                                 <div className="flex justify-between text-gold9/40">
@@ -402,8 +389,6 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                                     <span>{repo.last_commit.date}</span>
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div className="text-[10px] text-gold9/30 italic">No commits recorded.</div>
                                         )}
                                     </div>
                                 ))
@@ -442,6 +427,15 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                     <ArtifactModal
                         artifact={selectedArtifact}
                         onClose={() => setSelectedArtifact(null)}
+                    />
+                )}
+
+                {/* REPO DETAILS MODAL */}
+                {selectedRepo && (
+                    <RepoDetailsModal
+                        repo={selectedRepo}
+                        onClose={() => setSelectedRepo(null)}
+                        socket={socket}
                     />
                 )}
 
@@ -961,6 +955,78 @@ const CommandModal = ({ onClose, socket }) => {
                         {triggerType === 'manual' ? 'SAVE ROUTINE' : 'INITIALIZE ROUTINE'}
                     </button>
                 </form>
+            </div>
+        </div>
+    );
+};
+
+const RepoDetailsModal = ({ repo, onClose, socket }) => {
+    const [branches, setBranches] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (socket) {
+            socket.emit('get_repo_branches', { repo: repo.name });
+            const handleData = (data) => {
+                if (data.repo === repo.name) {
+                    setBranches(data.branches);
+                    setLoading(false);
+                }
+            };
+            socket.on('repo_branches', handleData);
+            return () => socket.off('repo_branches', handleData);
+        }
+    }, [socket, repo.name]);
+
+    const handleMerge = (branch) => {
+        if (confirm(`Merge '${branch}' into default branch?`)) {
+            socket.emit('perform_git_merge', { repo: repo.name, branch: branch });
+            onClose();
+        }
+    };
+
+    return (
+        <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-8">
+            <div className="bg-black border border-gold9 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col relative shadow-[0_0_50px_rgba(255,215,0,0.1)]">
+                <div className="flex justify-between items-center p-4 border-b border-gold9/20 bg-gold9/5">
+                    <div>
+                        <h2 className="text-lg font-bold text-gold9 flex items-center gap-2">
+                            <GitBranch size={18} />
+                            REPO: {repo.name}
+                        </h2>
+                        <div className="text-xs text-gold9/60 font-mono">REMOTE BRANCHES</div>
+                    </div>
+                    <button onClick={onClose} className="text-gold9/50 hover:text-gold9 p-2">✕</button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 scrollbar-hide space-y-2">
+                    {loading ? (
+                        <div className="text-center text-gold9/40 py-10 animate-pulse">Scanning Remote Refs...</div>
+                    ) : (
+                        branches.map((b, i) => (
+                            <div key={i} className="flex justify-between items-center bg-gold9/5 p-3 rounded border border-gold9/10 hover:bg-gold9/10 transition-colors">
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-bold text-gold9">{b.name}</span>
+                                        {b.is_default && <span className="text-[10px] bg-gold9/20 px-2 rounded text-gold9">DEFAULT</span>}
+                                    </div>
+                                    <div className="text-[10px] text-gold9/50 flex gap-3 mt-1">
+                                        <span className={b.ahead > 0 ? "text-green-400" : ""}>{b.ahead} commits ahead</span>
+                                        <span className={b.behind > 0 ? "text-red-400" : ""}>{b.behind} commits behind</span>
+                                    </div>
+                                </div>
+                                {!b.is_default && b.ahead > 0 && (
+                                    <button
+                                        onClick={() => handleMerge(b.name)}
+                                        className="bg-green-500/20 hover:bg-green-500/40 text-green-400 border border-green-500/50 rounded px-3 py-1 text-xs font-bold tracking-widest transition-all flex items-center gap-1"
+                                    >
+                                        <GitMerge size={12} />
+                                        MERGE
+                                    </button>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
             </div>
         </div>
     );

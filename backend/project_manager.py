@@ -13,6 +13,11 @@ try:
 except ImportError:
     from git_ops import GitOps
 
+try:
+    from backend.github_client import GitHubClient
+except ImportError:
+    from github_client import GitHubClient
+
 DEFAULT_SYSTEM_PROMPT = "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant."
 
 VALID_VOICES = ["Puck", "Charon", "Kore", "Fenrir", "Aoede", "Sadaltager"]
@@ -46,6 +51,20 @@ class ProjectManager:
 
         # State for git monitoring
         self._git_last_state = {}
+        self.fleet_file = self.workspace_root / "fleet.json"
+
+    def load_fleet(self):
+        if self.fleet_file.exists():
+            try:
+                with open(self.fleet_file, "r") as f:
+                    return json.load(f)
+            except:
+                pass
+        return []
+
+    def save_fleet(self, fleet):
+        with open(self.fleet_file, "w") as f:
+            json.dump(fleet, f, indent=4)
 
     def create_project(self, name: str):
         """Creates a new project directory with subfolders."""
@@ -96,72 +115,41 @@ class ProjectManager:
 
     def sync_jules_repos(self, sources):
         """
-        Syncs local repositories with the list of sources from Jules.
-        Clones missing repositories.
+        Syncs local fleet configuration with the list of sources from Jules.
+        Does NOT clone repositories. Updates fleet.json.
         """
-        import subprocess
+        fleet = self.load_fleet()
+        # fleet is a list of dicts: {owner, name, source}
+        existing_repos = {f"{r['owner']}/{r['name']}" for r in fleet}
 
-        token = self.get_github_token()
-        results = []
-
-        # Env to prevent interactive prompts
-        env = os.environ.copy()
-        env["GIT_TERMINAL_PROMPT"] = "0"
-
+        new_repos = []
         for source_obj in sources:
-            # Source object might be a dict or string depending on API version
-            # Assuming dict: {name: 'sources/github/owner/repo', displayName: '...'}
             source_name = source_obj.get("name") if isinstance(source_obj, dict) else source_obj
 
             if not source_name or not source_name.startswith("sources/github/"):
                 continue
 
-            # Parse owner/repo
-            # Format: sources/github/owner/repo
             parts = source_name.split('/')
             if len(parts) < 4:
                 continue
 
             repo_owner = parts[2]
             repo_name = parts[3]
-            full_repo_name = f"{repo_owner}/{repo_name}"
-            # Use repo_name as folder name to keep it simple, or owner_repo to avoid collisions?
-            # User likely wants "repo_name" if unique. Let's stick to repo_name for now.
-            target_dir = self.projects_dir / repo_name
+            full_name = f"{repo_owner}/{repo_name}"
 
-            if target_dir.exists():
-                results.append(f"Exists: {repo_name}")
-                continue
+            if full_name not in existing_repos:
+                fleet.append({
+                    "owner": repo_owner,
+                    "name": repo_name,
+                    "source": source_name
+                })
+                new_repos.append(full_name)
 
-            # Clone
-            clone_url = f"https://github.com/{repo_owner}/{repo_name}.git"
-            if token:
-                clone_url = f"https://oauth2:{token}@github.com/{repo_owner}/{repo_name}.git"
+        if new_repos:
+            self.save_fleet(fleet)
+            return [f"Added to Fleet: {r}" for r in new_repos], "OK"
 
-            try:
-                print(f"[ProjectManager] Cloning {full_repo_name}...")
-                subprocess.run(
-                    ["git", "clone", clone_url, str(target_dir)],
-                    check=True,
-                    capture_output=True,
-                    env=env
-                )
-
-                # Initialize project structure if needed (config.json)
-                self._create_default_config(target_dir)
-                (target_dir / "cad").mkdir(exist_ok=True)
-                (target_dir / "browser").mkdir(exist_ok=True)
-
-                results.append(f"Cloned: {repo_name}")
-            except subprocess.CalledProcessError as e:
-                err_msg = e.stderr.decode() if e.stderr else str(e)
-                if "Authentication failed" in err_msg or "403" in err_msg:
-                    return results, "AUTH_REQUIRED"
-                results.append(f"Failed: {repo_name} ({err_msg})")
-            except Exception as e:
-                results.append(f"Error: {repo_name} ({str(e)})")
-
-        return results, "OK"
+        return ["Fleet up to date."], "OK"
 
     def _create_default_config(self, project_path):
         """Creates a default config.json file in the project directory."""
@@ -502,34 +490,50 @@ class ProjectManager:
              return True, "Writing Mode disabled. Standard configuration restored."
         return False, msg
 
-    def monitor_git_repos(self):
+    async def monitor_git_repos(self):
         """
-        Scans all git projects for new commits since the last check.
+        Scans fleet for new commits (via API) since the last check.
         Returns a list of event dictionaries.
         """
         events = []
-        git_projects = self.list_git_projects()
+        fleet = self.load_fleet()
+        token = self.get_github_token()
 
-        for project_name in git_projects:
-            project_path = self.get_project_path(project_name)
-            last_commit = GitOps.get_last_commit_info(project_path)
+        if not token:
+            return []
 
-            if last_commit:
-                current_hash = last_commit['hash']
-                last_seen_hash = self._git_last_state.get(project_name)
+        client = GitHubClient(token)
 
-                if last_seen_hash and current_hash != last_seen_hash:
-                    # New commit detected
-                    events.append({
-                        "type": "git_commit",
-                        "repo": project_name,
-                        "author": last_commit['author'],
-                        "message": last_commit['message'],
-                        "hash": current_hash,
-                        "date": last_commit['date']
-                    })
+        for repo in fleet:
+            owner = repo['owner']
+            name = repo['name']
 
-                # Update state
-                self._git_last_state[project_name] = current_hash
+            branches = await client.get_branches(owner, name)
+            if not branches:
+                continue
+
+            # Assume first branch is default or look for main/master
+            # GitHub API get_repo_details would give default_branch, but let's just check all heads
+            # Actually, monitoring *every* branch is expensive.
+            # Let's just monitor the default branch or 'main'/'master'
+            default_branch = next((b for b in branches if b['name'] in ['main', 'master']), branches[0])
+
+            current_sha = default_branch['commit']['sha']
+            repo_key = f"{owner}/{name}"
+            last_seen_sha = self._git_last_state.get(repo_key)
+
+            if last_seen_sha and current_sha != last_seen_sha:
+                # New commit
+                # We could fetch commit details but SHA change is enough for trigger
+                events.append({
+                    "type": "git_commit",
+                    "repo": repo_key,
+                    "author": "Remote User", # Simplification to avoid extra API call
+                    "message": "New remote commit detected",
+                    "hash": current_sha,
+                    "date": "Just now"
+                })
+
+            self._git_last_state[repo_key] = current_sha
 
         return events

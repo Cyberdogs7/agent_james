@@ -1780,7 +1780,42 @@ User: "What's the weather in London?"
                                     branch_name = fc.args["branch_name"]
                                     repo_name = fc.args.get("repo_name")
                                     repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-                                    success, msg = GitOps.merge_branch(repo_path, branch_name)
+
+                                    # Check if local repo exists
+                                    if repo_path.exists():
+                                        success, msg = GitOps.merge_branch(repo_path, branch_name)
+                                    else:
+                                        # Attempt Remote Merge
+                                        token = self.project_manager.get_github_token()
+                                        if token and repo_name:
+                                            # Assume repo_name is owner/name or name
+                                            # We need owner/name. If just name, we might struggle if it's not in fleet.json with full info.
+                                            # But `repo_path.name` is sanitized name.
+                                            # Let's search fleet for full name
+                                            fleet = self.project_manager.load_fleet()
+                                            target_repo = next((r for r in fleet if r['name'] == repo_name or f"{r['owner']}/{r['name']}" == repo_name), None)
+
+                                            if target_repo:
+                                                from backend.github_client import GitHubClient
+                                                client = GitHubClient(token)
+                                                # Fetch default branch
+                                                details = await client.get_repo_details(target_repo['owner'], target_repo['name'])
+                                                target_branch = details.get('default_branch', 'main') if details else 'main'
+
+                                                result = await client.merge_branch(target_repo['owner'], target_repo['name'], target_branch, branch_name)
+                                                if result:
+                                                    success = True
+                                                    msg = f"Merged {branch_name} into {target_branch} remotely."
+                                                else:
+                                                    success = False
+                                                    msg = "Remote merge failed."
+                                            else:
+                                                success = False
+                                                msg = f"Repository '{repo_name}' not found locally or in fleet config."
+                                        else:
+                                            success = False
+                                            msg = "Repository path does not exist and no GitHub token available for remote merge."
+
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
@@ -2664,8 +2699,7 @@ User: "What's the weather in London?"
             print("[ADA DEBUG] [GIT] Starting fleet monitoring...")
         while not self.stop_event.is_set():
             try:
-                # Use executor to prevent blocking the event loop
-                events = await asyncio.to_thread(self.project_manager.monitor_git_repos)
+                events = await self.project_manager.monitor_git_repos()
                 for event in events:
                     if event['type'] == 'git_commit':
                         msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
