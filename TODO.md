@@ -17,19 +17,19 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Requires installing `@pixiv/three-vrm`. Need to map audio amplitude/visemes to blend shapes and head rotation to MediaPipe face tracking coordinates. Must gracefully degrade if camera is unavailable.
   - **Status**: **Idea** (Dependencies missing)
 
-- [x] **Self-Healing Codebase (Jules Auto-PR)**
-  - **Description**: Allow James to autonomously fix runtime errors or implement requested features by generating code and opening a Pull Request.
-  - **Wow Factor**: "Sir, I noticed a crash in the `kasa_agent`. I've analyzed the logs and prepared a fix for your review."
-  - **User Impact**: Automated maintenance; the assistant fixes itself.
-  - **Technical Notes**: Leverage `JulesAgent` with `automationMode="AUTO_CREATE_PR"`. Needs a log monitoring service that triggers Jules on specific exception patterns.
-  - **Status**: **Implemented** (Log monitoring service triggers proactive voice notification; `JulesAgent` creates PRs on demand)
+- [ ] **"Minority Report" 3D Manipulation**
+  - **Description**: Leverage the existing hand-tracking system to allow the user to rotate, zoom, and explode 3D CAD models in the `CadWindow` using natural hand gestures.
+  - **Wow Factor**: "James, explode this view." -> User physically pulls their hands apart to separate the model components.
+  - **User Impact**: Intuitive, mouse-free interaction with complex 3D data.
+  - **Technical Notes**: Map `HandLandmarker` pinch/drag deltas to Three.js camera controls. Requires "Modular Mode" state awareness.
+  - **Status**: **Idea** (Hand tracking implemented, 3D binding missing)
 
-- [x] **The "War Room" Dashboard**
-  - **Description**: A voice-activated "command center" view that aggregates Trello tickets, active GitHub PRs, and system status into a sci-fi style grid layout.
-  - **Wow Factor**: "James, show me the situation report." -> Screen transforms into a high-density information display.
-  - **User Impact**: Instant context on project health without checking 5 different browser tabs.
-  - **Technical Notes**: React component using CSS Grid/bento-box style. Needs to aggregate data from `TrelloAgent` and `JulesAgent` concurrently.
-  - **Status**: **Implemented**
+- [ ] **Real-World Vision (VLA)**
+  - **Description**: Allow James to "see" and identify physical objects held up to the camera. "James, what size screw is this?" or "Does this 3D print look like the model?"
+  - **Wow Factor**: The assistant bridges the gap between digital and physical reality.
+  - **User Impact**: Invaluable for hardware debugging and inventory management.
+  - **Technical Notes**: Ingest video frames into a Vision-Language Model (VLM) or specialized YOLO models for object detection.
+  - **Status**: **Idea**
 
 - [ ] **Deep OS Control (Cross-Platform)**
   - **Description**: Give James control over the operating system beyond the app window. "James, turn off WiFi", "Open Spotify", "Organize my desktop".
@@ -37,18 +37,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Redefines the assistant as an OS interface rather than just an app.
   - **Technical Notes**: Python `subprocess` calls. abstracting OS-specific commands (PowerShell for Windows, AppleScript/zsh for macOS). Security permission handling is critical.
   - **Status**: **Idea**
-
-- [x] **War Room: Fleet Command & Git Ops**
-  - **Description**: A visual UI for managing multiple JulesAgents working on tasks across multiple repos. Includes controls for voice-activated or manual git branch merges. Also allows configuring "Jules Worker Nodes"—autonomous agents with specific prompts and schedules (e.g., "Refactor Worker", "Testing Worker").
-  - **Triggers**: Users can define triggers for these workers, such as:
-    - When a card is added to a Trello list.
-    - When another Jules agent marks a task done.
-    - When a git branch is merged.
-    - Time-based schedules (e.g., every 30 minutes, or at 2 AM).
-  - **Wow Factor**: "Commanding a fleet of agents that code 24/7, even while I sleep."
-  - **User Impact**: Orchestrate complex multi-repo development and autonomous background work from a single view.
-  - **Technical Notes**: Leverage `JulesAgent` source discovery. Implement simple git merge wrappers. Scheduler for triggers.
-  - **Status**: **Implemented**
 
 ---
 
@@ -60,7 +48,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "James, why is this failing?" (James reads the local error log and the specific file diff you just made).
   - **User Impact**: Reduces the need to "explain" the context to the AI.
   - **Technical Notes**: Extend `JulesAgent` to read `.git` status/diffs locally via `subprocess` (avoiding heavy `GitPython` dependency if possible) and prepend to the prompt.
-  - **Status**: **Partially Implemented** (Basic repo source linking exists, local diffs missing)
+  - **Status**: **Partially Implemented** (Basic repo source linking exists; full diff context missing)
+
+- [ ] **Local "Brain" (Offline Mode)**
+  - **Description**: When the internet is down (or for privacy), switch to a local LLM (e.g., Llama 3 on GPU) for basic commands (timers, local device control).
+  - **Wow Factor**: "Sir, the network is down, but I am still operational."
+  - **User Impact**: Reliability and privacy.
+  - **Technical Notes**: Integration with `ollama` or `llama.cpp` python bindings. Check `check_cuda.py` for hardware capability.
+  - **Status**: **Idea**
 
 - [ ] **Visual Task Scheduling**
   - **Description**: When a Jules task is long-running (e.g., "Refactor the backend"), show a dedicated progress bar or "working" visualization in the UI, rather than just a spinner.
@@ -88,26 +83,21 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [ ] **Smart Error Interception**
-  - **Description**: If a terminal command run by the user (or agent) fails, James automatically parses the stderr and offers a one-sentence explanation/fix.
-  - **User Impact**: Faster debugging.
-  - **Status**: **Idea**
-
-- [ ] **Voice-Controlled Git Actions**
-  - **Description**: Simple voice commands for routine git operations. "James, commit this as 'Fix login bug' and push."
+- [ ] **Voice-Controlled Git Actions (Full Suite)**
+  - **Description**: Expand voice git controls beyond simple merging. "James, commit this as 'Fix login bug' and push."
   - **User Impact**: Hands-free version control.
-  - **Technical Notes**: Wrap `git` CLI commands in `AudioLoop` tools.
-  - **Status**: **Idea**
+  - **Technical Notes**: Wrap `git commit`, `git push`, `git pull` in `AudioLoop` tools.
+  - **Status**: **Partially Implemented** (Merge tool exists)
+
+- [ ] **Smart Error Interception (Terminal)**
+  - **Description**: If a user runs a terminal command that fails, James parses the stderr and offers a one-sentence explanation/fix proactively.
+  - **User Impact**: Faster debugging for shell operations.
+  - **Status**: **Idea** (Backend crash interception is implemented, shell interception is not)
 
 - [ ] **Video Feed Optimization**
   - **Description**: Ensure the camera feed doesn't freeze when the agent is "thinking" (blocking main thread).
   - **Technical Notes**: Move video processing to a WebWorker or optimize the Python asyncio loop.
   - **Status**: **Idea** (Optimization)
-
-- [ ] **Offline Fallback Mode**
-  - **Description**: When the internet is down, James should not crash but switch to a limited "Offline" mode (e.g., simple timer/local file commands only).
-  - **User Impact**: Reliability. Prevents the "I'm sorry, I can't do that" frustration loop.
-  - **Status**: **Idea**
 
 ---
 
