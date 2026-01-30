@@ -21,7 +21,9 @@ import {
     GitCommit,
     CheckCircle,
     List,
-    X
+    X,
+    GitBranch,
+    GitMerge
 } from 'lucide-react';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
@@ -30,17 +32,24 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [activeTab, setActiveTab] = useState('tasks'); // 'trello' or 'tasks'
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedArtifact, setSelectedArtifact] = useState(null);
+    const [fleetStatus, setFleetStatus] = useState([]);
 
     // Stream control
     useEffect(() => {
         if (socket) {
             socket.emit('start_dashboard_stream');
-        }
-        return () => {
-            if (socket) {
+            // Initial fleet status fetch
+            socket.emit('get_fleet_status');
+
+            const handleFleetStatus = (data) => {
+                setFleetStatus(data);
+            };
+            socket.on('fleet_status_update', handleFleetStatus);
+            return () => {
+                socket.off('fleet_status_update', handleFleetStatus);
                 socket.emit('stop_dashboard_stream');
-            }
-        };
+            };
+        }
     }, [socket]);
 
     useEffect(() => {
@@ -56,7 +65,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         jules = [],
         devices = [],
         printers = [],
-        git = { branch: 'unknown', branches: [], status: '' },
+        // git = { branch: 'unknown', branches: [], status: '' }, // Deprecated single-repo view
         system_status = "ONLINE",
         system_stats = { total_agents: 0, active_agents: 0, completed_agents: 0, success_rate: 0 }
     } = data || {};
@@ -99,6 +108,12 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         setSelectedSession(null);
         if (socket) {
             socket.emit('clear_focused_session');
+        }
+    };
+
+    const handleMerge = (repo) => {
+        if (socket && confirm(`Merge '${repo}' branch to main?`)) {
+            socket.emit('perform_git_merge', { repo });
         }
     };
 
@@ -169,10 +184,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                 {/* MAIN GRID */}
                 <div className="relative z-10 grid grid-cols-12 grid-rows-6 gap-6 flex-1 min-h-0">
 
-                    {/* COL 1: INTEL (TASKS / TRELLO) - Spans 4 cols, full height */}
+                    {/* COL 1: INTEL (TASKS / TRELLO) - Spans 3 cols */}
                     <motion.div
                         variants={itemVariants}
-                        className="col-span-4 row-span-6 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden group hover:border-gold9/40 transition-colors"
+                        className="col-span-3 row-span-6 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden group hover:border-gold9/40 transition-colors"
                     >
                         <div className="absolute top-0 right-0 p-2 opacity-50">
                             <Layers className="w-24 h-24 text-gold9/5" />
@@ -246,7 +261,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         </div>
                     </motion.div>
 
-                    {/* COL 2: CENTER COMMS (JULES) - Spans 5 cols, Top 4 rows */}
+                    {/* COL 2: CENTER COMMS (JULES) - Spans 5 cols */}
                     <motion.div
                         variants={itemVariants}
                         className="col-span-5 row-span-4 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden"
@@ -290,7 +305,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         </div>
                     </motion.div>
 
-                    {/* COL 2 BOTTOM: AGENT STATS - Spans 5 cols, Bottom 2 rows */}
+                    {/* COL 2 BOTTOM: AGENT STATS */}
                     <motion.div
                         variants={itemVariants}
                         className="col-span-5 row-span-2 grid grid-cols-3 gap-4"
@@ -312,79 +327,63 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         </div>
                     </motion.div>
 
-                    {/* COL 3: HARDWARE (DEVICES/PRINTERS/GIT) - Spans 3 cols, full height */}
+                    {/* COL 3: FLEET COMMAND (GIT) - Spans 4 cols, full height */}
                     <motion.div
                         variants={itemVariants}
-                        className="col-span-3 row-span-6 flex flex-col gap-4"
+                        className="col-span-4 row-span-6 flex flex-col gap-4 bg-black/40 border border-gold9/20 rounded-xl p-4 overflow-hidden"
                     >
-                        {/* GIT OPS */}
-                        <div className="bg-black/40 border border-gold9/20 rounded-xl p-4 relative overflow-hidden">
-                             <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-2">
-                                <span className="text-gold9">GIT OPS</span>
-                            </h2>
-                            <div className="text-xs space-y-2">
-                                <div className="flex justify-between">
-                                    <span className="text-gold9/60">BRANCH</span>
-                                    <span className="font-bold text-green-400">{git.branch}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gold9/60">STATUS</span>
-                                    <span className="font-mono text-[10px]">{git.status ? 'MODIFIED' : 'CLEAN'}</span>
-                                </div>
-                            </div>
-                        </div>
+                        <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-2">
+                            <GitBranch className="w-4 h-4 text-gold9" />
+                            <span className="text-gold9">FLEET COMMAND</span>
+                        </h2>
 
-                        {/* PRINTERS */}
-                        <div className="flex-1 bg-black/40 border border-gold9/20 rounded-xl p-4 relative overflow-hidden">
-                             <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-4">
-                                <Printer className="w-4 h-4 text-gold9" />
-                                FABRICATION
-                            </h2>
-                            <div className="space-y-3">
-                                {printers.length === 0 ? (
-                                    <div className="text-xs text-gold9/40 italic">No units online.</div>
-                                ) : (
-                                    printers.map((p, i) => (
-                                        <div key={i} className="bg-gold9/5 p-2 rounded border border-gold9/10">
-                                            <div className="flex justify-between items-center mb-1">
-                                                <span className="text-xs font-bold">{p.name}</span>
-                                                <div className={`w-1.5 h-1.5 rounded-full ${p.state === 'printing' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></div>
-                                            </div>
-                                            <div className="text-[10px] text-gold9/60 flex justify-between">
-                                                <span>{p.state || 'IDLE'}</span>
-                                                <span>{p.temp ? `${p.temp}°C` : '--'}</span>
-                                            </div>
-                                            {p.progress > 0 && (
-                                                <div className="w-full h-1 bg-gray-800 rounded-full mt-2 overflow-hidden">
-                                                    <div className="h-full bg-gold9" style={{ width: `${p.progress}%` }}></div>
+                        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
+                            {fleetStatus.length === 0 ? (
+                                <div className="text-xs text-gold9/40 italic text-center py-10">
+                                    No repositories under command.
+                                </div>
+                            ) : (
+                                fleetStatus.map((repo, i) => (
+                                    <div key={i} className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <div className="text-sm font-bold text-gold9">{repo.name}</div>
+                                                <div className="flex items-center gap-2 text-[10px] font-mono mt-1">
+                                                    <span className={`text-${repo.branch === 'main' || repo.branch === 'master' ? 'gray-400' : 'green-400'}`}>
+                                                        {repo.branch}
+                                                    </span>
+                                                    <span className="text-gold9/30">|</span>
+                                                    <span className={repo.status ? 'text-yellow-500' : 'text-gray-500'}>
+                                                        {repo.status ? 'DIRTY' : 'CLEAN'}
+                                                    </span>
                                                 </div>
+                                            </div>
+                                            {repo.branch !== 'main' && repo.branch !== 'master' && (
+                                                <button
+                                                    onClick={() => handleMerge(repo.name)}
+                                                    className="bg-green-500/20 hover:bg-green-500/40 text-green-400 border border-green-500/50 rounded px-2 py-1 flex items-center gap-1 text-[10px] font-bold tracking-wider transition-all"
+                                                    title="Merge to Main"
+                                                >
+                                                    <GitMerge size={10} />
+                                                    MERGE
+                                                </button>
                                             )}
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
 
-                        {/* DEVICES */}
-                        <div className="flex-1 bg-black/40 border border-gold9/20 rounded-xl p-4 relative overflow-hidden">
-                            <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest border-b border-gold9/10 pb-2 mb-4">
-                                <Zap className="w-4 h-4 text-gold9" />
-                                FIELD ASSETS
-                            </h2>
-                            <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-hide">
-                                 {devices.length === 0 ? (
-                                    <div className="text-xs text-gold9/40 italic">No assets detected.</div>
-                                ) : (
-                                    devices.map((d, i) => (
-                                        <div key={i} className="flex items-center justify-between bg-gold9/5 p-2 rounded border border-gold9/10">
-                                            <span className="text-xs truncate max-w-[100px]">{d.alias}</span>
-                                            <div className={`px-2 py-0.5 rounded text-[10px] font-bold ${d.is_on ? 'bg-gold9 text-black' : 'bg-gray-800 text-gray-500'}`}>
-                                                {d.is_on ? 'ON' : 'OFF'}
+                                        {repo.last_commit ? (
+                                            <div className="text-[10px] bg-black/30 p-2 rounded border border-white/5">
+                                                <div className="text-gold9/70 font-bold mb-0.5 truncate">{repo.last_commit.message}</div>
+                                                <div className="flex justify-between text-gold9/40">
+                                                    <span>{repo.last_commit.author}</span>
+                                                    <span>{repo.last_commit.date}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                                        ) : (
+                                            <div className="text-[10px] text-gold9/30 italic">No commits recorded.</div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </motion.div>
 
@@ -861,7 +860,7 @@ const CommandModal = ({ onClose, socket }) => {
                                     required
                                     value={actionValue}
                                     onChange={(e) => setActionValue(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none h-20 resize-none"
+                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
                                     placeholder="Describe the task for Jules..."
                                 />
                             </div>

@@ -34,6 +34,11 @@ try:
 except ImportError:
     from message_deduplicator import MessageDeduplicator
 
+try:
+    from backend.git_ops import GitOps
+except ImportError:
+    from git_ops import GitOps
+
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 app = FastAPI()
@@ -1260,6 +1265,76 @@ async def delete_task(sid, data):
                 await sio.emit('dashboard_update', data)
         else:
              await sio.emit('error', {'msg': 'Task not found'})
+
+@sio.event
+async def get_fleet_status(sid):
+    """Fetches the current status of all git repos."""
+    print(f"[SERVER] Client {sid} requested fleet status.")
+    if audio_loop and audio_loop.project_manager:
+        repos = audio_loop.project_manager.list_git_projects()
+        fleet_status = []
+        for repo in repos:
+            repo_path = audio_loop.project_manager.get_project_path(repo)
+            current_branch = GitOps.get_current_branch(repo_path)
+            status = GitOps.get_status(repo_path)
+            last_commit = GitOps.get_last_commit_info(repo_path)
+
+            fleet_status.append({
+                "name": repo,
+                "branch": current_branch,
+                "status": "dirty" if status else "clean",
+                "last_commit": last_commit
+            })
+        await sio.emit('fleet_status_update', fleet_status, to=sid)
+
+@sio.event
+async def perform_git_merge(sid, data):
+    """Merges a specific repo's current branch into main/master."""
+    repo_name = data.get('repo')
+    print(f"[SERVER] Client {sid} requested merge for repo: {repo_name}")
+
+    if audio_loop and audio_loop.project_manager:
+        repo_path = audio_loop.project_manager.get_project_path(repo_name)
+        # Assuming we want to merge current branch INTO main
+        current_branch = GitOps.get_current_branch(repo_path)
+
+        if current_branch in ['main', 'master']:
+            await sio.emit('error', {'msg': f"Already on {current_branch}. Nothing to merge into itself."})
+            return
+
+        # Simple Merge Workflow:
+        # 1. Checkout main
+        # 2. Merge feature branch
+        # 3. Checkout feature branch again? Or stay on main? usually stay on main after merge.
+
+        # We need subprocess calls here since GitOps doesn't expose checkout directly yet
+        # and we want to keep GitOps clean or use a new method if we added it.
+        # Since we can't edit git_ops in this step easily without replanning, we use subprocess.
+        # Wait, we can use `subprocess` directly here as we import it in `server.py`? No, import locally.
+        import subprocess
+
+        try:
+            # 1. Checkout main
+            subprocess.run(["git", "checkout", "main"], cwd=repo_path, check=True, capture_output=True)
+            target_branch = "main"
+        except subprocess.CalledProcessError:
+            try:
+                subprocess.run(["git", "checkout", "master"], cwd=repo_path, check=True, capture_output=True)
+                target_branch = "master"
+            except subprocess.CalledProcessError:
+                await sio.emit('error', {'msg': "Could not checkout main or master."})
+                return
+
+        # 2. Merge
+        success, msg = GitOps.merge_branch(repo_path, current_branch)
+
+        if success:
+            await sio.emit('status', {'msg': f"Merged {current_branch} into {target_branch}."})
+            # Refresh fleet status
+            await get_fleet_status(sid)
+        else:
+            await sio.emit('error', {'msg': f"Merge failed: {msg}"})
+
 
 @sio.event
 async def run_task(sid, data):

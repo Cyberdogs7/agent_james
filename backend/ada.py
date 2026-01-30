@@ -1773,7 +1773,7 @@ User: "What's the weather in London?"
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "git_merge_branch":
@@ -1837,6 +1837,55 @@ User: "What's the weather in London?"
                                     repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
                                     branches = GitOps.list_branches(repo_path)
                                     result_str = f"Branches in '{repo_path.name}': {', '.join(branches)}" if branches else f"No branches found or failed to list branches for '{repo_path.name}'."
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "git_status":
+                                    repo_name = fc.args.get("repo_name")
+                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+
+                                    current_branch = GitOps.get_current_branch(repo_path)
+                                    status = GitOps.get_status(repo_path)
+                                    last_commit = GitOps.get_last_commit_info(repo_path)
+
+                                    result_str = f"Status for '{repo_path.name}':\n"
+                                    result_str += f"Branch: {current_branch or 'Unknown'}\n"
+                                    result_str += f"State: {'Dirty' if status else 'Clean'}\n"
+                                    if status:
+                                        result_str += f"Changes:\n{status}\n"
+                                    if last_commit:
+                                        result_str += f"Last Commit: {last_commit['hash']} - {last_commit['message']} ({last_commit['author']}, {last_commit['date']})"
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result_str}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "git_fleet_status":
+                                    repos = self.project_manager.list_git_projects()
+                                    if not repos:
+                                        result_str = "No git repositories found."
+                                    else:
+                                        result_str = "Fleet Status Report:\n"
+                                        for repo in repos:
+                                            repo_path = self.project_manager.get_project_path(repo)
+                                            current_branch = GitOps.get_current_branch(repo_path)
+                                            status = GitOps.get_status(repo_path)
+                                            last_commit = GitOps.get_last_commit_info(repo_path)
+
+                                            result_str += f"--- {repo} ---\n"
+                                            result_str += f"Branch: {current_branch or 'Unknown'}\n"
+                                            result_str += f"Status: {'Dirty' if status else 'Clean'}\n"
+                                            if last_commit:
+                                                result_str += f"Commit: {last_commit['message'][:50]}... ({last_commit['date']})\n"
+                                            result_str += "\n"
+
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
@@ -2567,6 +2616,43 @@ User: "What's the weather in London?"
                 await self.out_queue.put(frame)
         cap.release()
 
+    async def _monitor_git_fleet(self):
+        """Background task to monitor git repos for new commits."""
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [GIT] Starting fleet monitoring...")
+        while not self.stop_event.is_set():
+            try:
+                events = self.project_manager.monitor_git_repos()
+                for event in events:
+                    if event['type'] == 'git_commit':
+                        msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [GIT] {msg}")
+
+                        # Notify Frontend (via display_content or just rely on dashboard update loop?)
+                        # Ideally, we trigger a dashboard refresh push
+                        # But we can also send a specialized notification
+                        if self.on_display_content:
+                            self.on_display_content({
+                                "content_type": "notification",
+                                "data": {"text": msg},
+                                "duration": 10000
+                            })
+
+                        # Voice Announcement (Only if not interacting?)
+                        # We don't have a robust "idle" check here, but we can just speak it.
+                        if self.session:
+                            try:
+                                await self.session.send(input=f"System Notification: {msg}", end_of_turn=False)
+                            except Exception as e:
+                                print(f"[ADA DEBUG] [ERR] Failed to announce git event: {e}")
+
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Git monitoring error: {e}")
+
+            await asyncio.sleep(30) # Check every 30 seconds
+
     def _get_frame(self, cap):
         ret, frame = cap.read()
         if not ret:
@@ -2626,6 +2712,9 @@ User: "What's the weather in London?"
 
                     # Start the Jules session monitoring task
                     tasks.append(asyncio.create_task(self.jules_agent.start_monitoring(self._handle_jules_status_change)))
+
+                    # Start Git Fleet monitoring
+                    tasks.append(asyncio.create_task(self._monitor_git_fleet()))
 
                     if not is_reconnect:
                         if start_message:

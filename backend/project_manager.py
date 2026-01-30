@@ -8,6 +8,11 @@ try:
 except ImportError:
     from writing_prompts import WRITING_MODE_SYSTEM_PROMPT
 
+try:
+    from backend.git_ops import GitOps
+except ImportError:
+    from git_ops import GitOps
+
 DEFAULT_SYSTEM_PROMPT = "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant."
 
 VALID_VOICES = ["Puck", "Charon", "Kore", "Fenrir", "Aoede", "Sadaltager"]
@@ -38,6 +43,9 @@ class ProjectManager:
             
         # Ensure temp project receives fresh creation
         self.create_project("temp")
+
+        # State for git monitoring
+        self._git_last_state = {}
 
     def create_project(self, name: str):
         """Creates a new project directory with subfolders."""
@@ -392,3 +400,35 @@ class ProjectManager:
         if success:
              return True, "Writing Mode disabled. Standard configuration restored."
         return False, msg
+
+    def monitor_git_repos(self):
+        """
+        Scans all git projects for new commits since the last check.
+        Returns a list of event dictionaries.
+        """
+        events = []
+        git_projects = self.list_git_projects()
+
+        for project_name in git_projects:
+            project_path = self.get_project_path(project_name)
+            last_commit = GitOps.get_last_commit_info(project_path)
+
+            if last_commit:
+                current_hash = last_commit['hash']
+                last_seen_hash = self._git_last_state.get(project_name)
+
+                if last_seen_hash and current_hash != last_seen_hash:
+                    # New commit detected
+                    events.append({
+                        "type": "git_commit",
+                        "repo": project_name,
+                        "author": last_commit['author'],
+                        "message": last_commit['message'],
+                        "hash": current_hash,
+                        "date": last_commit['date']
+                    })
+
+                # Update state
+                self._git_last_state[project_name] = current_hash
+
+        return events
