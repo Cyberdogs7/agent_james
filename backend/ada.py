@@ -2616,6 +2616,43 @@ User: "What's the weather in London?"
                 await self.out_queue.put(frame)
         cap.release()
 
+    async def _monitor_git_fleet(self):
+        """Background task to monitor git repos for new commits."""
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [GIT] Starting fleet monitoring...")
+        while not self.stop_event.is_set():
+            try:
+                events = self.project_manager.monitor_git_repos()
+                for event in events:
+                    if event['type'] == 'git_commit':
+                        msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [GIT] {msg}")
+
+                        # Notify Frontend (via display_content or just rely on dashboard update loop?)
+                        # Ideally, we trigger a dashboard refresh push
+                        # But we can also send a specialized notification
+                        if self.on_display_content:
+                            self.on_display_content({
+                                "content_type": "notification",
+                                "data": {"text": msg},
+                                "duration": 10000
+                            })
+
+                        # Voice Announcement (Only if not interacting?)
+                        # We don't have a robust "idle" check here, but we can just speak it.
+                        if self.session:
+                            try:
+                                await self.session.send(input=f"System Notification: {msg}", end_of_turn=False)
+                            except Exception as e:
+                                print(f"[ADA DEBUG] [ERR] Failed to announce git event: {e}")
+
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Git monitoring error: {e}")
+
+            await asyncio.sleep(30) # Check every 30 seconds
+
     def _get_frame(self, cap):
         ret, frame = cap.read()
         if not ret:
@@ -2675,6 +2712,9 @@ User: "What's the weather in London?"
 
                     # Start the Jules session monitoring task
                     tasks.append(asyncio.create_task(self.jules_agent.start_monitoring(self._handle_jules_status_change)))
+
+                    # Start Git Fleet monitoring
+                    tasks.append(asyncio.create_task(self._monitor_git_fleet()))
 
                     if not is_reconnect:
                         if start_message:
