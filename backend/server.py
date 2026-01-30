@@ -1386,10 +1386,12 @@ async def update_tool_permissions(sid, data):
     await sio.emit('tool_permissions', SETTINGS["tool_permissions"])
 
 if __name__ == "__main__":
+    port = int(os.getenv("SERVER_PORT", 8180))
+    print(f"[SERVER] Starting server on port {port}")
     uvicorn.run(
         "server:app_socketio", 
         host="127.0.0.1", 
-        port=8000, 
+        port=port,
         reload=False, # Reload enabled causes spawn of worker which might miss the event loop policy patch
         loop="asyncio",
         reload_excludes=["temp_cad_gen.py", "output.stl", "*.stl"]
