@@ -622,6 +622,10 @@ tools_list = [{"function_declarations": [
             "branch_name": {
                 "type": "STRING",
                 "description": "The name of the branch to merge."
+                },
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "Optional: The name of the project/repo to operate on. Defaults to current project."
             }
         },
         "required": ["branch_name"]
@@ -636,6 +640,10 @@ tools_list = [{"function_declarations": [
                 "message": {
                     "type": "STRING",
                     "description": "The commit message."
+                },
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "Optional: The name of the project/repo to operate on. Defaults to current project."
                 }
             },
             "required": ["message"]
@@ -646,7 +654,12 @@ tools_list = [{"function_declarations": [
         "description": "Pushes commits to the remote repository.",
         "parameters": {
             "type": "OBJECT",
-            "properties": {}
+            "properties": {
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "Optional: The name of the project/repo to operate on. Defaults to current project."
+                }
+            }
         }
     },
     {
@@ -654,7 +667,33 @@ tools_list = [{"function_declarations": [
         "description": "Pulls changes from the remote repository.",
         "parameters": {
             "type": "OBJECT",
+            "properties": {
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "Optional: The name of the project/repo to operate on. Defaults to current project."
+                }
+            }
+        }
+    },
+    {
+        "name": "git_list_repos",
+        "description": "Lists all available local git repositories.",
+        "parameters": {
+            "type": "OBJECT",
             "properties": {}
+        }
+    },
+    {
+        "name": "git_list_branches",
+        "description": "Lists all branches in a git repository.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "Optional: The name of the project/repo to list branches for. Defaults to current project."
+                }
+            }
         }
     },
     {
