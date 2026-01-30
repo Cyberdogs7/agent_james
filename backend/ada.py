@@ -1305,6 +1305,51 @@ class AudioLoop:
         success, msg = self.project_manager.dismiss_jules_session(session_id)
         return msg
 
+    async def handle_focused_session(self, session_id):
+        """Notifies the model that the user is focusing on a specific session."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FOCUS] User focused session: {session_id}")
+
+        # Fetch summary context
+        activities = await self.handle_list_jules_activities(session_id)
+        summary = "No recent activity."
+        if isinstance(activities, list) and activities:
+            # Get last 3 activities
+            recent = activities[-3:]
+            summary_lines = []
+            for act in recent:
+                if 'agentMessage' in act:
+                    summary_lines.append(f"Jules: {act['agentMessage']['content'][:100]}...")
+                elif 'userMessage' in act:
+                    summary_lines.append(f"User: {act['userMessage']['content'][:100]}...")
+            summary = "\n".join(summary_lines)
+
+        msg = (
+            f"System Notification: The user has opened the detailed view for Jules Session '{session_id}'.\n"
+            f"Context (Recent Activity):\n{summary}\n\n"
+            f"The user is now looking at this session. If they speak, assume it might be feedback or instructions for this specific session. "
+            f"Use the 'send_jules_feedback' tool if appropriate."
+        )
+
+        if self.session:
+            try:
+                await self.session.send(input=msg, end_of_turn=True)
+            except Exception as e:
+                print(f"[ADA DEBUG] Failed to send focus notification: {e}")
+
+    async def handle_clear_focused_session(self):
+        """Notifies the model that the user has closed the specific session view."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [FOCUS] User cleared focus.")
+
+        msg = "System Notification: The user has closed the Jules Session detail view. You are back to general context."
+
+        if self.session:
+            try:
+                await self.session.send(input=msg, end_of_turn=True)
+            except Exception as e:
+                print(f"[ADA DEBUG] Failed to send clear focus notification: {e}")
+
     async def get_dashboard_data(self):
         """Gathers all data for the War Room Dashboard."""
         if INCLUDE_RAW_LOGS:
