@@ -22,8 +22,7 @@ import {
     FileCode,
     GitCommit,
     CheckCircle,
-    List,
-    Cpu
+    List
 } from 'lucide-react';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
