@@ -668,6 +668,9 @@ class AudioLoop:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
                 print("[ADA] [WARN] Audio features will be disabled. Please check microphone permissions.")
+            # Keep the task alive but idle to prevent session teardown
+            while not self.stop_event.is_set():
+                await asyncio.sleep(1)
             return
 
         if __debug__:
