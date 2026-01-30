@@ -1,6 +1,7 @@
 import asyncio
 import os
 import httpx
+import time
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 
@@ -17,6 +18,11 @@ class JulesAgent:
         self.sessions_lock = asyncio.Lock()
         self.monitored_sessions = {}
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
+
+        # Caching
+        self._cache = {}
+        self._cache_expiry = {}
+        self._cache_ttl = 15 # Seconds
 
     def _log(self, *args, **kwargs):
         if self.include_raw:
@@ -67,6 +73,14 @@ class JulesAgent:
         print(f"[JULES_AGENT] Request failed for {tool_name} after {max_retries} retries.")
         return None
 
+    def invalidate_cache(self, key=None):
+        if key:
+            self._cache.pop(key, None)
+            self._cache_expiry.pop(key, None)
+        else:
+            self._cache.clear()
+            self._cache_expiry.clear()
+
     async def create_session(self, prompt, source):
         """Creates a new session in the Jules API."""
         source_context = {}
@@ -100,6 +114,10 @@ class JulesAgent:
             self.session_id = session["name"]
             async with self.sessions_lock:
                 self.active_sessions.add(self.session_id)
+
+            # Invalidate session list cache so the new session appears immediately
+            self.invalidate_cache("list_sessions")
+
         return session
 
     async def send_message(self, session_id, message):
@@ -108,10 +126,22 @@ class JulesAgent:
 
     async def list_sessions(self, limit=100):
         """Lists all sessions, returning full session objects."""
+        # Check Cache
+        cache_key = "list_sessions"
+        now = time.time()
+        if cache_key in self._cache and cache_key in self._cache_expiry:
+            if now < self._cache_expiry[cache_key]:
+                # Valid cache
+                return self._cache[cache_key]
+
         params = {"pageSize": limit}
         response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions", params=params)
         if response and "sessions" in response:
-            return response["sessions"]
+            sessions = response["sessions"]
+            # Set Cache
+            self._cache[cache_key] = sessions
+            self._cache_expiry[cache_key] = now + self._cache_ttl
+            return sessions
         return []
 
     async def list_sources(self):
@@ -127,6 +157,16 @@ class JulesAgent:
         self._log("[JULES_AGENT] Starting background session monitoring...")
         while True:
             try:
+                # Force a fresh fetch or rely on cache?
+                # Monitoring should probably be fresh or close to it.
+                # If we use cached list_sessions, we might miss updates by 15s.
+                # However, monitoring loop runs every 15s anyway.
+                # So we can just call list_sessions and let it handle caching.
+
+                # To ensure we catch updates, we might want to bypass cache or shorten TTL for monitoring?
+                # But since list_sessions is the only way to get status, caching it effectively limits monitoring frequency too.
+                # The user accepted 15s cache.
+
                 sessions = await self.list_sessions()
                 if sessions:
                     for session in sessions:
@@ -154,6 +194,11 @@ class JulesAgent:
                             if status_change_callback:
                                 # Non-blocking call to the callback
                                 asyncio.create_task(status_change_callback(title, current_state))
+
+                                # Invalidate cache on state change to ensure UI gets it?
+                                # If we detected it, it means our data is fresh enough or we just fetched it.
+                                # Actually, if we got it from list_sessions, the cache is already updated with this state.
+
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Error in monitoring loop: {e}")
 
@@ -166,6 +211,9 @@ class JulesAgent:
         self._log(f"[JULES_AGENT] Starting to poll for updates on session: {session_id}")
         while not stop_event.is_set():
             try:
+                # list_activities is not cached yet.
+                # This runs for specific sessions.
+                # We should NOT cache this heavily if we want near-realtime chat.
                 activities_response = await self.list_activities(session_id)
                 if activities_response and "activities" in activities_response:
                     activities = activities_response["activities"]

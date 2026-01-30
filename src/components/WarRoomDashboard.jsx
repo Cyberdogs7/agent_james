@@ -2,14 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity,
-    Wifi,
     Cpu,
     Layers,
     CheckSquare,
     Printer,
     Zap,
     Clock,
-    Globe,
     Shield,
     AlertCircle,
     Plus,
@@ -22,7 +20,8 @@ import {
     FileCode,
     GitCommit,
     CheckCircle,
-    List
+    List,
+    X
 } from 'lucide-react';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
@@ -30,6 +29,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [activeTab, setActiveTab] = useState('tasks'); // 'trello' or 'tasks'
     const [selectedSession, setSelectedSession] = useState(null);
+    const [selectedArtifact, setSelectedArtifact] = useState(null);
 
     // Stream control
     useEffect(() => {
@@ -58,7 +58,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         printers = [],
         git = { branch: 'unknown', branches: [], status: '' },
         system_status = "ONLINE",
-        system_stats = { cpu: 0, ram: 0, net_sent: 0, net_recv: 0 }
+        system_stats = { total_agents: 0, active_agents: 0, completed_agents: 0, success_rate: 0 }
     } = data || {};
 
     const containerVariants = {
@@ -290,28 +290,25 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         </div>
                     </motion.div>
 
-                    {/* COL 2 BOTTOM: QUICK STATS - Spans 5 cols, Bottom 2 rows */}
+                    {/* COL 2 BOTTOM: AGENT STATS - Spans 5 cols, Bottom 2 rows */}
                     <motion.div
                         variants={itemVariants}
                         className="col-span-5 row-span-2 grid grid-cols-3 gap-4"
                     >
                         <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">RAM LOAD</div>
-                            <div className="text-2xl font-bold text-green-400">{system_stats.ram.toFixed(1)}%</div>
+                            <div className="text-xs text-gold9/60">ACTIVE AGENTS</div>
+                            <div className="text-2xl font-bold text-green-400">{system_stats.active_agents}</div>
                             <Activity className="w-4 h-4 self-end text-gold9/30" />
                         </div>
                         <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">CPU LOAD</div>
-                            <div className="text-2xl font-bold text-gold9">{system_stats.cpu.toFixed(1)}%</div>
+                            <div className="text-xs text-gold9/60">TOTAL DEPLOYED</div>
+                            <div className="text-2xl font-bold text-gold9">{system_stats.total_agents}</div>
                             <Cpu className="w-4 h-4 self-end text-gold9/30" />
                         </div>
                         <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">NETWORK</div>
-                            <div className="text-[10px] font-bold text-blue-400 font-mono">
-                                <div>TX: {(system_stats.net_sent / 1024 / 1024).toFixed(1)} MB</div>
-                                <div>RX: {(system_stats.net_recv / 1024 / 1024).toFixed(1)} MB</div>
-                            </div>
-                            <Globe className="w-4 h-4 self-end text-gold9/30" />
+                            <div className="text-xs text-gold9/60">SUCCESS RATE</div>
+                            <div className="text-2xl font-bold text-blue-400">{system_stats.success_rate}%</div>
+                            <CheckCircle className="w-4 h-4 self-end text-gold9/30" />
                         </div>
                     </motion.div>
 
@@ -413,6 +410,15 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         session={selectedSession}
                         onClose={closeSessionDetails}
                         socket={socket}
+                        onViewArtifact={setSelectedArtifact}
+                    />
+                )}
+
+                {/* ARTIFACT MODAL */}
+                {selectedArtifact && (
+                    <ArtifactModal
+                        artifact={selectedArtifact}
+                        onClose={() => setSelectedArtifact(null)}
                     />
                 )}
 
@@ -421,7 +427,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     );
 };
 
-const SessionDetailModal = ({ session, onClose, socket }) => {
+const SessionDetailModal = ({ session, onClose, socket, onViewArtifact }) => {
     const [activities, setActivities] = useState([]);
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(true);
@@ -489,7 +495,7 @@ const SessionDetailModal = ({ session, onClose, socket }) => {
                             <div className="text-center text-gold9/40 py-20 italic">No telemetry data.</div>
                         ) : (
                             activities.map((act, i) => (
-                                <ActivityItem key={i} activity={act} />
+                                <ActivityItem key={i} activity={act} onViewArtifact={onViewArtifact} />
                             ))
                         )
                     )}
@@ -522,7 +528,7 @@ const SessionDetailModal = ({ session, onClose, socket }) => {
     );
 };
 
-const ActivityItem = ({ activity }) => {
+const ActivityItem = ({ activity, onViewArtifact }) => {
     // 1. Agent Message
     if (activity.agentMessage) {
         return (
@@ -589,19 +595,33 @@ const ActivityItem = ({ activity }) => {
                                 if (source.startsWith('sources/github/')) source = source.replace('sources/github/', '');
 
                                 return (
-                                    <div key={idx} className="space-y-2">
+                                    <div
+                                        key={idx}
+                                        className="space-y-2 cursor-pointer hover:bg-green-500/10 p-2 rounded transition-colors group"
+                                        onClick={() => onViewArtifact && onViewArtifact({
+                                            title: subject,
+                                            body: body,
+                                            source: source,
+                                            commit: patch.baseCommitId,
+                                            // Pass raw patch instructions if available in body or separate field
+                                            // The API might return patch diffs too, but for now we just show message
+                                        })}
+                                    >
                                         <div className="flex items-start gap-3">
                                             <div className="mt-1">
-                                                <GitCommit size={18} className="text-green-400" />
+                                                <GitCommit size={18} className="text-green-400 group-hover:text-green-300" />
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-bold text-green-200 truncate" title={subject}>{subject}</div>
-                                                {body && <div className="text-xs text-green-500/60 mt-1 whitespace-pre-wrap line-clamp-4 hover:line-clamp-none transition-all cursor-pointer">{body}</div>}
+                                                <div className="text-sm font-bold text-green-200 truncate group-hover:text-white" title={subject}>{subject}</div>
+                                                {body && <div className="text-xs text-green-500/60 mt-1 whitespace-pre-wrap line-clamp-2">{body}</div>}
                                             </div>
                                         </div>
                                         <div className="pl-8 text-[10px] font-mono text-green-500/40 flex gap-4">
                                             <span>REPO: {source}</span>
                                             <span>COMMIT: {patch.baseCommitId ? patch.baseCommitId.substring(0, 7) : 'HEAD'}</span>
+                                        </div>
+                                        <div className="pl-8 text-[10px] text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            [CLICK TO INSPECT]
                                         </div>
                                     </div>
                                 );
@@ -659,6 +679,46 @@ const ActivityItem = ({ activity }) => {
         <div className="flex justify-center my-2 opacity-50">
             <div className="text-[10px] text-gold9 font-mono bg-gold9/5 px-2 py-1 rounded border border-gold9/10">
                 RAW: {JSON.stringify(activity).substring(0, 50)}...
+            </div>
+        </div>
+    );
+};
+
+const ArtifactModal = ({ artifact, onClose }) => {
+    return (
+        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-8">
+            <div className="bg-black border border-green-500/50 rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col relative shadow-[0_0_50px_rgba(0,255,0,0.1)]">
+                <div className="flex justify-between items-center p-4 border-b border-green-500/20 bg-green-500/5">
+                    <div>
+                        <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
+                            <GitCommit size={18} />
+                            ARTIFACT INSPECTION
+                        </h2>
+                        <div className="text-xs text-green-500/60 font-mono">
+                            COMMIT: {artifact.commit ? artifact.commit.substring(0, 7) : 'HEAD'} | REPO: {artifact.source}
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="text-green-500/50 hover:text-green-400 p-2">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 scrollbar-hide text-green-200">
+                    <div className="mb-4">
+                        <h3 className="text-sm font-bold text-green-500 mb-1 uppercase tracking-widest">Subject</h3>
+                        <div className="text-lg font-bold">{artifact.title}</div>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-green-500 mb-2 uppercase tracking-widest">Description</h3>
+                        <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed bg-green-900/10 p-4 rounded border border-green-500/10">
+                            {artifact.body || "No detailed description provided."}
+                        </div>
+                    </div>
+                </div>
+                <div className="p-4 border-t border-green-500/20 bg-green-500/5 flex justify-end">
+                    <button onClick={onClose} className="px-6 py-2 border border-green-500/30 hover:bg-green-500/10 text-green-400 rounded text-xs font-bold tracking-widest transition-colors">
+                        CLOSE INSPECTION
+                    </button>
+                </div>
             </div>
         </div>
     );

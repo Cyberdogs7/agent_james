@@ -1198,11 +1198,14 @@ async def create_project(sid, data):
 async def dashboard_stream_loop():
     """Background task to push dashboard updates."""
     print("[SERVER] Starting Dashboard Stream Loop")
+    last_data = None
     try:
         while True:
             if audio_loop:
                 data = await audio_loop.get_dashboard_data()
-                await sio.emit('dashboard_update', data)
+                if data != last_data:
+                    await sio.emit('dashboard_update', data)
+                    last_data = data
             await asyncio.sleep(2) # Update every 2 seconds
     except asyncio.CancelledError:
         print("[SERVER] Dashboard Stream Cancelled")

@@ -336,7 +336,6 @@ from search_agent import SearchAgent
 from scraper_agent import ScraperAgent
 from proactive_agent import ProactiveAgent
 from git_ops import GitOps
-import psutil
 try:
     from backend.task_manager import TaskManager
 except ImportError:
@@ -1358,23 +1357,18 @@ class AudioLoop:
         # 1. Project Info
         project = self.project_manager.current_project
 
-        # 2. System Stats (Real-time)
-        try:
-            cpu = psutil.cpu_percent(interval=None)
-            ram = psutil.virtual_memory().percent
-            net = psutil.net_io_counters()
-            # Calculate a rough "speed" or just show total bytes for now.
-            # Ideally we'd store prev value to calc rate, but for stateless call just sending totals/percent is safer.
-            # Using net.bytes_recv + net.bytes_sent doesn't give speed without time delta.
-            # Let's send raw values and let UI handle or just be static "Active"
-            system_stats = {
-                "cpu": cpu,
-                "ram": ram,
-                "net_sent": net.bytes_sent,
-                "net_recv": net.bytes_recv
-            }
-        except Exception:
-            system_stats = {"cpu": 0, "ram": 0, "net_sent": 0, "net_recv": 0}
+        # 2. System Stats (REPLACED WITH AGENT STATS)
+        # Calculate stats from Jules Sessions
+        total_sessions = len(jules_sessions)
+        active_sessions_count = len([s for s in jules_sessions if s.get('state') not in ['COMPLETED', 'FAILED']])
+        completed_sessions_count = len([s for s in jules_sessions if s.get('state') == 'COMPLETED'])
+
+        system_stats = {
+            "total_agents": total_sessions,
+            "active_agents": active_sessions_count,
+            "completed_agents": completed_sessions_count,
+            "success_rate": int((completed_sessions_count / total_sessions * 100)) if total_sessions > 0 else 0
+        }
 
         # 3. Tasks (Worker Nodes)
         tasks = self.task_manager.list_tasks()
