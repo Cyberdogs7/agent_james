@@ -34,6 +34,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - [x] Subtask: Volume Control
   - [x] Subtask: System Lock / Sleep
 
+- [x] **Per-Project Fleet & Security Isolation**
+  - **Description**: Migrated `fleet.json` and GitHub tokens from global scope to individual project directories.
+  - **Wow Factor**: Seamlessly switching projects changes the entire context (repos, auth) without leaks.
+  - **User Impact**: Better security (token not in global file) and cleaner multi-project workflow.
+  - **Status**: **Implemented**
+
 ---
 
 ## 🧩 Smart Enhancements (Coding Focus)
