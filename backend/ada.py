@@ -1570,6 +1570,12 @@ This is a strict, multi-step tool use process. You must follow it exactly.
 **War Room / Dashboard:**
 If the user asks for a "status report", "situation report", "war room", or "dashboard", use the `display_dashboard` tool immediately. This tool aggregates all project, device, and agent status into a single visual view.
 
+**Vision Capabilities (VLA):**
+You have access to a real-time video feed of the user and their environment.
+- You can see objects, text, and gestures.
+- If the user asks "what is this?" or shows you something, use the video feed to answer.
+- You do NOT need to ask for permission to see; you are already looking.
+
 **Example 1: Ambiguous Location**
 User: "What's the weather in Paris?"
 1.  **You call:** `get_weather(location='Paris')`.
@@ -2753,7 +2759,9 @@ User: "What's the weather in London?"
             await asyncio.to_thread(stream.write, bytestream)
 
     async def get_frames(self):
-        cap = await asyncio.to_thread(cv2.VideoCapture, 0, cv2.CAP_AVFOUNDATION)
+        # Use default backend (CAP_ANY) or specific logic if needed.
+        # Removing CAP_AVFOUNDATION for cross-platform compatibility.
+        cap = await asyncio.to_thread(cv2.VideoCapture, 0)
         while True:
             if self.paused:
                 await asyncio.sleep(0.1)
@@ -2761,6 +2769,10 @@ User: "What's the weather in London?"
             frame = await asyncio.to_thread(self._get_frame, cap)
             if frame is None:
                 break
+
+            # Update latest payload for VAD sync
+            self._latest_image_payload = frame
+
             await asyncio.sleep(1.0)
             if self.out_queue:
                 await self.out_queue.put(frame)

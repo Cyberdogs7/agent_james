@@ -21,12 +21,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - [x] Subtask: Per-Project Avatar Loading
   - [x] Subtask: Head Tracking (MediaPipe)
 
-- [ ] **Real-World Vision (VLA)**
+- [x] **Real-World Vision (VLA)**
   - **Description**: Allow James to "see" and identify physical objects held up to the camera. "James, what size screw is this?" or "Does this 3D print look like the model?"
   - **Wow Factor**: The assistant bridges the gap between digital and physical reality.
   - **User Impact**: Invaluable for hardware debugging and inventory management.
   - **Technical Notes**: Ingest video frames into a Vision-Language Model (VLM) or specialized YOLO models for object detection.
-  - **Status**: **Idea**
+  - **Status**: **Implemented**
+  - [x] Subtask: Gemini Vision Integration
+  - [x] Subtask: Robust Camera Capture (Cross-Platform)
 
 - [ ] **Deep OS Control (Cross-Platform)**
   - **Description**: Give James control over the operating system beyond the app window. "James, turn off WiFi", "Open Spotify", "Organize my desktop".
