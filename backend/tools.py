@@ -205,6 +205,21 @@ get_system_prompt_tool = {
     }
 }
 
+switch_video_source_tool = {
+    "name": "switch_video_source",
+    "description": "Switches the video input source between the webcam and the screen. Use 'screen' to see what the user sees on their monitor, and 'camera' to see the user.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "source": {
+                "type": "STRING",
+                "description": "The video source to switch to. Must be either 'camera' or 'screen'."
+            }
+        },
+        "required": ["source"]
+    }
+}
+
 trello_tools = {
     "list_boards": {
         "name": "trello_list_boards",
@@ -535,7 +550,8 @@ tools_list = [{"function_declarations": [
     delete_custom_system_prompt_tool,
     get_system_prompt_tool,
     toggle_jules_slack_notifications_tool,
-    add_architectural_memory_tool
+    add_architectural_memory_tool,
+    switch_video_source_tool
 ] + list(trello_tools.values()) + [
     {
         "name": "search",
