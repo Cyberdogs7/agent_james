@@ -71,7 +71,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Sir, remember we decided against using `requests` in favor of `httpx` last week."
   - **User Impact**: Consistency across long development cycles.
   - **Technical Notes**: Vector store (ChromaDB or simple JSONL) for retrieving relevant context based on current task.
-  - **Status**: **Idea**
+  - **Status**: **Implemented**
+  - [x] Subtask: Memory Manager (JSONL + Embeddings)
+  - [x] Subtask: Project Integration
+  - [x] Subtask: Ada Tool & RAG Integration
 
 - [x] **Proactive "Bug Hunting" Mode**
   - **Description**: A background mode where James watches for file saves, runs the relevant tests silently, and speaks up *only* if something breaks.
@@ -90,11 +93,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Hands-free version control.
   - **Technical Notes**: Wrap `git commit`, `git push`, `git pull` in `AudioLoop` tools.
   - **Status**: **Implemented**
-
-- [ ] **Smart Error Interception (Terminal)**
-  - **Description**: If a user runs a terminal command that fails, James parses the stderr and offers a one-sentence explanation/fix proactively.
-  - **User Impact**: Faster debugging for shell operations.
-  - **Status**: **Idea** (Backend crash interception is implemented, shell interception is not)
 
 - [ ] **Video Feed Optimization**
   - **Description**: Ensure the camera feed doesn't freeze when the agent is "thinking" (blocking main thread).

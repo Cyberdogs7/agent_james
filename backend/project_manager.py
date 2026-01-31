@@ -18,6 +18,11 @@ try:
 except ImportError:
     from github_client import GitHubClient
 
+try:
+    from backend.memory_manager import MemoryManager
+except ImportError:
+    from memory_manager import MemoryManager
+
 DEFAULT_SYSTEM_PROMPT = "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant."
 
 VALID_VOICES = ["Puck", "Charon", "Kore", "Fenrir", "Aoede", "Sadaltager"]
@@ -52,6 +57,9 @@ class ProjectManager:
         # State for git monitoring
         self._git_last_state = {}
         self.global_fleet_file = self.workspace_root / "fleet.json"
+
+        # Initialize Memory Manager
+        self.memory_manager = MemoryManager(self.get_current_project_path())
 
     def load_fleet(self):
         project_fleet_file = self.get_current_project_path() / "fleet.json"
@@ -212,6 +220,7 @@ class ProjectManager:
         
         if project_path.exists():
             self.current_project = safe_name
+            self.memory_manager = MemoryManager(self.get_current_project_path())
             print(f"[ProjectManager] Switched to project: {safe_name}")
             return True, f"Switched to project '{safe_name}'."
         return False, f"Project '{safe_name}' does not exist."
@@ -508,6 +517,12 @@ class ProjectManager:
         if success:
              return True, "Writing Mode disabled. Standard configuration restored."
         return False, msg
+
+    def add_architectural_memory(self, content, tags=None):
+        return self.memory_manager.add_memory(content, tags)
+
+    def search_architectural_memory(self, query):
+        return self.memory_manager.search_memory(query)
 
     async def monitor_git_repos(self):
         """
