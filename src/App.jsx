@@ -175,6 +175,8 @@ function App() {
     // Smoothing and Snapping Refs
     const smoothedCursorPosRef = useRef({ x: 0, y: 0 });
     const snapStateRef = useRef({ isSnapped: false, element: null, snapPos: { x: 0, y: 0 } });
+    const interactiveTargetsCacheRef = useRef([]); // Cache for expensive DOM queries
+    const lastInteractiveSearchTimeRef = useRef(0);
 
     // Mouse Drag Refs
     const dragOffsetRef = useRef({ x: 0, y: 0 });
@@ -1006,8 +1008,14 @@ function App() {
                     }
                 } else {
                     // Check if we should snap
-                    // Find all interactive elements
-                    const targets = Array.from(document.querySelectorAll('button, input, select, .draggable'));
+                    // Find all interactive elements (Optimized with caching)
+                    const nowTime = performance.now();
+                    if (nowTime - lastInteractiveSearchTimeRef.current > 1000 || interactiveTargetsCacheRef.current.length === 0) {
+                        interactiveTargetsCacheRef.current = Array.from(document.querySelectorAll('button, input, select, .draggable'));
+                        lastInteractiveSearchTimeRef.current = nowTime;
+                    }
+                    const targets = interactiveTargetsCacheRef.current;
+
                     let closest = null;
                     let minDist = Infinity;
 
