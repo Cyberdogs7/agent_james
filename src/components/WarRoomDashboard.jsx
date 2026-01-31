@@ -26,10 +26,12 @@ import {
     GitMerge
 } from 'lucide-react';
 import PlanVisualizer from './PlanVisualizer';
+import AutomationEditor from './AutomationEditor';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
     const [showCommandModal, setShowCommandModal] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
     const [activeTab, setActiveTab] = useState('tasks'); // 'trello' or 'tasks'
     const [selectedSession, setSelectedSession] = useState(null);
     const [selectedArtifact, setSelectedArtifact] = useState(null);
@@ -168,6 +170,13 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-6">
+                        <button
+                            onClick={() => setShowEditor(true)}
+                            className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                        >
+                            <Cpu size={14} />
+                            EDITOR
+                        </button>
                         <button
                             data-testid="open-command-modal"
                             onClick={() => setShowCommandModal(true)}
@@ -443,6 +452,15 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         repo={selectedRepo}
                         onClose={() => setSelectedRepo(null)}
                         socket={socket}
+                    />
+                )}
+
+                {/* AUTOMATION EDITOR */}
+                {showEditor && (
+                    <AutomationEditor
+                        tasks={tasks}
+                        socket={socket}
+                        onClose={() => setShowEditor(false)}
                     />
                 )}
 

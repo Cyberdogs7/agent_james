@@ -1332,6 +1332,23 @@ async def create_task(sid, data):
             await sio.emit('dashboard_update', data)
 
 @sio.event
+async def update_task(sid, data):
+    # data: { id, updates: { title, trigger, action, status... } }
+    task_id = data.get('id')
+    updates = data.get('updates')
+    print(f"[SERVER] Update Task: {task_id} with {updates}")
+
+    if audio_loop and audio_loop.task_manager:
+        if audio_loop.task_manager.update_task(task_id, updates):
+            await sio.emit('status', {'msg': 'Task updated'})
+            # Force an immediate push if streaming
+            if dashboard_task:
+                data = await audio_loop.get_dashboard_data()
+                await sio.emit('dashboard_update', data)
+        else:
+            await sio.emit('error', {'msg': 'Task not found or update failed'})
+
+@sio.event
 async def delete_task(sid, data):
     task_id = data.get('id')
     print(f"[SERVER] Delete Task: {task_id}")
