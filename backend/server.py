@@ -1332,26 +1332,42 @@ async def get_fleet_status(sid):
         from github_client import GitHubClient
         client = GitHubClient(token)
 
-        fleet_status = []
-        for repo in fleet:
+        async def fetch_repo_status(repo):
             owner = repo['owner']
             name = repo['name']
 
             # Fetch details (basic check if exists and default branch)
             details = await client.get_repo_details(owner, name)
             if not details:
-                fleet_status.append({"name": f"{owner}/{name}", "status": "Error accessing repo"})
-                continue
+                return {"name": f"{owner}/{name}", "status": "Error accessing repo"}
 
             default_branch = details.get('default_branch', 'main')
 
-            fleet_status.append({
+            # Fetch last commit
+            commit_info = None
+            commit_data = await client.get_commit(owner, name, default_branch)
+            if commit_data:
+                c = commit_data.get('commit', {})
+                author = c.get('author', {}).get('name', 'Unknown')
+                date = c.get('author', {}).get('date', '')
+                message = c.get('message', '')
+                commit_info = {
+                    "author": author,
+                    "date": date,
+                    "message": message
+                }
+
+            return {
                 "name": f"{owner}/{name}",
                 "branch": default_branch,
-                "status": "Remote", # "Clean" concept doesn't apply to remote
-                "last_commit": None # Could fetch, but list_commits is extra call. Omit for speed or fetch later.
-            })
-        await sio.emit('fleet_status_update', fleet_status, to=sid)
+                "status": "Remote",
+                "last_commit": commit_info
+            }
+
+        tasks = [fetch_repo_status(repo) for repo in fleet]
+        fleet_status = await asyncio.gather(*tasks)
+
+        await sio.emit('fleet_status_update', list(fleet_status), to=sid)
 
 @sio.event
 async def get_repo_branches(sid, data):

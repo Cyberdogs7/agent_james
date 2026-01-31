@@ -557,15 +557,26 @@ class ProjectManager:
             last_seen_sha = self._git_last_state.get(repo_key)
 
             if last_seen_sha and current_sha != last_seen_sha:
-                # New commit
-                # We could fetch commit details but SHA change is enough for trigger
+                # New commit detected
+                commit_msg = "New remote commit detected"
+                author_name = "Remote User"
+                date_str = "Just now"
+
+                # Fetch details
+                commit_data = await client.get_commit(owner, name, current_sha)
+                if commit_data:
+                    c = commit_data.get('commit', {})
+                    author_name = c.get('author', {}).get('name', author_name)
+                    date_str = c.get('author', {}).get('date', date_str)
+                    commit_msg = c.get('message', commit_msg)
+
                 events.append({
                     "type": "git_commit",
                     "repo": repo_key,
-                    "author": "Remote User", # Simplification to avoid extra API call
-                    "message": "New remote commit detected",
+                    "author": author_name,
+                    "message": commit_msg,
                     "hash": current_sha,
-                    "date": "Just now"
+                    "date": date_str
                 })
 
             self._git_last_state[repo_key] = current_sha

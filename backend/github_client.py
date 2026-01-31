@@ -48,3 +48,6 @@ class GitHubClient:
             "commit_message": message or f"Merge {head} into {base}"
         }
         return await self._request("POST", f"/repos/{owner}/{repo}/merges", json=data)
+
+    async def get_commit(self, owner, repo, sha):
+        return await self._request("GET", f"/repos/{owner}/{repo}/commits/{sha}")

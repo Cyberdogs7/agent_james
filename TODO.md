@@ -24,6 +24,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Extend `JulesAgent` to manage a pool of sessions and aggregate their "thought" streams into a unified dashboard view.
   - **Status**: **Idea**
 
+- [x] **Remote Fleet Management**
+  - **Description**: Monitor and manage remote repositories (JulesAgents) directly from the War Room. View detailed commit history, branch status, and perform remote merges.
+  - **Wow Factor**: "James, merge the feature branch on the backend repo."
+  - **User Impact**: Centralized control of the distributed agent fleet.
+  - **Technical Notes**: Integration with GitHub API via `GitHubClient` to fetch commit details and trigger merges. Dashboard UI for fleet status.
+  - **Status**: **Implemented**
+
 - [ ] **Local "Brain" (Offline Mode)**
   - **Description**: When the internet is down (or for privacy), switch to a local LLM (e.g., Llama 3 on GPU) for basic commands (timers, local device control).
   - **Wow Factor**: "Sir, the network is down, but I am still operational."
