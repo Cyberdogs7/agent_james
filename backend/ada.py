@@ -2279,6 +2279,24 @@ User: "What's the weather in London?"
                                     )
                                     function_responses.append(function_response)
 
+                                elif fc.name == "switch_video_source":
+                                    source = fc.args.get("source")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_video_source' source='{source}'")
+
+                                    if source in ["camera", "screen"]:
+                                        self.video_mode = source
+                                        msg = f"Switched video source to {source}."
+                                    else:
+                                        msg = f"Invalid source '{source}'. Use 'camera' or 'screen'."
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg},
+                                    )
+                                    function_responses.append(function_response)
+
                                 elif fc.name == "write_file":
                                     path = fc.args["path"]
                                     content = fc.args["content"]
@@ -2758,25 +2776,67 @@ User: "What's the weather in London?"
                 self.on_audio_data(bytestream)
             await asyncio.to_thread(stream.write, bytestream)
 
-    async def get_frames(self):
-        # Use default backend (CAP_ANY) or specific logic if needed.
-        # Removing CAP_AVFOUNDATION for cross-platform compatibility.
-        cap = await asyncio.to_thread(cv2.VideoCapture, 0)
-        while True:
+    async def video_loop(self):
+        cap = None
+
+        while not self.stop_event.is_set():
             if self.paused:
                 await asyncio.sleep(0.1)
                 continue
-            frame = await asyncio.to_thread(self._get_frame, cap)
-            if frame is None:
-                break
 
-            # Update latest payload for VAD sync
-            self._latest_image_payload = frame
+            frame = None
+            if self.video_mode == "camera":
+                if cap is None or not cap.isOpened():
+                     cap = await asyncio.to_thread(cv2.VideoCapture, 0)
+
+                frame = await asyncio.to_thread(self._get_frame, cap)
+
+            elif self.video_mode == "screen":
+                if cap and cap.isOpened():
+                    cap.release()
+                    cap = None
+
+                try:
+                    frame = await asyncio.to_thread(self._get_screen_sync)
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Screen capture failed: {e}")
+
+            else:
+                 # None or unknown
+                 if cap: cap.release(); cap = None
+                 await asyncio.sleep(1)
+                 continue
+
+            if frame:
+                self._latest_image_payload = frame
+                if self.out_queue:
+                    await self.out_queue.put(frame)
 
             await asyncio.sleep(1.0)
-            if self.out_queue:
-                await self.out_queue.put(frame)
-        cap.release()
+
+        if cap: cap.release()
+
+    def _get_screen_sync(self):
+        with mss.mss() as sct:
+            if len(sct.monitors) > 1:
+                monitor = sct.monitors[1]  # Capture primary monitor
+            else:
+                monitor = sct.monitors[0]  # Fallback to all/virtual monitor
+
+            sct_img = sct.grab(monitor)
+
+            # Convert to PIL Image
+            img = PIL.Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
+            img.thumbnail([1024, 1024])
+
+            # Save to buffer
+            image_io = io.BytesIO()
+            img.save(image_io, format="jpeg")
+            image_io.seek(0)
+            image_bytes = image_io.read()
+
+            return {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode()}
 
     async def _monitor_git_fleet(self):
         """Background task to monitor git repos for new commits."""
@@ -2828,11 +2888,6 @@ User: "What's the weather in London?"
         image_bytes = image_io.read()
         return {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode()}
 
-    async def _get_screen(self):
-        pass 
-    async def get_screen(self):
-         pass
-
     async def _session_runner(self, start_message=None, is_reconnect=False):
         """Handles a single connection and run-loop of the voice agent."""
         # Force reset message_source to ensure clean state on new session/reconnect
@@ -2863,10 +2918,8 @@ User: "What's the weather in London?"
                     audio_input_task = asyncio.create_task(self.listen_audio())
                     tasks.append(audio_input_task) # Still track it for cleanup
 
-                    if self.video_mode == "camera":
-                        tasks.append(asyncio.create_task(self.get_frames()))
-                    elif self.video_mode == "screen":
-                        tasks.append(asyncio.create_task(self.get_screen()))
+                    # Start Video Loop (Handles Camera/Screen switching dynamically)
+                    tasks.append(asyncio.create_task(self.video_loop()))
 
                     tasks.append(asyncio.create_task(self.receive_audio()))
                     tasks.append(asyncio.create_task(self.play_audio()))

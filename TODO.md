@@ -10,12 +10,12 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] **"Omniscient" Desktop Vision**
+- [x] **"Omniscient" Desktop Vision**
   - **Description**: Allow James to "see" the user's screen content on demand. "James, look at this error log" or "What do you think of this UI design?".
   - **Wow Factor**: Bridges the gap between the assistant and the digital workspace. The AI becomes a true pair programmer that sees what you see.
   - **User Impact**: Dramatically reduces the need to copy-paste context.
-  - **Technical Notes**: Implement `_get_screen` in `ada.py` using `mss` or `pyautogui` to capture screenshots and feed them to the Gemini vision pipeline.
-  - **Status**: **Idea** (Stub exists in `ada.py`)
+  - **Technical Notes**: Implemented `_get_screen` in `ada.py` using `mss`. Added `switch_video_source` tool to dynamically toggle between camera and screen share.
+  - **Status**: **Implemented**
 
 - [ ] **Swarm Intelligence (Multi-Agent Mode)**
   - **Description**: Allow James to spawn and coordinate multiple "Jules" agents to work on different repositories or tasks simultaneously.
