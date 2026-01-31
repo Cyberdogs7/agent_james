@@ -52,6 +52,29 @@ run_jules_agent_tool = {
     }
 }
 
+spawn_swarm_agent_tool = {
+    "name": "spawn_swarm_agent",
+    "description": "Spawns a new Swarm Agent (Jules) with a specific role and task. Use this to delegate work to specialized agents.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "role": {
+                "type": "STRING",
+                "description": "The role of the agent (e.g., 'Frontend Engineer', 'Security Auditor', 'Python Expert')."
+            },
+            "prompt": {
+                "type": "STRING",
+                "description": "The detailed task or instruction for the agent."
+            },
+            "source": {
+                "type": "STRING",
+                "description": "Optional: The source context (repo) for the agent."
+            }
+        },
+        "required": ["role", "prompt"]
+    }
+}
+
 
 list_jules_sources_tool = {
     "name": "list_jules_sources",
@@ -542,6 +565,7 @@ tools_list = [{"function_declarations": [
     read_directory_tool,
     read_file_tool,
     run_jules_agent_tool,
+    spawn_swarm_agent_tool,
     send_jules_feedback_tool,
     list_jules_sources_tool,
     list_jules_sessions_tool,

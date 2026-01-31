@@ -19,6 +19,7 @@ class JulesAgent:
         # Centralized Swarm Management
         self.polling_tasks = {} # {session_id: {"task": asyncio.Task, "stop_event": asyncio.Event}}
         self.monitored_sessions = {} # {session_id: last_state}
+        self.session_insights = {} # {session_id: "Last captured thought or message"}
 
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
 
@@ -170,17 +171,24 @@ class JulesAgent:
 
                         for activity in new_activities:
                             message = None
+                            insight = None
                             if "agentMessage" in activity:
                                 content = activity["agentMessage"]["content"]
+                                insight = content
                                 if "feedback" in content.lower():
                                     message = f"Jules is asking for feedback on session {session_id}. Please respond."
                                 else:
                                     message = content
                             elif "plan" in activity:
                                 message = "Jules has generated a plan."
+                                insight = "Generating Plan..."
                             elif "sessionComplete" in activity:
                                 message = "Jules has completed the session."
+                                insight = "Session Completed."
                                 session_completed = True
+
+                            if insight:
+                                self.session_insights[session_id] = insight
 
                             if message:
                                 messages_to_send.append(message)
@@ -252,6 +260,10 @@ class JulesAgent:
     async def list_activities(self, session_id):
         """Lists all activities for a session."""
         return await self._request("GET", f"{self.base_url}/{session_id}/activities", tool_name="list_activities")
+
+    def get_session_insight(self, session_id):
+        """Returns the latest insight/thought for a specific session."""
+        return self.session_insights.get(session_id)
 
     async def start_monitoring(self, status_change_callback):
         """Starts a background task to monitor all Jules sessions for status changes."""

@@ -34,7 +34,6 @@ async def test_create_session_success(jules_agent):
         assert session is not None
         assert session["name"] == "sessions/test_session_id"
         assert jules_agent.session_id == "sessions/test_session_id"
-        assert "sessions/test_session_id" in jules_agent.active_sessions
         mock_request.assert_called_once()
         call_args = mock_request.call_args.kwargs
         assert call_args["json"]["prompt"] == prompt
@@ -221,7 +220,8 @@ async def test_poll_for_updates_flow(jules_agent):
 
         # We can now await the polling function directly. It should stop on its own
         # when it receives the sessionComplete message.
-        await jules_agent.poll_for_updates(session_id, stop_event)
+        # It takes (session_id, stop_event, callback). Passing None for callback to use default session.send logic.
+        await jules_agent._poll_loop(session_id, stop_event, None)
 
         # Check calls to ada_session.send
         send_calls = jules_agent.session.send.call_args_list
