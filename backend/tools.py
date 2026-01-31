@@ -77,6 +77,28 @@ toggle_jules_slack_notifications_tool = {
     }
 }
 
+add_architectural_memory_tool = {
+    "name": "add_architectural_memory",
+    "description": "Stores an architectural decision, constraint, or 'lesson learned' in the project's long-term memory. Use this when you make a significant decision or discover a best practice.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "content": {
+                "type": "STRING",
+                "description": "The memory content (e.g., 'Use httpx instead of requests', 'Database schema must use UUIDs')."
+            },
+            "tags": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "STRING"
+                },
+                "description": "Optional tags for categorization (e.g., ['architecture', 'python', 'database'])."
+            }
+        },
+        "required": ["content"]
+    }
+}
+
 list_jules_sessions_tool = {
     "name": "list_jules_sessions",
     "description": "Lists all Jules sessions saved in the current project's local memory.",
@@ -512,7 +534,8 @@ tools_list = [{"function_declarations": [
     append_system_prompt_tool,
     delete_custom_system_prompt_tool,
     get_system_prompt_tool,
-    toggle_jules_slack_notifications_tool
+    toggle_jules_slack_notifications_tool,
+    add_architectural_memory_tool
 ] + list(trello_tools.values()) + [
     {
         "name": "search",

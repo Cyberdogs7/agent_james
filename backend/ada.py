@@ -1208,7 +1208,20 @@ class AudioLoop:
             return "Fetching available Jules sources. I will notify you shortly."
 
         async def run_jules_task():
-            session = await jules_agent.create_session(prompt, source)
+            # Inject architectural memory context (RAG)
+            final_prompt = prompt
+            try:
+                memories = self.project_manager.search_architectural_memory(prompt)
+                if memories:
+                    memory_context = "\n".join([f"- {m}" for m in memories])
+                    final_prompt = f"Context from previous architectural decisions & constraints:\n{memory_context}\n\nTask:\n{prompt}"
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [MEMORY] Injected context into prompt. Length: {len(memory_context)}")
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Memory search failed: {e}")
+
+            session = await jules_agent.create_session(final_prompt, source)
             if session:
                 session_id = session['name']
                 if INCLUDE_RAW_LOGS:
@@ -1299,6 +1312,13 @@ class AudioLoop:
             return response["activities"]
         else:
             return "Failed to list Jules activities."
+
+    async def handle_add_architectural_memory(self, content, tags=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [MEMORY] Adding architectural memory: '{content}'")
+
+        success, msg = self.project_manager.add_architectural_memory(content, tags)
+        return msg
 
     async def handle_dismiss_jules_session(self, session_id):
         if INCLUDE_RAW_LOGS:
@@ -2006,6 +2026,17 @@ User: "What's the weather in London?"
                                         id=fc.id,
                                         name=fc.name,
                                         response={"result": f"Slack notifications for Jules status updates have been {'enabled' if enabled else 'disabled'}."}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "add_architectural_memory":
+                                    content = fc.args["content"]
+                                    tags = fc.args.get("tags")
+                                    result = await self.handle_add_architectural_memory(content, tags)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
                                     )
                                     function_responses.append(function_response)
 
