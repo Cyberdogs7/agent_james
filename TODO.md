@@ -39,12 +39,14 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 👔 Engineering Manager Mode (Orchestration & Review)
 *Transforming the user from a coder to a commander of agents.*
 
-- [ ] **Event-Driven Automation Engine**
+- [x] **Event-Driven Automation Engine**
   - **Description**: A robust "If-This-Then-That" system to trigger Jules Agents based on events.
     - *Triggers*: Schedule (Cron), Git Events (PR Open, Commit Push), Trello Card Movement.
     - *Actions*: Spawn Agent with specific Prompt & Context, Send Notification, Run Script.
   - **Wow Factor**: "Sir, the nightly build failed, so I automatically deployed an agent to investigate the logs. It has identified the issue."
   - **User Impact**: Automates the "management" overhead of assigning tasks to agents.
+  - **Technical Notes**: Implemented `AutomationEngine` in `backend/automation_engine.py` with background polling loop. Integrated into `server.py`. Supports Git commit monitoring, Trello card movement, and schedule triggers. Actions include proactive voice notifications and spawning Jules agents.
+  - **Status**: **Implemented**
 
 - [x] **Streamlined "One-Click" Review & Merge**
   - **Description**: A dedicated interface for reviewing Agent work.
@@ -55,10 +57,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Added `get_branch_diff` event to fetch file patches. Updated `WarRoomDashboard` with a Review UI. Implemented atomic "Merge & Delete" in backend.
   - **Status**: **Implemented**
 
-- [ ] **Proactive Voice Notifications ("The Nagging Secretary")**
+- [x] **Proactive Voice Notifications ("The Nagging Secretary")**
   - **Description**: Voice announcements to ensure the human manager doesn't become the bottleneck.
   - **Behavior**: If a Jules Agent finishes a task and it sits unreviewed for >X minutes, James verbally notifies the user. "Sir, Agent 3 has finished the refactor and is awaiting your approval."
   - **User Impact**: Keeps the "factory line" of coding agents moving efficiently.
+  - **Technical Notes**: Wired `AutomationEngine` to `AudioLoop.send_notification` via `server.py` callback. Implemented notification queueing for when session is inactive, flushing on connect.
+  - **Status**: **Implemented**
 
 ---
 
