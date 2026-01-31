@@ -2,12 +2,34 @@ import React, { useState, useEffect, useRef } from 'react';
 import Visualizer from './Visualizer';
 import WeatherWidget from './WeatherWidget';
 import TimerCarousel from './TimerCarousel';
+import AvatarCanvas from './AvatarCanvas';
 import { X } from 'lucide-react';
 
-const DisplayArea = ({ socket, isListening, audioData, intensity, timers }) => {
+const DisplayArea = ({ socket, isListening, audioData, intensity, timers, currentProject }) => {
   const [displayContent, setDisplayContent] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(null);
   const timerRef = useRef(null);
+
+  // Check for project-specific avatar
+  useEffect(() => {
+      if (currentProject) {
+          const port = import.meta.env.SERVER_PORT || 8180;
+          const hostname = window.location.hostname;
+          const url = `http://${hostname}:${port}/projects/${currentProject}/avatar.vrm`;
+
+          fetch(url, { method: 'HEAD' })
+              .then(res => {
+                  if (res.ok) {
+                      console.log("[DisplayArea] Found custom avatar:", url);
+                      setAvatarUrl(url);
+                  } else {
+                      setAvatarUrl(null);
+                  }
+              })
+              .catch(() => setAvatarUrl(null));
+      }
+  }, [currentProject]);
 
   const handleTimerDismiss = (name) => {
     if (socket) {
@@ -64,6 +86,10 @@ const DisplayArea = ({ socket, isListening, audioData, intensity, timers }) => {
     if (!displayContent) {
       if (timers && timers.length > 0) {
         return <TimerCarousel timers={timers} onDismiss={handleTimerDismiss} />;
+      }
+      // Render Avatar if available
+      if (avatarUrl) {
+          return <AvatarCanvas audioData={audioData} vrmUrl={avatarUrl} />;
       }
       return <Visualizer isListening={isListening} audioData={audioData} intensity={intensity} />;
     }
