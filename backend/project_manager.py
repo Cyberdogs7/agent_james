@@ -51,19 +51,32 @@ class ProjectManager:
 
         # State for git monitoring
         self._git_last_state = {}
-        self.fleet_file = self.workspace_root / "fleet.json"
+        self.global_fleet_file = self.workspace_root / "fleet.json"
 
     def load_fleet(self):
-        if self.fleet_file.exists():
+        project_fleet_file = self.get_current_project_path() / "fleet.json"
+
+        # Migration Check: If project fleet doesn't exist but global does, migrate
+        if not project_fleet_file.exists() and self.global_fleet_file.exists():
+            print(f"[ProjectManager] Migrating fleet.json to project: {self.current_project}")
             try:
-                with open(self.fleet_file, "r") as f:
+                # Move the file
+                shutil.move(str(self.global_fleet_file), str(project_fleet_file))
+            except Exception as e:
+                print(f"[ProjectManager] Error migrating fleet.json: {e}")
+
+        # Load from project
+        if project_fleet_file.exists():
+            try:
+                with open(project_fleet_file, "r") as f:
                     return json.load(f)
             except:
                 pass
         return []
 
     def save_fleet(self, fleet):
-        with open(self.fleet_file, "w") as f:
+        project_fleet_file = self.get_current_project_path() / "fleet.json"
+        with open(project_fleet_file, "w") as f:
             json.dump(fleet, f, indent=4)
 
     def create_project(self, name: str):
@@ -83,34 +96,40 @@ class ProjectManager:
         return False, f"Project '{safe_name}' already exists."
 
     def set_github_token(self, token: str):
-        """Saves the GitHub token to settings.json in the workspace root."""
-        settings_path = self.workspace_root / "settings.json"
-        settings = {}
-        if settings_path.exists():
-            try:
-                with open(settings_path, "r") as f:
-                    content = f.read().strip()
-                    if content:
-                        settings = json.load(f)
-            except Exception as e:
-                print(f"[ProjectManager] Error reading settings.json: {e}")
-
-        settings["github_token"] = token
-
-        with open(settings_path, "w") as f:
-            json.dump(settings, f, indent=4)
+        """Saves the GitHub token to the current project's config.json."""
+        self.update_project_config({"github_token": token})
         return True
 
     def get_github_token(self):
-        """Retrieves the GitHub token from settings.json."""
+        """Retrieves the GitHub token from project config, migrating from global settings if necessary."""
+        # 1. Check Project Config
+        config = self.get_project_config()
+        token = config.get("github_token")
+        if token:
+            return token
+
+        # 2. Check Global Settings (Migration)
         settings_path = self.workspace_root / "settings.json"
         if settings_path.exists():
             try:
                 with open(settings_path, "r") as f:
                     settings = json.load(f)
-                    return settings.get("github_token")
-            except:
-                pass
+
+                global_token = settings.get("github_token")
+                if global_token:
+                    print(f"[ProjectManager] Migrating GitHub token to project: {self.current_project}")
+                    # Save to project
+                    self.set_github_token(global_token)
+
+                    # Remove from global settings
+                    del settings["github_token"]
+                    with open(settings_path, "w") as f:
+                        json.dump(settings, f, indent=4)
+
+                    return global_token
+            except Exception as e:
+                print(f"[ProjectManager] Error reading/migrating settings.json: {e}")
+
         return None
 
     def sync_jules_repos(self, sources):

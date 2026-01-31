@@ -173,6 +173,12 @@ def load_settings():
                 loaded = json.load(f)
                 # Merge with defaults to ensure new keys exist
                 deep_merge(SETTINGS, loaded)
+
+            # Clean up deprecated github_token from global settings memory
+            # It is now managed per-project by ProjectManager
+            if "github_token" in SETTINGS:
+                del SETTINGS["github_token"]
+
             print(f"Loaded settings: {SETTINGS}")
         except Exception as e:
             print(f"Error loading settings: {e}")
