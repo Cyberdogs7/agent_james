@@ -3,6 +3,27 @@ import asyncio
 import os
 import tempfile
 import shutil
+import sys
+from unittest.mock import MagicMock
+
+# Ensure backend is in path
+backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend')
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
+
+# Mock dotenv before it's imported by anything
+sys.modules['dotenv'] = MagicMock()
+sys.modules['cv2'] = MagicMock()
+sys.modules['pyaudio'] = MagicMock()
+sys.modules['mss'] = MagicMock()
+sys.modules['PIL'] = MagicMock()
+sys.modules['PIL.Image'] = MagicMock()
+sys.modules['google'] = MagicMock()
+sys.modules['google.genai'] = MagicMock()
+sys.modules['google.genai.types'] = MagicMock()
+sys.modules['httpx'] = MagicMock()
+sys.modules['tzlocal'] = MagicMock()
+sys.modules['pydantic'] = MagicMock()
 
 @pytest.fixture(autouse=True)
 def mock_api_keys(monkeypatch):
