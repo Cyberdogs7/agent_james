@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import time
+import asyncio
 from pathlib import Path
 try:
     from backend.writing_prompts import WRITING_MODE_SYSTEM_PROMPT
@@ -556,38 +557,23 @@ class ProjectManager:
     def search_architectural_memory(self, query):
         return self.memory_manager.search_memory(query)
 
-    async def monitor_git_repos(self):
-        """
-        Scans fleet for new commits (via API) since the last check.
-        Returns a list of event dictionaries.
-        """
-        events = []
-        fleet = self.load_fleet()
-        token = self.get_github_token()
-
-        if not token:
-            return []
-
-        client = GitHubClient(token)
-
-        for repo in fleet:
+    async def _check_repo(self, client, repo):
+        try:
             owner = repo['owner']
             name = repo['name']
 
             branches = await client.get_branches(owner, name)
             if not branches:
-                continue
+                return None
 
             # Assume first branch is default or look for main/master
-            # GitHub API get_repo_details would give default_branch, but let's just check all heads
-            # Actually, monitoring *every* branch is expensive.
-            # Let's just monitor the default branch or 'main'/'master'
             default_branch = next((b for b in branches if b['name'] in ['main', 'master']), branches[0])
 
             current_sha = default_branch['commit']['sha']
             repo_key = f"{owner}/{name}"
             last_seen_sha = self._git_last_state.get(repo_key)
 
+            event = None
             if last_seen_sha and current_sha != last_seen_sha:
                 # New commit detected
                 commit_msg = "New remote commit detected"
@@ -602,15 +588,42 @@ class ProjectManager:
                     date_str = c.get('author', {}).get('date', date_str)
                     commit_msg = c.get('message', commit_msg)
 
-                events.append({
+                event = {
                     "type": "git_commit",
                     "repo": repo_key,
                     "author": author_name,
                     "message": commit_msg,
                     "hash": current_sha,
                     "date": date_str
-                })
+                }
 
             self._git_last_state[repo_key] = current_sha
+            return event
+        except Exception as e:
+            print(f"[ProjectManager] Error checking repo {repo.get('owner')}/{repo.get('name')}: {e}")
+            return None
+
+    async def monitor_git_repos(self):
+        """
+        Scans fleet for new commits (via API) since the last check.
+        Returns a list of event dictionaries.
+        """
+        fleet = self.load_fleet()
+        token = self.get_github_token()
+
+        if not token:
+            return []
+
+        client = GitHubClient(token)
+        tasks = [self._check_repo(client, repo) for repo in fleet]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        events = []
+        for res in results:
+            if isinstance(res, Exception):
+                print(f"[ProjectManager] Monitor task failed: {res}")
+                continue
+            if res:
+                events.append(res)
 
         return events
