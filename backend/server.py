@@ -9,6 +9,8 @@ if sys.platform == 'win32':
 import socketio
 import uvicorn
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import threading
 import sys
@@ -47,6 +49,25 @@ except ImportError:
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount projects directory for static file access (e.g. avatars)
+# project_root is calculated below, but we need it here or need to defer mounting.
+# Let's move project_root calc up or use relative path logic assuming backend execution context.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+projects_dir = os.path.join(project_root, "projects")
+if not os.path.exists(projects_dir):
+    os.makedirs(projects_dir)
+app.mount("/projects", StaticFiles(directory=projects_dir), name="projects")
+
 app_socketio = socketio.ASGIApp(sio, app)
 
 import signal
@@ -127,8 +148,7 @@ async def handle_slack_message(message):
         print("[SERVER] Audio loop not ready, cannot process Slack message.")
 
 # Determine project root and initialize ProjectManager
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
+# project_root already calculated above
 project_manager = ProjectManager(project_root)
 
 DEFAULT_SETTINGS = {

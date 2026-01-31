@@ -1542,6 +1542,7 @@ function App() {
                             isListening={isConnected && !isMuted}
                             intensity={audioAmp}
                             timers={timers}
+                            currentProject={currentProject}
                         />
                     </div>
                     {isModularMode && <div className={`absolute top-2 right-2 text-xs font-bold tracking-widest z-20 ${activeDragElement === 'visualizer' ? 'text-green-500' : 'text-yellow-500/50'}`}>VISUALIZER</div>}
