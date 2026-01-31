@@ -13,10 +13,13 @@ class JulesAgent:
         self.base_url = "https://jules.googleapis.com/v1alpha"
         self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key})
         self.session_id = None
-        self.session = session
-        self.active_sessions = set()
+        self.session = session # Optional: Main Gemini Session (Legacy support, prefer callbacks)
         self.sessions_lock = asyncio.Lock()
-        self.monitored_sessions = {}
+
+        # Centralized Swarm Management
+        self.polling_tasks = {} # {session_id: {"task": asyncio.Task, "stop_event": asyncio.Event}}
+        self.monitored_sessions = {} # {session_id: last_state}
+
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
 
         # Caching
@@ -112,13 +115,113 @@ class JulesAgent:
         session = await self._request("POST", f"{self.base_url}/sessions", tool_name="create_session", json=data)
         if session:
             self.session_id = session["name"]
-            async with self.sessions_lock:
-                self.active_sessions.add(self.session_id)
-
             # Invalidate session list cache so the new session appears immediately
             self.invalidate_cache("list_sessions")
 
         return session
+
+    async def spawn_agent(self, prompt, source, callback=None):
+        """High-level method to create a session and immediately start polling it."""
+        session = await self.create_session(prompt, source)
+        if session:
+            session_id = session['name']
+            self.start_polling(session_id, callback)
+            return session
+        return None
+
+    def start_polling(self, session_id, callback=None):
+        """Starts a background task to poll a specific session for updates."""
+        if session_id in self.polling_tasks:
+            self._log(f"[JULES_AGENT] Already polling session: {session_id}")
+            return
+
+        self._log(f"[JULES_AGENT] Starting active polling for session: {session_id}")
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(self._poll_loop(session_id, stop_event, callback))
+        self.polling_tasks[session_id] = {"task": task, "stop_event": stop_event}
+
+        # Cleanup callback
+        task.add_done_callback(lambda t: self.stop_polling(session_id))
+
+    def stop_polling(self, session_id):
+        """Stops the polling task for a specific session."""
+        if session_id in self.polling_tasks:
+            self._log(f"[JULES_AGENT] Stopping polling for session: {session_id}")
+            info = self.polling_tasks.pop(session_id)
+            info["stop_event"].set()
+            # We don't await the task here to avoid blocking, but it will exit soon.
+
+    async def _poll_loop(self, session_id, stop_event, callback):
+        """Internal loop to poll for updates on a session."""
+        last_activity_count = 0
+        last_activity_time = datetime.now()
+
+        while not stop_event.is_set():
+            try:
+                activities_response = await self.list_activities(session_id)
+                if activities_response and "activities" in activities_response:
+                    activities = activities_response["activities"]
+                    new_activities = activities[last_activity_count:]
+
+                    if new_activities:
+                        last_activity_time = datetime.now()
+                        messages_to_send = []
+                        session_completed = False
+
+                        for activity in new_activities:
+                            message = None
+                            if "agentMessage" in activity:
+                                content = activity["agentMessage"]["content"]
+                                if "feedback" in content.lower():
+                                    message = f"Jules is asking for feedback on session {session_id}. Please respond."
+                                else:
+                                    message = content
+                            elif "plan" in activity:
+                                message = "Jules has generated a plan."
+                            elif "sessionComplete" in activity:
+                                message = "Jules has completed the session."
+                                session_completed = True
+
+                            if message:
+                                messages_to_send.append(message)
+
+                        if messages_to_send:
+                            combined_message = "\n".join(messages_to_send)
+                            final_message = f"Jules Update ({session_id}):\n{combined_message}"
+
+                            # Invoke callback if provided, else fall back to direct session send (Legacy)
+                            if callback:
+                                if asyncio.iscoroutinefunction(callback):
+                                    await callback(final_message)
+                                else:
+                                    callback(final_message)
+                            elif self.session:
+                                # Legacy fallback
+                                try:
+                                    await asyncio.wait_for(
+                                        self.session.send(input=final_message, end_of_turn=False),
+                                        timeout=10.0
+                                    )
+                                except Exception as e:
+                                    self._log(f"[JULES_AGENT] [ERR] Failed to send update: {e}")
+
+                        if session_completed:
+                            self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
+                            stop_event.set()
+
+                        last_activity_count = len(activities)
+                    else:
+                        # No new activity, check for timeout
+                        if datetime.now() - last_activity_time > timedelta(minutes=20):
+                            self._log(f"[JULES_AGENT] Session {session_id} timed out. Stopping polling.")
+                            stop_event.set()
+
+                if not stop_event.is_set():
+                    await asyncio.sleep(10)
+
+            except Exception as e:
+                self._log(f"[JULES_AGENT] [ERR] Error polling {session_id}: {e}")
+                await asyncio.sleep(60)
 
     async def send_message(self, session_id, message):
         """Sends a message to a session."""
@@ -131,14 +234,12 @@ class JulesAgent:
         now = time.time()
         if cache_key in self._cache and cache_key in self._cache_expiry:
             if now < self._cache_expiry[cache_key]:
-                # Valid cache
                 return self._cache[cache_key]
 
         params = {"pageSize": limit}
         response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions", params=params)
         if response and "sessions" in response:
             sessions = response["sessions"]
-            # Set Cache
             self._cache[cache_key] = sessions
             self._cache_expiry[cache_key] = now + self._cache_ttl
             return sessions
@@ -157,16 +258,6 @@ class JulesAgent:
         self._log("[JULES_AGENT] Starting background session monitoring...")
         while True:
             try:
-                # Force a fresh fetch or rely on cache?
-                # Monitoring should probably be fresh or close to it.
-                # If we use cached list_sessions, we might miss updates by 15s.
-                # However, monitoring loop runs every 15s anyway.
-                # So we can just call list_sessions and let it handle caching.
-
-                # To ensure we catch updates, we might want to bypass cache or shorten TTL for monitoring?
-                # But since list_sessions is the only way to get status, caching it effectively limits monitoring frequency too.
-                # The user accepted 15s cache.
-
                 sessions = await self.list_sessions()
                 if sessions:
                     for session in sessions:
@@ -174,103 +265,23 @@ class JulesAgent:
                         current_state = session.get("state")
                         title = session.get("title", "Untitled Jules Task")
 
-                        # Ignore completed or failed sessions
                         if current_state in ["COMPLETED", "FAILED"]:
                             if session_id in self.monitored_sessions:
-                                self._log(f"[JULES_AGENT] Session {session_id} has completed or failed. Removing from monitoring.")
                                 del self.monitored_sessions[session_id]
                             continue
 
                         previous_state = self.monitored_sessions.get(session_id)
 
                         if previous_state is None:
-                            # New session detected, start monitoring
-                            self._log(f"[JULES_AGENT] New active session found: {session_id} ('{title}'). State: {current_state}. Starting to monitor.")
+                            self._log(f"[JULES_AGENT] New active session found: {session_id}. State: {current_state}.")
                             self.monitored_sessions[session_id] = current_state
                         elif previous_state != current_state:
-                            # State change detected
-                            self._log(f"[JULES_AGENT] Status change for session {session_id} ('{title}'): {previous_state} -> {current_state}")
+                            self._log(f"[JULES_AGENT] Status change for {session_id}: {previous_state} -> {current_state}")
                             self.monitored_sessions[session_id] = current_state
                             if status_change_callback:
-                                # Non-blocking call to the callback
                                 asyncio.create_task(status_change_callback(title, current_state))
-
-                                # Invalidate cache on state change to ensure UI gets it?
-                                # If we detected it, it means our data is fresh enough or we just fetched it.
-                                # Actually, if we got it from list_sessions, the cache is already updated with this state.
 
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Error in monitoring loop: {e}")
 
-            await asyncio.sleep(15) # Poll every 15 seconds
-
-    async def poll_for_updates(self, session_id, stop_event):
-        """Polls for updates on a session until a stop event is set."""
-        last_activity_count = 0
-        last_activity_time = datetime.now()
-        self._log(f"[JULES_AGENT] Starting to poll for updates on session: {session_id}")
-        while not stop_event.is_set():
-            try:
-                # list_activities is not cached yet.
-                # This runs for specific sessions.
-                # We should NOT cache this heavily if we want near-realtime chat.
-                activities_response = await self.list_activities(session_id)
-                if activities_response and "activities" in activities_response:
-                    activities = activities_response["activities"]
-                    new_activities = activities[last_activity_count:]
-
-                    if new_activities:
-                        last_activity_time = datetime.now()  # Reset timer on new activity
-                        messages_to_send = []
-                        session_completed = False
-
-                        for activity in new_activities:
-                            message = None
-                            if "agentMessage" in activity:
-                                content = activity["agentMessage"]["content"]
-                                if "feedback" in content.lower():
-                                    message = f"Jules is asking for feedback on session {session_id}. Please use the send message functionality to respond."
-                                else:
-                                    message = content
-                            elif "plan" in activity:
-                                message = "Jules has generated a plan."
-                            elif "sessionComplete" in activity:
-                                message = "Jules has completed the session."
-                                session_completed = True
-
-                            if message:
-                                messages_to_send.append(message)
-
-                        if messages_to_send and self.session:
-                            try:
-                                combined_message = "\n".join(messages_to_send)
-                                final_message = f"Jules session update:\n{combined_message}"
-                                # Add a timeout to the send operation
-                                await asyncio.wait_for(
-                                    self.session.send(input=final_message, end_of_turn=False),
-                                    timeout=10.0
-                                )
-                            except asyncio.TimeoutError:
-                                self._log(f"[JULES_AGENT] [ERR] Timeout sending message to session {session_id}.")
-                            except Exception as e:
-                                self._log(f"[JULES_AGENT] [ERR] Failed to send message for session {session_id}: {e}")
-
-                        if session_completed:
-                            self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
-                            stop_event.set()
-
-                        last_activity_count = len(activities)
-                    else:
-                        # No new activity, check for timeout
-                        if datetime.now() - last_activity_time > timedelta(minutes=20):
-                            self._log(f"[JULES_AGENT] Session {session_id} timed out due to inactivity after 20 minutes. Stopping polling.")
-                            stop_event.set()
-
-                if not stop_event.is_set():
-                    await asyncio.sleep(10) # Poll more frequently
-
-            except Exception as e:
-                self._log(f"[JULES_AGENT] [ERR] Error during polling for {session_id}: {e}")
-                await asyncio.sleep(60) # Wait longer on error
-
-        self._log(f"[JULES_AGENT] Polling stopped for session: {session_id}")
+            await asyncio.sleep(15)

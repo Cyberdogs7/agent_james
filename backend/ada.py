@@ -408,9 +408,6 @@ class AudioLoop:
         # Instantiate JulesAgent for session management and monitoring
         self.jules_agent = JulesAgent()
 
-        # Dictionary to keep track of active polling tasks
-        self.jules_polling_tasks = {}
-
         self.send_text_task = None
         self.stop_event = asyncio.Event()
         self._reconnect_needed = asyncio.Event()
@@ -470,24 +467,15 @@ class AudioLoop:
 
     def stop(self):
         self.stop_event.set()
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [SHUTDOWN] Stopping all Jules polling tasks...")
-        for session_id, task_info in self.jules_polling_tasks.items():
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [SHUTDOWN] Signaling stop for session: {session_id}")
-            task_info["stop_event"].set()
+        # Note: JulesAgent handles cleanup of its own internal polling tasks when the process exits
+        # or we can explicitly stop them here if we exposed a method.
+        # But for now, setting stop_event is main shutdown signal.
 
     def reconnect(self):
         """Signals the main loop to reconnect."""
         if INCLUDE_RAW_LOGS:
             print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
         self._reconnect_needed.set()
-
-    def _cleanup_jules_task(self, session_id, task):
-        """Callback to remove a completed Jules polling task."""
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Cleaning up polling task for session: {session_id}")
-        self.jules_polling_tasks.pop(session_id, None)
 
     async def _handle_jules_status_change(self, title, new_state):
         """Handles UI and voice notifications for Jules session status changes."""
@@ -1181,16 +1169,15 @@ class AudioLoop:
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
 
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(session=self.session, api_key=api_key)
+        # We use the persistent instance self.jules_agent instead of creating a new one
+        # to ensure centralized management of polling tasks.
 
         if not source:
             if INCLUDE_RAW_LOGS:
                 print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
             
             async def fetch_sources_and_notify():
-                sources_response = await jules_agent.list_sources()
+                sources_response = await self.jules_agent.list_sources()
                 if sources_response and "sources" in sources_response:
                     sources = [s["name"] for s in sources_response["sources"]]
                     sources_str = "\n".join(sources)
@@ -1207,6 +1194,19 @@ class AudioLoop:
             asyncio.create_task(fetch_sources_and_notify())
             return "Fetching available Jules sources. I will notify you shortly."
 
+        async def _jules_update_callback(message):
+            """Callback for when Jules sends an update."""
+            if self.session:
+                 try:
+                    # Add a timeout to the send operation
+                    await asyncio.wait_for(
+                        self.session.send(input=f"System Notification: {message}", end_of_turn=False),
+                        timeout=10.0
+                    )
+                 except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send Jules update to model: {e}")
+
         async def run_jules_task():
             # Inject architectural memory context (RAG)
             final_prompt = prompt
@@ -1221,20 +1221,13 @@ class AudioLoop:
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [ERR] Memory search failed: {e}")
 
-            session = await jules_agent.create_session(final_prompt, source)
+            # Spawn the agent and start polling automatically via callback
+            session = await self.jules_agent.spawn_agent(final_prompt, source, callback=_jules_update_callback)
+
             if session:
                 session_id = session['name']
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [JULES] Session created: {session_id}")
-
-                stop_event = asyncio.Event()
-                polling_task = asyncio.create_task(
-                    jules_agent.poll_for_updates(session_id, stop_event)
-                )
-                self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
-                polling_task.add_done_callback(
-                    lambda task: self._cleanup_jules_task(session_id, task)
-                )
 
                 try:
                     title = session.get('title', session_id)
@@ -1258,23 +1251,21 @@ class AudioLoop:
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
         
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(session=self.session, api_key=api_key)
+        # Use the existing agent instance
+        async def _jules_update_callback(message):
+            if self.session:
+                 try:
+                    await self.session.send(input=f"System Notification: {message}", end_of_turn=False)
+                 except Exception:
+                    pass
 
-        if session_id not in self.jules_polling_tasks:
+        # Ensure we are polling this session (if not already)
+        if session_id not in self.jules_agent.polling_tasks:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
-            stop_event = asyncio.Event()
-            polling_task = asyncio.create_task(
-                jules_agent.poll_for_updates(session_id, stop_event)
-            )
-            self.jules_polling_tasks[session_id] = {"task": polling_task, "stop_event": stop_event}
-            polling_task.add_done_callback(
-                lambda task: self._cleanup_jules_task(session_id, task)
-            )
+            self.jules_agent.start_polling(session_id, callback=_jules_update_callback)
 
-        response = await jules_agent.send_message(session_id, feedback)
+        response = await self.jules_agent.send_message(session_id, feedback)
         if response:
             return "Feedback sent successfully."
         else:

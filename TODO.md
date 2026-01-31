@@ -22,7 +22,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Sir, I have Agent 1 refactoring the frontend and Agent 2 updating the API. Both are 50% complete."
   - **User Impact**: Massive parallelism for complex refactors.
   - **Technical Notes**: Extend `JulesAgent` to manage a pool of sessions and aggregate their "thought" streams into a unified dashboard view.
-  - **Status**: **Idea**
+  - **Status**: **Broken Down**
+    - [ ] **Centralize Session Management**: Refactor `JulesAgent` to internally manage `asyncio` polling tasks for multiple sessions, removing ad-hoc management from `ada.py`.
+    - [ ] **Add `spawn_swarm_agent` Tool**: Create a high-level tool for the assistant to explicitly spawn agents with defined roles.
+    - [ ] **Swarm Dashboard Aggregation**: Update `get_dashboard_data` to visualize the status and active "thoughts" of the entire fleet.
 
 - [x] **Remote Fleet Management**
   - **Description**: Monitor and manage remote repositories (JulesAgents) directly from the War Room. View detailed commit history, branch status, and perform remote merges.
@@ -31,41 +34,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Integration with GitHub API via `GitHubClient` to fetch commit details and trigger merges. Dashboard UI for fleet status.
   - **Status**: **Implemented**
 
-- [ ] **Local "Brain" (Offline Mode)**
-  - **Description**: When the internet is down (or for privacy), switch to a local LLM (e.g., Llama 3 on GPU) for basic commands (timers, local device control).
-  - **Wow Factor**: "Sir, the network is down, but I am still operational."
-  - **User Impact**: Reliability and privacy.
-  - **Technical Notes**: Integration with `ollama` or `llama.cpp` python bindings. Check `check_cuda.py` for hardware capability.
-  - **Status**: **Idea**
-
----
-
-## 🧩 Smart Enhancements
-*High-impact improvements that make the assistant feel sharper and more capable.*
-
-- [ ] **Semantic Code Search**
-  - **Description**: "Where do we handle authentication?" -> James opens the exact file and highlights the lines.
-  - **Wow Factor**: Instant navigation of large codebases.
-  - **User Impact**: Faster debugging and onboarding.
-  - **Technical Notes**: Use `chromadb` or similar to embed the codebase (already started in `memory_manager.py`?) and provide a "Jump to" tool.
-  - **Status**: **Idea**
-
-- [ ] **Smart Home "Scenes"**
-  - **Description**: Context-aware environment control. "James, I'm coding." -> Lights turn cool white, music lowers. "James, it's late." -> Lights warm, notifications suppressed.
-  - **Wow Factor**: The physical room adapts to the digital task.
-  - **User Impact**: Immersion and focus.
-  - **Technical Notes**: Extend `KasaAgent` to support grouped states (Scenes) rather than just individual device control.
-  - **Status**: **Idea**
-
 ---
 
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
-
-- [ ] **Video Feed Optimization (WebWorker)**
-  - **Description**: Ensure the camera feed doesn't freeze when the agent is "thinking" (blocking main thread).
-  - **Technical Notes**: Move video processing to a WebWorker or optimize the Python asyncio loop.
-  - **Status**: **Idea** (Optimization)
 
 - [x] **Conversation Memory Persistence**
   - **Description**: Allow James to look up past conversation history. "What did we decide about the database last week?"
@@ -77,3 +49,7 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 ## 🛑 Deprecated / Removed
 - *Legacy "Chatbot" Interfaces*: We are moving towards purely multimodal/agentic interactions.
+- *Local "Brain"*: Removed to focus on cloud-based Swarm Intelligence.
+- *Semantic Code Search*: Removed to focus on Swarm Intelligence.
+- *Smart Home "Scenes"*: Removed to focus on Swarm Intelligence.
+- *Video Feed Optimization*: Removed to focus on Swarm Intelligence.
