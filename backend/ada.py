@@ -1427,13 +1427,21 @@ class AudioLoop:
         enriched_sessions = []
         now = time.time()
 
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [DASHBOARD] Jules sessions fetched: {len(jules_sessions)}")
+
         # Efficiently manage local state
         all_states = self.project_manager.get_all_jules_session_states()
         new_session_ids = []
 
         # Identify new sessions
         for s in jules_sessions:
-            s_id = s['name']
+            s_id = s.get('name')
+            if not s_id:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WARN] Found session without name: {s}")
+                continue
+
             if s_id not in all_states or "seen_at" not in all_states[s_id]:
                 new_session_ids.append(s_id)
 
@@ -1445,7 +1453,9 @@ class AudioLoop:
                 all_states[nid]["seen_at"] = now
 
         for s in jules_sessions:
-            s_id = s['name']
+            s_id = s.get('name')
+            if not s_id: continue
+
             s_state = s.get('state', 'UNKNOWN')
             s_title = s.get('title', 'Untitled')
 
@@ -1484,6 +1494,9 @@ class AudioLoop:
                 "title": s_title,
                 "state": s_state
             })
+
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [DASHBOARD] Enriched sessions: {len(enriched_sessions)}")
 
         # 6. Device Data
         devices = []
