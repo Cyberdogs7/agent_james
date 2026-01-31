@@ -25,6 +25,7 @@ import {
     GitBranch,
     GitMerge
 } from 'lucide-react';
+import PlanVisualizer from './PlanVisualizer';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
@@ -703,25 +704,12 @@ const ActivityItem = ({ activity, onViewArtifact }) => {
     if (activity.plan) {
          return (
             <div className="flex justify-center my-4">
-                <div className="w-full max-w-[90%] border border-purple-500/40 bg-purple-500/5 rounded-xl p-4">
+                <div className="w-full max-w-[90%] border border-purple-500/40 bg-purple-500/5 rounded-xl p-4 shadow-[0_0_20px_rgba(168,85,247,0.1)]">
                      <div className="flex items-center gap-2 mb-3 text-purple-400 border-b border-purple-500/20 pb-2">
                         <List size={16} />
                         <span className="text-xs font-bold tracking-widest">STRATEGIC PLAN</span>
                     </div>
-                    <div className="space-y-2">
-                        {activity.plan.steps && activity.plan.steps.length > 0 ? (
-                            activity.plan.steps.map((step, idx) => (
-                                <div key={idx} className="flex gap-3">
-                                    <div className="w-5 h-5 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] text-purple-300 shrink-0 mt-0.5">
-                                        {idx + 1}
-                                    </div>
-                                    <div className="text-sm text-purple-200/90">{step.title || step.description || "Untitled Step"}</div>
-                                </div>
-                            ))
-                        ) : (
-                             <div className="text-sm text-purple-200/80 italic">Plan generated (details unavailable)</div>
-                        )}
-                    </div>
+                    <PlanVisualizer steps={activity.plan.steps} />
                 </div>
             </div>
          );

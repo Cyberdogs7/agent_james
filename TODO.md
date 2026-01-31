@@ -57,12 +57,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Integration with `ollama` or `llama.cpp` python bindings. Check `check_cuda.py` for hardware capability.
   - **Status**: **Idea**
 
-- [ ] **Visual Task Scheduling**
+- [x] **Visual Task Scheduling**
   - **Description**: When a Jules task is long-running (e.g., "Refactor the backend"), show a dedicated progress bar or "working" visualization in the UI, rather than just a spinner.
   - **Wow Factor**: Visualizing the "thought process" or "files being touched" makes the wait feel productive.
   - **User Impact**: Certainty that the agent is not stuck.
   - **Technical Notes**: Parse the streaming `activities` from `JulesAgent` to update a dynamic UI list of "Completed Steps".
-  - **Status**: **Designed**
+  - **Status**: **Implemented**
 
 - [ ] **Architectural Memory (RAG)**
   - **Description**: A long-term memory system where James stores architectural decisions, project constraints, and "lessons learned" to avoid repeating mistakes.

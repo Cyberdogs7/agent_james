@@ -129,6 +129,7 @@ async def test_list_sessions_success(jules_agent):
         mock_request.reset_mock()
 
         # Test with custom limit
+        jules_agent.invalidate_cache("list_sessions")
         await jules_agent.list_sessions(limit=5)
         mock_request.assert_called_with(
             "GET", f"{jules_agent.base_url}/sessions",
