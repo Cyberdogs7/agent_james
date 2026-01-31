@@ -46,6 +46,16 @@ try:
 except ImportError:
     from bug_hunter import BugHunter
 
+try:
+    from backend.task_manager import TaskManager
+except ImportError:
+    from task_manager import TaskManager
+
+try:
+    from backend.automation_engine import AutomationEngine
+except ImportError:
+    from automation_engine import AutomationEngine
+
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 app = FastAPI()
@@ -98,6 +108,8 @@ kasa_agent = KasaAgent()
 slack_agent = None
 scraper_agent = None
 log_monitor = None
+automation_engine = None
+task_manager = None
 # Deduplicator for UI inputs (which don't have built-in IDs usually)
 ui_deduplicator = MessageDeduplicator(max_size=500)
 SETTINGS_FILE = "settings.json"
@@ -265,6 +277,13 @@ async def startup_event():
     print("[SERVER] Startup: Initializing Scraper Agent...")
     scraper_agent = ScraperAgent()
     print("[SERVER] Scraper Agent initialized.")
+
+    global task_manager, automation_engine
+    print("[SERVER] Startup: Initializing Automation Engine...")
+    task_manager = TaskManager(project_manager.get_current_project_path())
+    automation_engine = AutomationEngine(task_manager, project_manager)
+    asyncio.create_task(automation_engine.start())
+    print("[SERVER] Automation Engine started.")
 
 
 @app.get("/status")
@@ -470,6 +489,11 @@ async def start_audio(sid, data=None):
         
         audio_loop.update_agent.sio = sio
 
+        # Connect Automation Engine to Ada for notifications
+        if automation_engine:
+            automation_engine.ada = audio_loop
+            print("[SERVER] Connected Automation Engine to Ada instance.")
+
         print("Emitting 'A.D.A Started'")
         await sio.emit('status', {'msg': 'A.D.A Started'})
 
@@ -592,6 +616,10 @@ async def shutdown(sid, data=None):
     if authenticator:
         print("[SERVER] Stopping Authenticator...")
         authenticator.stop()
+
+    if automation_engine:
+        print("[SERVER] Stopping Automation Engine...")
+        automation_engine.stop()
 
     print("[SERVER] Graceful shutdown complete. Terminating process...")
 
