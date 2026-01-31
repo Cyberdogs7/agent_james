@@ -46,12 +46,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Sir, the nightly build failed, so I automatically deployed an agent to investigate the logs. It has identified the issue."
   - **User Impact**: Automates the "management" overhead of assigning tasks to agents.
 
-- [ ] **Streamlined "One-Click" Review & Merge**
+- [x] **Streamlined "One-Click" Review & Merge**
   - **Description**: A dedicated interface for reviewing Agent work.
     - View file diffs directly in the dashboard.
     - "Approve & Merge": Single button to merge the PR and delete the remote branch, replacing the 5-click GitHub workflow.
   - **Wow Factor**: Reviewing code becomes as fast as swiping through a feed.
   - **User Impact**: Drastically reduces the friction of finalizing agent work.
+  - **Technical Notes**: Added `get_branch_diff` event to fetch file patches. Updated `WarRoomDashboard` with a Review UI. Implemented atomic "Merge & Delete" in backend.
+  - **Status**: **Implemented**
 
 - [ ] **Proactive Voice Notifications ("The Nagging Secretary")**
   - **Description**: Voice announcements to ensure the human manager doesn't become the bottleneck.

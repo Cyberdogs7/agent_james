@@ -956,6 +956,7 @@ const CommandModal = ({ onClose, socket }) => {
 const RepoDetailsModal = ({ repo, onClose, socket }) => {
     const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [reviewBranch, setReviewBranch] = useState(null);
 
     useEffect(() => {
         if (socket) {
@@ -971,17 +972,17 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
         }
     }, [socket, repo.name]);
 
-    const handleMerge = (branch) => {
-        const defaultBranch = branches.find(b => b.is_default)?.name || 'main';
-        if (confirm(`Merge '${branch}' into ${defaultBranch}?`)) {
-            socket.emit('perform_git_merge', {
-                repo: repo.name,
-                branch: branch,
-                target: defaultBranch
-            });
-            onClose();
-        }
-    };
+    if (reviewBranch) {
+        return (
+            <BranchReviewView
+                repo={repo}
+                branch={reviewBranch}
+                socket={socket}
+                onBack={() => setReviewBranch(null)}
+                onClose={onClose}
+            />
+        );
+    }
 
     return (
         <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-8">
@@ -1014,16 +1015,151 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
                                 </div>
                                 {!b.is_default && b.ahead > 0 && (
                                     <button
-                                        onClick={() => handleMerge(b.name)}
+                                        onClick={() => setReviewBranch(b.name)}
                                         className="bg-green-500/20 hover:bg-green-500/40 text-green-400 border border-green-500/50 rounded px-3 py-1 text-xs font-bold tracking-widest transition-all flex items-center gap-1"
                                     >
-                                        <GitMerge size={12} />
-                                        MERGE
+                                        <CheckSquare size={12} />
+                                        REVIEW
                                     </button>
                                 )}
                             </div>
                         ))
                     )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const BranchReviewView = ({ repo, branch, socket, onBack, onClose }) => {
+    const [diffData, setDiffData] = useState(null);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [merging, setMerging] = useState(false);
+
+    useEffect(() => {
+        if (socket) {
+            socket.emit('get_branch_diff', { repo: repo.name, branch: branch });
+            const handleDiff = (data) => {
+                if (data.repo === repo.name && data.branch === branch) {
+                    setDiffData(data);
+                    if (data.files && data.files.length > 0) {
+                        setSelectedFile(data.files[0]);
+                    }
+                }
+            };
+            socket.on('branch_diff_data', handleDiff);
+            return () => socket.off('branch_diff_data', handleDiff);
+        }
+    }, [socket, repo.name, branch]);
+
+    const handleApproveAndMerge = () => {
+        if (confirm("Are you sure? This will merge the branch into main and DELETE the remote branch.")) {
+            setMerging(true);
+            socket.emit('perform_git_merge', {
+                repo: repo.name,
+                branch: branch,
+                target: diffData?.target || 'main',
+                delete_source_branch: true
+            });
+            setTimeout(() => {
+                onClose();
+            }, 1000);
+        }
+    };
+
+    if (!diffData) {
+        return (
+            <div className="absolute inset-0 z-[75] bg-black/90 flex items-center justify-center text-gold9">
+                <div className="animate-pulse flex flex-col items-center gap-2">
+                    <Activity size={24} />
+                    <span className="text-xs font-mono tracking-widest">FETCHING DIFF CONTEXT...</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-black border border-gold9 rounded-xl w-full max-w-6xl h-[90vh] flex flex-col relative shadow-[0_0_50px_rgba(255,215,0,0.1)]">
+                {/* Header */}
+                <div className="flex justify-between items-center p-4 border-b border-gold9/20 bg-gold9/5">
+                    <div>
+                        <h2 className="text-lg font-bold text-gold9 flex items-center gap-2">
+                            <CheckSquare size={18} />
+                            CODE REVIEW: {branch}
+                        </h2>
+                        <div className="text-xs text-gold9/60 font-mono">
+                            TARGET: {diffData.target} | FILES CHANGED: {diffData.files.length}
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={onBack} className="px-3 py-1 text-xs text-gold9/60 border border-gold9/20 rounded hover:bg-gold9/10">
+                            BACK
+                        </button>
+                        <button onClick={onClose} className="text-gold9/50 hover:text-gold9 p-2">✕</button>
+                    </div>
+                </div>
+
+                {/* Content Split */}
+                <div className="flex-1 flex min-h-0 overflow-hidden">
+                    {/* Left: File List */}
+                    <div className="w-1/3 border-r border-gold9/20 flex flex-col bg-black/50">
+                        <div className="p-2 border-b border-gold9/10 text-xs font-bold text-gold9/40 tracking-widest uppercase">
+                            Changed Files
+                        </div>
+                        <div className="flex-1 overflow-y-auto scrollbar-hide">
+                            {diffData.files.map((file, i) => (
+                                <div
+                                    key={i}
+                                    onClick={() => setSelectedFile(file)}
+                                    className={`p-3 text-sm font-mono cursor-pointer border-l-2 transition-colors flex justify-between items-center ${
+                                        selectedFile && selectedFile.filename === file.filename
+                                            ? 'border-gold9 bg-gold9/10 text-gold9'
+                                            : 'border-transparent text-gray-400 hover:text-gold9/80 hover:bg-gold9/5'
+                                    }`}
+                                >
+                                    <span className="truncate flex-1 mr-2" title={file.filename}>{file.filename}</span>
+                                    <div className="flex gap-2 text-[10px]">
+                                        <span className="text-green-400">+{file.additions}</span>
+                                        <span className="text-red-400">-{file.deletions}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Right: Diff Viewer */}
+                    <div className="w-2/3 flex flex-col bg-[#1e1e1e]">
+                         <div className="p-2 border-b border-white/10 text-xs font-bold text-gray-400 flex justify-between">
+                            <span>{selectedFile ? selectedFile.filename : 'No file selected'}</span>
+                         </div>
+                         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 font-mono text-xs text-gray-300">
+                            {selectedFile && selectedFile.patch ? (
+                                <pre className="whitespace-pre">{selectedFile.patch}</pre>
+                            ) : (
+                                <div className="text-gray-600 italic mt-10 text-center">
+                                    {selectedFile ? (selectedFile.status === 'added' ? '(New File)' : '(Binary or Large File)') : 'Select a file to view diff'}
+                                </div>
+                            )}
+                         </div>
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="p-4 border-t border-gold9/20 bg-gold9/5 flex justify-between items-center">
+                    <div className="text-xs text-gold9/40">
+                        CAUTION: Merging will immediately trigger deployment and delete source branch.
+                    </div>
+                    <button
+                        onClick={handleApproveAndMerge}
+                        disabled={merging}
+                        className={`px-6 py-2 rounded text-black font-bold tracking-widest flex items-center gap-2 transition-all ${
+                            merging ? 'bg-green-500/50 cursor-wait' : 'bg-green-500 hover:bg-green-400 shadow-[0_0_15px_rgba(34,197,94,0.4)]'
+                        }`}
+                    >
+                        <ThumbsUp size={16} />
+                        {merging ? 'MERGING...' : 'APPROVE & MERGE'}
+                    </button>
                 </div>
             </div>
         </div>

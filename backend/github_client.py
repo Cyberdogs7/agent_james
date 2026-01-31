@@ -22,6 +22,8 @@ class GitHubClient:
                     **kwargs
                 )
                 response.raise_for_status()
+                if response.status_code == 204:
+                    return True
                 return response.json()
             except httpx.HTTPStatusError as e:
                 print(f"[GitHubClient] HTTP Error {e.response.status_code}: {e.response.text}")
@@ -51,3 +53,6 @@ class GitHubClient:
 
     async def get_commit(self, owner, repo, sha):
         return await self._request("GET", f"/repos/{owner}/{repo}/commits/{sha}")
+
+    async def delete_branch(self, owner, repo, branch_name):
+        return await self._request("DELETE", f"/repos/{owner}/{repo}/git/refs/heads/{branch_name}")
