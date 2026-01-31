@@ -1415,13 +1415,61 @@ async def get_repo_branches(sid, data):
         await sio.emit('repo_branches', {"repo": repo_full_name, "branches": result})
 
 @sio.event
+async def get_branch_diff(sid, data):
+    repo_full_name = data.get('repo')
+    branch = data.get('branch')
+    target = data.get('target', 'main')
+
+    print(f"[SERVER] Client {sid} requested diff for {repo_full_name}: {branch} -> {target}")
+
+    if audio_loop and audio_loop.project_manager:
+        token = audio_loop.project_manager.get_github_token()
+        if not token:
+             await sio.emit('error', {'msg': "Authentication Required"})
+             return
+
+        from github_client import GitHubClient
+        client = GitHubClient(token)
+
+        parts = repo_full_name.split('/')
+        if len(parts) != 2: return
+        owner, name = parts
+
+        # Use passed target or try to discover it?
+        # Ideally the frontend sends the default branch as target.
+        # compare_commits expects base...head (base=target, head=branch)
+
+        diff_data = await client.compare_commits(owner, name, target, branch)
+        if diff_data:
+            files = diff_data.get('files', [])
+            changes = []
+            for f in files:
+                changes.append({
+                    "filename": f.get('filename'),
+                    "status": f.get('status'),
+                    "additions": f.get('additions'),
+                    "deletions": f.get('deletions'),
+                    "patch": f.get('patch', '')
+                })
+
+            await sio.emit('branch_diff_data', {
+                "repo": repo_full_name,
+                "branch": branch,
+                "target": target,
+                "files": changes
+            })
+        else:
+             await sio.emit('error', {'msg': "Failed to fetch diff."})
+
+@sio.event
 async def perform_git_merge(sid, data):
     """Merges a specific repo's branch into main/master via GitHub API."""
     repo_full_name = data.get('repo')
     branch = data.get('branch')
     target = data.get('target')
+    delete_source_branch = data.get('delete_source_branch', False)
 
-    print(f"[SERVER] Client {sid} requested remote merge for {repo_full_name}: {branch} -> {target or 'DEFAULT'}")
+    print(f"[SERVER] Client {sid} requested remote merge for {repo_full_name}: {branch} -> {target or 'DEFAULT'} (Delete: {delete_source_branch})")
 
     if audio_loop and audio_loop.project_manager:
         token = audio_loop.project_manager.get_github_token()
@@ -1449,7 +1497,18 @@ async def perform_git_merge(sid, data):
         result = await client.merge_branch(owner, name, target, branch)
 
         if result:
-            await sio.emit('status', {'msg': f"Merged {branch} into {target} successfully."})
+            msg = f"Merged {branch} into {target} successfully."
+            if delete_source_branch:
+                try:
+                    del_res = await client.delete_branch(owner, name, branch)
+                    if del_res:
+                        msg += " Branch deleted."
+                    else:
+                        msg += " Failed to delete branch."
+                except Exception as e:
+                    msg += f" Error deleting branch: {str(e)}"
+
+            await sio.emit('status', {'msg': msg})
             # Trigger refresh of branches
             await get_repo_branches(sid, data)
         else:
