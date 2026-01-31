@@ -36,6 +36,30 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 ---
 
+## 👔 Engineering Manager Mode (Orchestration & Review)
+*Transforming the user from a coder to a commander of agents.*
+
+- [ ] **Event-Driven Automation Engine**
+  - **Description**: A robust "If-This-Then-That" system to trigger Jules Agents based on events.
+    - *Triggers*: Schedule (Cron), Git Events (PR Open, Commit Push), Trello Card Movement.
+    - *Actions*: Spawn Agent with specific Prompt & Context, Send Notification, Run Script.
+  - **Wow Factor**: "Sir, the nightly build failed, so I automatically deployed an agent to investigate the logs. It has identified the issue."
+  - **User Impact**: Automates the "management" overhead of assigning tasks to agents.
+
+- [ ] **Streamlined "One-Click" Review & Merge**
+  - **Description**: A dedicated interface for reviewing Agent work.
+    - View file diffs directly in the dashboard.
+    - "Approve & Merge": Single button to merge the PR and delete the remote branch, replacing the 5-click GitHub workflow.
+  - **Wow Factor**: Reviewing code becomes as fast as swiping through a feed.
+  - **User Impact**: Drastically reduces the friction of finalizing agent work.
+
+- [ ] **Proactive Voice Notifications ("The Nagging Secretary")**
+  - **Description**: Voice announcements to ensure the human manager doesn't become the bottleneck.
+  - **Behavior**: If a Jules Agent finishes a task and it sits unreviewed for >X minutes, James verbally notifies the user. "Sir, Agent 3 has finished the refactor and is awaiting your approval."
+  - **User Impact**: Keeps the "factory line" of coding agents moving efficiently.
+
+---
+
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
