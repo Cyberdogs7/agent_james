@@ -12,8 +12,25 @@ class TaskManager:
 
     def _ensure_file(self):
         if not self.tasks_file.exists():
+            default_tasks = [
+                {
+                    "id": str(uuid.uuid4()),
+                    "title": "Announce New Commits",
+                    "trigger": {
+                        "type": "git",
+                        "value": "*"
+                    },
+                    "action": {
+                        "type": "notify",
+                        "value": "New commit detected."
+                    },
+                    "status": "active",
+                    "created_at": time.time(),
+                    "last_run": None
+                }
+            ]
             with open(self.tasks_file, 'w', encoding='utf-8') as f:
-                json.dump([], f, indent=4)
+                json.dump(default_tasks, f, indent=4)
 
     def load_tasks(self):
         try:

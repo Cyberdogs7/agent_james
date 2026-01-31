@@ -46,6 +46,26 @@ try:
 except ImportError:
     from bug_hunter import BugHunter
 
+try:
+    from backend.automation_engine import AutomationEngine
+except ImportError:
+    from automation_engine import AutomationEngine
+
+try:
+    from backend.task_manager import TaskManager
+except ImportError:
+    from task_manager import TaskManager
+
+try:
+    from backend.jules_agent import JulesAgent
+except ImportError:
+    from jules_agent import JulesAgent
+
+try:
+    from backend.trello_agent import TrelloAgent
+except ImportError:
+    from trello_agent import TrelloAgent
+
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 app = FastAPI()
@@ -150,6 +170,28 @@ async def handle_slack_message(message):
 # Determine project root and initialize ProjectManager
 # project_root already calculated above
 project_manager = ProjectManager(project_root)
+
+# Initialize Automation Engine
+task_manager = TaskManager(project_manager.get_current_project_path())
+jules_agent = JulesAgent()
+trello_agent = TrelloAgent()
+
+automation_engine = AutomationEngine(
+    project_manager=project_manager,
+    task_manager=task_manager,
+    jules_agent=jules_agent,
+    trello_agent=trello_agent
+)
+
+# Notification Callback
+async def handle_automation_notification(message):
+    if audio_loop and audio_loop.session:
+        print(f"[SERVER] Automation Notification (Realtime): {message}")
+        await audio_loop.send_notification(message)
+        return True # Signal that message was handled
+    return False
+
+automation_engine.set_notification_callback(handle_automation_notification)
 
 DEFAULT_SETTINGS = {
     "face_auth_enabled": False, # Default OFF as requested
@@ -266,6 +308,8 @@ async def startup_event():
     scraper_agent = ScraperAgent()
     print("[SERVER] Scraper Agent initialized.")
 
+    print("[SERVER] Startup: Initializing Automation Engine...")
+    asyncio.create_task(automation_engine.start())
 
 @app.get("/status")
 async def status():
@@ -472,6 +516,24 @@ async def start_audio(sid, data=None):
 
         print("Emitting 'A.D.A Started'")
         await sio.emit('status', {'msg': 'A.D.A Started'})
+
+        # Flush pending notifications from AutomationEngine
+        async def flush_notifications_when_ready():
+            # Wait for session up to 10s
+            for _ in range(20):
+                if audio_loop and audio_loop.session:
+                    break
+                await asyncio.sleep(0.5)
+
+            if audio_loop and audio_loop.session:
+                notes = automation_engine.get_pending_notifications()
+                if notes:
+                    print(f"[SERVER] Flushing {len(notes)} pending notifications...")
+                    for note in notes:
+                        await audio_loop.send_notification(note)
+                        await asyncio.sleep(2) # Stagger
+
+        asyncio.create_task(flush_notifications_when_ready())
 
         # Load saved printers
         saved_printers = SETTINGS.get("printers", [])

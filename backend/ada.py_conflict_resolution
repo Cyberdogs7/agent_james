@@ -1,0 +1,17 @@
+    async def send_notification(self, message):
+        """Sends a proactive system notification to the model (voice output) and frontend."""
+        # Notify Frontend
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "notification",
+                "data": {"text": message},
+                "duration": 10000
+            })
+
+        if self.session:
+            try:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [NOTIFY] Sending proactive notification: {message}")
+                await self.session.send(input=f"System Notification: {message}", end_of_turn=True)
+            except Exception as e:
+                print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
