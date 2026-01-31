@@ -39,6 +39,11 @@ try:
 except ImportError:
     from git_ops import GitOps
 
+try:
+    from backend.bug_hunter import BugHunter
+except ImportError:
+    from bug_hunter import BugHunter
+
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
 app = FastAPI()
@@ -94,6 +99,17 @@ async def handle_runtime_error(error_log):
             print("[SERVER] Sent runtime error notification to model.")
         except Exception as e:
             print(f"[SERVER] Failed to send error notification: {e}")
+
+async def handle_bug_hunter_notification(message):
+    """Callback for BugHunter to notify the model of test failures."""
+    print(f"[SERVER] Handling Bug Hunter notification: {message}")
+    if audio_loop and audio_loop.session:
+        msg = f"System Notification: {message}"
+        try:
+            await audio_loop.session.send(input=msg, end_of_turn=True)
+            print("[SERVER] Sent bug report to model.")
+        except Exception as e:
+            print(f"[SERVER] Failed to send bug report: {e}")
 
 async def handle_slack_message(message):
     """Callback function for the SlackAgent to handle incoming messages."""
@@ -201,6 +217,15 @@ async def startup_event():
     except Exception as e:
         print(f"[SERVER] Failed to install LogMonitor: {e}")
         import traceback
+        traceback.print_exc()
+
+    # Initialize Bug Hunter
+    try:
+        print("[SERVER] Startup: Initializing Bug Hunter...")
+        bug_hunter = BugHunter(project_root, callback=handle_bug_hunter_notification)
+        bug_hunter.start()
+    except Exception as e:
+        print(f"[SERVER] Failed to install BugHunter: {e}")
         traceback.print_exc()
 
     print("[SERVER] Startup: Initializing Kasa Agent...")

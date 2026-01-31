@@ -43,12 +43,12 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements (Coding Focus)
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [ ] **Deep Git Context Awareness**
+- [x] **Deep Git Context Awareness**
   - **Description**: James should know the *current* local state—which branch is active, what files are staged, and the diff of the working directory—before sending a request to Jules.
   - **Wow Factor**: "James, why is this failing?" (James reads the local error log and the specific file diff you just made).
   - **User Impact**: Reduces the need to "explain" the context to the AI.
   - **Technical Notes**: Extend `JulesAgent` to read `.git` status/diffs locally via `subprocess` (avoiding heavy `GitPython` dependency if possible) and prepend to the prompt.
-  - **Status**: **Partially Implemented** (Basic repo source linking exists; full diff context missing)
+  - **Status**: **Implemented**
 
 - [ ] **Local "Brain" (Offline Mode)**
   - **Description**: When the internet is down (or for privacy), switch to a local LLM (e.g., Llama 3 on GPU) for basic commands (timers, local device control).
@@ -71,12 +71,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Vector store (ChromaDB or simple JSONL) for retrieving relevant context based on current task.
   - **Status**: **Idea**
 
-- [ ] **Proactive "Bug Hunting" Mode**
+- [x] **Proactive "Bug Hunting" Mode**
   - **Description**: A background mode where James watches for file saves, runs the relevant tests silently, and speaks up *only* if something breaks.
   - **Wow Factor**: "Sir, that last edit to `server.py` seems to have broken the login test."
   - **User Impact**: Catch regressions immediately.
   - **Technical Notes**: File watcher -> `pytest` runner -> Voice notification trigger.
-  - **Status**: **Idea**
+  - **Status**: **Implemented**
 
 ---
 
