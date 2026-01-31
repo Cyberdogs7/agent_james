@@ -2849,7 +2849,15 @@ User: "What's the weather in London?"
             return {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode()}
 
     async def send_notification(self, message):
-        """Sends a proactive system notification to the model (voice output)."""
+        """Sends a proactive system notification to the model (voice output) and frontend."""
+        # Notify Frontend
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "notification",
+                "data": {"text": message},
+                "duration": 10000
+            })
+
         if self.session:
             try:
                 if INCLUDE_RAW_LOGS:
