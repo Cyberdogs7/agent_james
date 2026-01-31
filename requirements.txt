@@ -30,3 +30,4 @@ tzlocal
 slack-sdk
 beautifulsoup4
 psutil
+pytest-asyncio
