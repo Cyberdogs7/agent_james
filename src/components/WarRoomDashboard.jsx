@@ -169,6 +169,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                     </div>
                     <div className="flex items-center gap-6">
                         <button
+                            data-testid="open-command-modal"
                             onClick={() => setShowCommandModal(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
                         >
@@ -791,6 +792,22 @@ const CommandModal = ({ onClose, socket }) => {
     const [selectedSource, setSelectedSource] = useState('');
     const [availableSources, setAvailableSources] = useState([]);
 
+    // Schedule Editor State
+    const [scheduleMode, setScheduleMode] = useState('daily'); // 'daily' or 'interval'
+    const [intervalMinutes, setIntervalMinutes] = useState(60);
+    const [dailyTime, setDailyTime] = useState('09:00');
+    const [dailyDays, setDailyDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    const toggleDay = (day) => {
+        if (dailyDays.includes(day)) {
+            setDailyDays(dailyDays.filter(d => d !== day));
+        } else {
+            setDailyDays([...dailyDays, day]);
+        }
+    };
+
     // Fetch sources on mount
     useEffect(() => {
         if (socket) {
@@ -820,11 +837,27 @@ const CommandModal = ({ onClose, socket }) => {
             };
         }
 
+        let finalTriggerValue = triggerValue;
+        if (triggerType === 'schedule') {
+            if (scheduleMode === 'interval') {
+                finalTriggerValue = {
+                    mode: 'interval',
+                    interval_minutes: parseInt(intervalMinutes)
+                };
+            } else {
+                finalTriggerValue = {
+                    mode: 'daily',
+                    time: dailyTime,
+                    days: dailyDays
+                };
+            }
+        }
+
         if (socket) {
             socket.emit('create_task', {
                 title,
                 trigger_type: triggerType,
-                trigger_value: triggerValue,
+                trigger_value: finalTriggerValue,
                 action_type: actionType,
                 action_value: finalActionValue
             });
@@ -883,17 +916,90 @@ const CommandModal = ({ onClose, socket }) => {
                         </div>
                     </div>
 
-                    {(triggerType === 'schedule' || triggerType === 'git' || triggerType === 'trello') && (
+                    {/* SCHEDULE EDITOR */}
+                    {triggerType === 'schedule' && (
+                        <div className="bg-gold9/5 p-3 rounded border border-gold9/10 space-y-3">
+                            <div>
+                                <label className="block text-xs text-gold9/60 mb-1">FREQUENCY</label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setScheduleMode('daily')}
+                                        className={`flex-1 py-1 text-xs border rounded ${scheduleMode === 'daily' ? 'bg-gold9 text-black border-gold9' : 'border-gold9/30 text-gold9/60'}`}
+                                    >
+                                        DAILY
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setScheduleMode('interval')}
+                                        className={`flex-1 py-1 text-xs border rounded ${scheduleMode === 'interval' ? 'bg-gold9 text-black border-gold9' : 'border-gold9/30 text-gold9/60'}`}
+                                    >
+                                        INTERVAL
+                                    </button>
+                                </div>
+                            </div>
+
+                            {scheduleMode === 'daily' ? (
+                                <div className="space-y-3">
+                                    <div className="flex gap-2 items-center">
+                                        <div className="flex-1">
+                                            <label className="block text-[10px] text-gold9/40 mb-1">TIME (24H)</label>
+                                            <input
+                                                type="time"
+                                                value={dailyTime}
+                                                onChange={(e) => setDailyTime(e.target.value)}
+                                                className="w-full bg-black border border-gold9/30 rounded p-1 text-sm text-gold9 text-center"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-gold9/40 mb-1">DAYS ACTIVE</label>
+                                        <div className="flex justify-between">
+                                            {DAYS.map(day => (
+                                                <button
+                                                    key={day}
+                                                    type="button"
+                                                    onClick={() => toggleDay(day)}
+                                                    className={`w-8 h-8 rounded-full text-[10px] font-bold flex items-center justify-center border transition-colors ${
+                                                        dailyDays.includes(day)
+                                                            ? 'bg-gold9 text-black border-gold9'
+                                                            : 'bg-transparent text-gold9/40 border-gold9/20 hover:border-gold9/50'
+                                                    }`}
+                                                >
+                                                    {day.charAt(0)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div>
+                                    <label className="block text-[10px] text-gold9/40 mb-1">REPEAT EVERY (MINUTES)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={intervalMinutes}
+                                        onChange={(e) => setIntervalMinutes(e.target.value)}
+                                        className="w-full bg-black border border-gold9/30 rounded p-2 text-sm text-gold9"
+                                    />
+                                    <div className="text-[10px] text-gold9/30 mt-1 text-right">
+                                        Approx: {(intervalMinutes / 60).toFixed(1)} hours
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* OTHER TRIGGERS */}
+                    {(triggerType === 'git' || triggerType === 'trello') && (
                         <div>
-                            <label className="block text-xs text-gold9/60 mb-1">
-                                {triggerType === 'schedule' ? 'CRON / TIME' : 'EVENT DETAIL'}
-                            </label>
+                            <label className="block text-xs text-gold9/60 mb-1">EVENT DETAIL</label>
                             <input
                                 type="text"
                                 value={triggerValue}
                                 onChange={(e) => setTriggerValue(e.target.value)}
                                 className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
-                                placeholder={triggerType === 'schedule' ? '0 12 * * *' : 'Trigger Value'}
+                                placeholder={triggerType === 'git' ? 'owner/repo' : 'List Name'}
                             />
                         </div>
                     )}
@@ -943,6 +1049,7 @@ const CommandModal = ({ onClose, socket }) => {
 
                     <button
                         type="submit"
+                        data-testid="save-routine"
                         className="w-full bg-gold9 text-black font-bold py-2 rounded hover:bg-yellow-400 transition-colors tracking-widest mt-4"
                     >
                         {triggerType === 'manual' ? 'SAVE ROUTINE' : 'INITIALIZE ROUTINE'}

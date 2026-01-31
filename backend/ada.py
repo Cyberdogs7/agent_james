@@ -7,7 +7,10 @@ import sys
 import traceback
 from dotenv import load_dotenv
 import cv2
-import pyaudio
+try:
+    import pyaudio
+except ImportError:
+    pyaudio = None
 import PIL.Image
 import mss
 import argparse
@@ -31,7 +34,11 @@ if sys.version_info < (3, 11, 0):
 
 from tools import tools_list
 
-FORMAT = pyaudio.paInt16
+if pyaudio:
+    FORMAT = pyaudio.paInt16
+else:
+    FORMAT = 8  # Fallback
+
 CHANNELS = 1
 SEND_SAMPLE_RATE = 16000
 RECEIVE_SAMPLE_RATE = 24000
@@ -322,7 +329,14 @@ tools = [{'google_search': {}}, {"function_declarations": [
     display_dashboard_tool, dismiss_jules_session_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
-pya = pyaudio.PyAudio()
+if pyaudio:
+    try:
+        pya = pyaudio.PyAudio()
+    except Exception:
+        print("[ADA] Warning: PyAudio failed to initialize.")
+        pya = None
+else:
+    pya = None
 
 from cad_agent import CadAgent
 from web_agent import WebAgent
@@ -562,6 +576,13 @@ class AudioLoop:
             await self.session.send(input=msg, end_of_turn=False)
 
     async def listen_audio(self):
+        if not pya:
+             if INCLUDE_RAW_LOGS:
+                 print("[ADA] PyAudio not available. Audio input disabled.")
+             while not self.stop_event.is_set():
+                 await asyncio.sleep(1)
+             return
+
         try:
             mic_info = pya.get_default_input_device_info()
         except Exception as e:
@@ -2772,19 +2793,30 @@ User: "What's the weather in London?"
             raise e
 
     async def play_audio(self):
-        stream = await asyncio.to_thread(
-            pya.open,
-            format=FORMAT,
-            channels=CHANNELS,
-            rate=RECEIVE_SAMPLE_RATE,
-            output=True,
-            output_device_index=self.output_device_index,
-        )
-        while True:
-            bytestream = await self.audio_in_queue.get()
-            if self.on_audio_data:
-                self.on_audio_data(bytestream)
-            await asyncio.to_thread(stream.write, bytestream)
+        if not pya:
+             while True:
+                # Just consume queue
+                await self.audio_in_queue.get()
+
+        try:
+            stream = await asyncio.to_thread(
+                pya.open,
+                format=FORMAT,
+                channels=CHANNELS,
+                rate=RECEIVE_SAMPLE_RATE,
+                output=True,
+                output_device_index=self.output_device_index,
+            )
+            while True:
+                bytestream = await self.audio_in_queue.get()
+                if self.on_audio_data:
+                    self.on_audio_data(bytestream)
+                await asyncio.to_thread(stream.write, bytestream)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA] [ERR] Failed to play audio: {e}")
+            while True:
+                await self.audio_in_queue.get()
 
     async def video_loop(self):
         cap = None
@@ -3085,26 +3117,32 @@ User: "What's the weather in London?"
             print("[ADA DEBUG] [INFO] Main run loop has exited.")
 
 def get_input_devices():
-    p = pyaudio.PyAudio()
-    info = p.get_host_api_info_by_index(0)
-    numdevices = info.get('deviceCount')
-    devices = []
-    for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            devices.append((i, p.get_device_info_by_host_api_device_index(0, i).get('name')))
-    p.terminate()
-    return devices
+    if not pyaudio: return []
+    try:
+        p = pyaudio.PyAudio()
+        info = p.get_host_api_info_by_index(0)
+        numdevices = info.get('deviceCount')
+        devices = []
+        for i in range(0, numdevices):
+            if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+                devices.append((i, p.get_device_info_by_host_api_device_index(0, i).get('name')))
+        p.terminate()
+        return devices
+    except: return []
 
 def get_output_devices():
-    p = pyaudio.PyAudio()
-    info = p.get_host_api_info_by_index(0)
-    numdevices = info.get('deviceCount')
-    devices = []
-    for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxOutputChannels')) > 0:
-            devices.append((i, p.get_device_info_by_host_api_device_index(0, i).get('name')))
-    p.terminate()
-    return devices
+    if not pyaudio: return []
+    try:
+        p = pyaudio.PyAudio()
+        info = p.get_host_api_info_by_index(0)
+        numdevices = info.get('deviceCount')
+        devices = []
+        for i in range(0, numdevices):
+            if (p.get_device_info_by_host_api_device_index(0, i).get('maxOutputChannels')) > 0:
+                devices.append((i, p.get_device_info_by_host_api_device_index(0, i).get('name')))
+        p.terminate()
+        return devices
+    except: return []
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
