@@ -71,12 +71,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Vector store (ChromaDB or simple JSONL) for retrieving relevant context based on current task.
   - **Status**: **Idea**
 
-- [ ] **Proactive "Bug Hunting" Mode**
+- [x] **Proactive "Bug Hunting" Mode**
   - **Description**: A background mode where James watches for file saves, runs the relevant tests silently, and speaks up *only* if something breaks.
   - **Wow Factor**: "Sir, that last edit to `server.py` seems to have broken the login test."
   - **User Impact**: Catch regressions immediately.
   - **Technical Notes**: File watcher -> `pytest` runner -> Voice notification trigger.
-  - **Status**: **Partially Implemented** (Starting implementation)
+  - **Status**: **Implemented**
 
 ---
 

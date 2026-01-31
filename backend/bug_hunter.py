@@ -1,153 +1,139 @@
 import os
-import time
 import sys
 import subprocess
 import threading
 import asyncio
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+class BugHunterHandler(FileSystemEventHandler):
+    def __init__(self, callback, project_root):
+        self.callback = callback
+        self.project_root = project_root
+        self.debounce_timer = None
+        self.debounce_interval = 2.0
+        self.lock = threading.Lock()
+        self.test_process = None
+
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+        if not event.src_path.endswith(".py"):
+            return
+
+        self._trigger_debounce(event.src_path)
+
+    def _trigger_debounce(self, file_path):
+        with self.lock:
+            if self.debounce_timer:
+                self.debounce_timer.cancel()
+            self.debounce_timer = threading.Timer(self.debounce_interval, self._run_tests, args=[file_path])
+            self.debounce_timer.start()
+
+    def _run_tests(self, file_path):
+        with self.lock:
+            if self.test_process and self.test_process.poll() is None:
+                print("[BUG HUNTER] Tests already running, skipping trigger.")
+                return
+
+        # Map file to test
+        test_file = self._resolve_test_file(file_path)
+        if not test_file:
+            print(f"[BUG HUNTER] No matching test found for {os.path.basename(file_path)}")
+            return
+
+        print(f"[BUG HUNTER] Detected change in {os.path.basename(file_path)}. Running {test_file}...")
+
+        try:
+            self.test_process = subprocess.Popen(
+                [sys.executable, "-m", "pytest", test_file],
+                cwd=self.project_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            stdout, stderr = self.test_process.communicate()
+
+            if self.test_process.returncode != 0:
+                print("[BUG HUNTER] Tests failed!")
+                summary = self._parse_output(stdout + stderr, os.path.basename(file_path))
+                if summary:
+                    self._notify(summary)
+            else:
+                print("[BUG HUNTER] Tests passed.")
+
+        except Exception as e:
+            print(f"[BUG HUNTER] Error running tests: {e}")
+
+    def _resolve_test_file(self, file_path):
+        """
+        Simple heuristic:
+        backend/foo.py -> tests/test_foo.py
+        """
+        filename = os.path.basename(file_path)
+
+        # If it's already a test, run it
+        if filename.startswith("test_"):
+            return file_path
+
+        # Try to find corresponding test
+        test_name = f"test_{filename}"
+        potential_test_path = os.path.join(self.project_root, "tests", test_name)
+
+        if os.path.exists(potential_test_path):
+            return potential_test_path
+
+        return None
+
+    def _parse_output(self, output, trigger_file):
+        lines = output.splitlines()
+        for line in lines:
+            if "FAILED" in line and "::" in line:
+                parts = line.split("::")
+                if len(parts) >= 2:
+                    test_part = parts[1].strip()
+                    test_name = test_part.split(" ")[0]
+                    return f"Sir, that edit to {trigger_file} seems to have broken {test_name}."
+
+        if "ERRORS" in output or "error" in output.lower():
+             return f"Sir, I detected an error while running tests for {trigger_file}."
+
+        return None
+
+    def _notify(self, message):
+        self.callback(message)
 
 class BugHunter:
     def __init__(self, project_root, callback):
         self.project_root = project_root
         self.callback = callback
-        self.running = False
-        self.last_mtime = {}
-        self.debounce_timer = None
-        self.debounce_interval = 2.0  # Seconds
+        self.observer = None
         self.loop = None
-        self.lock = threading.Lock()
 
     def start(self):
-        """Starts the background monitoring thread."""
-        self.running = True
         try:
             self.loop = asyncio.get_running_loop()
         except RuntimeError:
             print("[BUG HUNTER] Warning: No running event loop found during start()")
 
-        threading.Thread(target=self._monitor_loop, daemon=True).start()
-        print("[BUG HUNTER] Started proactively hunting for bugs.")
+        event_handler = BugHunterHandler(self._dispatch_notification, self.project_root)
+        self.observer = Observer()
+
+        # Watch backend and tests
+        for folder in ["backend", "tests"]:
+            path = os.path.join(self.project_root, folder)
+            if os.path.exists(path):
+                self.observer.schedule(event_handler, path, recursive=True)
+
+        self.observer.start()
+        print("[BUG HUNTER] Started (Watchdog).")
 
     def stop(self):
-        self.running = False
-        if self.debounce_timer:
-            self.debounce_timer.cancel()
+        if self.observer:
+            self.observer.stop()
+            self.observer.join()
 
-    def _monitor_loop(self):
-        # Initial scan to populate mtime
-        self._check_files(initial=True)
-
-        while self.running:
-            try:
-                changed = self._check_files()
-                if changed:
-                    self._trigger_debounce()
-            except Exception as e:
-                print(f"[BUG HUNTER] Error in monitor loop: {e}")
-            time.sleep(1)
-
-    def _check_files(self, initial=False):
-        changed = False
-        # Monitor backend and tests
-        paths_to_monitor = [
-            os.path.join(self.project_root, "backend"),
-            os.path.join(self.project_root, "tests")
-        ]
-
-        for path in paths_to_monitor:
-            if not os.path.exists(path):
-                continue
-            for root, dirs, files in os.walk(path):
-                # Skip __pycache__
-                if "__pycache__" in dirs:
-                    dirs.remove("__pycache__")
-
-                for f in files:
-                    if f.endswith(".py"):
-                        full_path = os.path.join(root, f)
-                        try:
-                            mtime = os.stat(full_path).st_mtime
-                            if full_path not in self.last_mtime:
-                                self.last_mtime[full_path] = mtime
-                                if not initial:
-                                    # New file created
-                                    print(f"[BUG HUNTER] New file detected: {f}")
-                                    changed = True
-                            elif mtime > self.last_mtime[full_path]:
-                                self.last_mtime[full_path] = mtime
-                                print(f"[BUG HUNTER] Modified file detected: {f}")
-                                changed = True
-                        except OSError:
-                            pass
-        return changed
-
-    def _trigger_debounce(self):
-        with self.lock:
-            if self.debounce_timer:
-                self.debounce_timer.cancel()
-            self.debounce_timer = threading.Timer(self.debounce_interval, self._run_tests)
-            self.debounce_timer.start()
-
-    def _run_tests(self):
-        print("[BUG HUNTER] Running relevant tests...")
-        try:
-            # Run pytest
-            # We want to capture output to parse failures
-            # We run from project_root
-            result = subprocess.run(
-                [sys.executable, "-m", "pytest", "tests/"],
-                cwd=self.project_root,
-                capture_output=True,
-                text=True
-            )
-
-            if result.returncode != 0:
-                # Tests failed
-                print("[BUG HUNTER] Tests failed!")
-                summary = self._parse_output(result.stdout + result.stderr)
-                if summary:
-                    self._notify(summary)
-            else:
-                print("[BUG HUNTER] All tests passed.")
-
-        except Exception as e:
-            print(f"[BUG HUNTER] Error running tests: {e}")
-
-    def _parse_output(self, output):
-        # Simple parser to find the failed test
-        # Look for "FAILED tests/... ::test_name" lines
-        lines = output.splitlines()
-        failed_tests = []
-
-        for line in lines:
-            if "FAILED" in line and "::" in line:
-                # Example: tests/test_math.py::test_add FAILED
-                # Or: FAILED tests/test_math.py::test_add - assert...
-                parts = line.split("::")
-                if len(parts) >= 2:
-                    # Clean up filename (remove FAILED prefix if present)
-                    file_part = parts[0].strip()
-                    if "FAILED " in file_part:
-                        file_part = file_part.replace("FAILED ", "")
-                    file_name = os.path.basename(file_part)
-
-                    # Clean up test name (remove status suffix)
-                    test_part = parts[1].strip()
-                    test_name = test_part.split(" ")[0]
-
-                    failed_tests.append((file_name, test_name))
-
-        if failed_tests:
-            # Just report the first failure for brevity
-            file_name, test_name = failed_tests[0]
-            return f"Sir, that last edit seems to have broken {test_name} in {file_name}."
-
-        # Check for collection errors or other failures
-        if "ERRORS" in output or "error" in output.lower():
-             return "Sir, I detected an error while running the test suite."
-
-        return None
-
-    def _notify(self, message):
+    def _dispatch_notification(self, message):
         print(f"[BUG HUNTER] Notification: {message}")
         if self.callback:
             if self.loop and self.loop.is_running():
