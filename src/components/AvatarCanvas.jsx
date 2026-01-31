@@ -4,8 +4,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import * as THREE from 'three';
 
-function AvatarModel({ url, audioData }) {
+function AvatarModel({ url, audioData, facePosition }) {
   const [vrm, setVrm] = useState(null);
+  const lookAtTargetRef = useRef({ yaw: 0, pitch: 0 });
 
   // Use GLTFLoader with VRMLoaderPlugin
   const gltf = useLoader(GLTFLoader, url, (loader) => {
@@ -90,16 +91,48 @@ function AvatarModel({ url, audioData }) {
         vrm.expressionManager.setValue('blink', blinkValue);
     }
 
-    // --- Idle Head Movement ---
-    // Subtle Perlin-like noise using composite sines
-    const time = state.clock.elapsedTime;
+    // --- Head Movement (Gaze Tracking) ---
     const head = vrm.humanoid.getNormalizedBoneNode('head');
-    if (head) {
-        const yRot = Math.sin(time * 0.5) * 0.05 + Math.sin(time * 0.23) * 0.05;
-        const xRot = Math.sin(time * 0.3) * 0.03;
+    const neck = vrm.humanoid.getNormalizedBoneNode('neck');
 
-        head.rotation.y = yRot;
-        head.rotation.x = xRot;
+    if (head) {
+        let targetYaw = 0;
+        let targetPitch = 0;
+
+        if (facePosition) {
+            // Map 0..1 to Radians
+            // User Right (x=1) -> Avatar Looks Left (Yaw +)
+            // User Top (y=0) -> Avatar Looks Up (Pitch -)
+            const YAW_SENSITIVITY = 1.0;
+            const PITCH_SENSITIVITY = 0.8;
+
+            targetYaw = (facePosition.x - 0.5) * YAW_SENSITIVITY;
+            targetPitch = (facePosition.y - 0.5) * PITCH_SENSITIVITY;
+        } else {
+            // Idle Noise
+            const time = state.clock.elapsedTime;
+            targetYaw = Math.sin(time * 0.5) * 0.1;
+            targetPitch = Math.sin(time * 0.3) * 0.05;
+        }
+
+        // Smooth Interpolation (Lerp)
+        const alpha = 5.0 * delta; // Smoothing speed
+        lookAtTargetRef.current.yaw += (targetYaw - lookAtTargetRef.current.yaw) * alpha;
+        lookAtTargetRef.current.pitch += (targetPitch - lookAtTargetRef.current.pitch) * alpha;
+
+        // Apply Distributed Rotation
+        const yaw = lookAtTargetRef.current.yaw;
+        const pitch = lookAtTargetRef.current.pitch;
+
+        if (neck) {
+            neck.rotation.y = yaw * 0.5;
+            neck.rotation.x = pitch * 0.5;
+            head.rotation.y = yaw * 0.5;
+            head.rotation.x = pitch * 0.5;
+        } else {
+            head.rotation.y = yaw;
+            head.rotation.x = pitch;
+        }
     }
   });
 
@@ -109,7 +142,7 @@ function AvatarModel({ url, audioData }) {
   return vrm ? <primitive object={vrm.scene} position={[0, -1.4, 0]} /> : null;
 }
 
-export default function AvatarCanvas({ audioData, vrmUrl }) {
+export default function AvatarCanvas({ audioData, vrmUrl, facePosition }) {
   if (!vrmUrl) return null;
 
   return (
@@ -120,7 +153,7 @@ export default function AvatarCanvas({ audioData, vrmUrl }) {
         <directionalLight position={[-1, 0.5, 1]} intensity={0.5} />
 
         <React.Suspense fallback={null}>
-            <AvatarModel url={vrmUrl} audioData={audioData} />
+            <AvatarModel url={vrmUrl} audioData={audioData} facePosition={facePosition} />
         </React.Suspense>
         </Canvas>
     </div>

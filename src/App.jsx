@@ -8,7 +8,7 @@ import BrowserWindow from './components/BrowserWindow';
 import ChatModule from './components/ChatModule';
 import ToolsModule from './components/ToolsModule';
 import { Mic, MicOff, Settings, X, Minus, Power, Video, VideoOff, Layout, Hand, Printer, Clock } from 'lucide-react';
-import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+import { FilesetResolver, HandLandmarker, FaceLandmarker } from '@mediapipe/tasks-vision';
 // MemoryPrompt removed - memory is now actively saved to project
 import ConfirmationPopup from './components/ConfirmationPopup';
 import AuthLock from './components/AuthLock';
@@ -142,6 +142,8 @@ function App() {
     const cursorSensitivityRef = useRef(2.0);
     const isCameraFlippedRef = useRef(false);
     const handLandmarkerRef = useRef(null);
+    const faceLandmarkerRef = useRef(null);
+    const [facePosition, setFacePosition] = useState(null); // Normalized coordinates
     const cursorTrailRef = useRef([]); // Stores last N positions for trail
     const [ripples, setRipples] = useState([]); // Visual ripples on click
 
@@ -669,18 +671,17 @@ function App() {
             }
         });
 
-        // Initialize Hand Landmarker
-        const initHandLandmarker = async () => {
+        // Initialize Vision (Hand + Face)
+        const initVision = async () => {
             try {
-                console.log("Initializing HandLandmarker...");
+                console.log("Initializing Vision Models...");
 
-                // 1. Verify Model File
-                console.log("Fetching model file...");
-                const response = await fetch('/hand_landmarker.task');
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch model: ${response.status} ${response.statusText}`);
-                }
-                console.log("Model file found:", response.headers.get('content-type'), response.headers.get('content-length'));
+                // 1. Verify Model Files
+                console.log("Fetching model files...");
+                await Promise.all([
+                    fetch('/hand_landmarker.task').then(r => { if (!r.ok) throw new Error('Hand model missing') }),
+                    fetch('/face_landmarker.task').then(r => { if (!r.ok) throw new Error('Face model missing') })
+                ]);
 
                 // 2. Initialize Vision
                 console.log("Initializing FilesetResolver...");
@@ -689,25 +690,42 @@ function App() {
                 );
                 console.log("FilesetResolver initialized.");
 
-                // 3. Create Landmarker
-                console.log("Creating HandLandmarker (GPU)...");
-                handLandmarkerRef.current = await HandLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: `/hand_landmarker.task`,
-                        delegate: "GPU" // Enable GPU acceleration
-                    },
-                    runningMode: "VIDEO",
-                    numHands: 1
-                });
-                console.log("HandLandmarker initialized successfully!");
-                addMessage('System', 'Hand Tracking Ready');
+                // 3. Create Landmarkers
+                console.log("Creating Landmarkers (GPU)...");
+
+                // Parallel creation
+                const [handLandmarker, faceLandmarker] = await Promise.all([
+                    HandLandmarker.createFromOptions(vision, {
+                        baseOptions: {
+                            modelAssetPath: `/hand_landmarker.task`,
+                            delegate: "GPU"
+                        },
+                        runningMode: "VIDEO",
+                        numHands: 1
+                    }),
+                    FaceLandmarker.createFromOptions(vision, {
+                        baseOptions: {
+                            modelAssetPath: `/face_landmarker.task`,
+                            delegate: "GPU"
+                        },
+                        runningMode: "VIDEO",
+                        numFaces: 1,
+                        outputFaceBlendshapes: true
+                    })
+                ]);
+
+                handLandmarkerRef.current = handLandmarker;
+                faceLandmarkerRef.current = faceLandmarker;
+
+                console.log("Vision models initialized successfully!");
+                addMessage('System', 'Vision Tracking Ready');
 
             } catch (error) {
-                console.error("Failed to initialize HandLandmarker:", error);
-                addMessage('System', `Hand Tracking Error: ${error.message}`);
+                console.error("Failed to initialize Vision:", error);
+                addMessage('System', `Vision Error: ${error.message}`);
             }
         };
-        initHandLandmarker();
+        initVision();
 
         return () => {
             socket.off('connect');
@@ -893,8 +911,22 @@ function App() {
         }
 
 
-        // 3. Hand Tracking
+        // 3. Vision Tracking (Face + Hand)
         let startTimeMs = performance.now();
+
+        // FACE TRACKING
+        // Run every frame if video is new
+        if (faceLandmarkerRef.current && videoRef.current.currentTime !== lastVideoTimeRef.current) {
+             const faceResults = faceLandmarkerRef.current.detectForVideo(videoRef.current, startTimeMs);
+             if (faceResults.faceLandmarks && faceResults.faceLandmarks.length > 0) {
+                 const landmarks = faceResults.faceLandmarks[0];
+                 // Use Nose Tip (Index 1) as face center reference
+                 const nose = landmarks[1];
+                 setFacePosition({ x: nose.x, y: nose.y, z: nose.z });
+             }
+        }
+
+        // HAND TRACKING
         // Use Ref for toggle check
         if (isHandTrackingEnabledRef.current && handLandmarkerRef.current && videoRef.current.currentTime !== lastVideoTimeRef.current) {
             lastVideoTimeRef.current = videoRef.current.currentTime;
@@ -1543,6 +1575,7 @@ function App() {
                             intensity={audioAmp}
                             timers={timers}
                             currentProject={currentProject}
+                            facePosition={facePosition}
                         />
                     </div>
                     {isModularMode && <div className={`absolute top-2 right-2 text-xs font-bold tracking-widest z-20 ${activeDragElement === 'visualizer' ? 'text-green-500' : 'text-yellow-500/50'}`}>VISUALIZER</div>}

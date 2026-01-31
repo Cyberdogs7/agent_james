@@ -5,7 +5,7 @@ import TimerCarousel from './TimerCarousel';
 import AvatarCanvas from './AvatarCanvas';
 import { X } from 'lucide-react';
 
-const DisplayArea = ({ socket, isListening, audioData, intensity, timers, currentProject }) => {
+const DisplayArea = ({ socket, isListening, audioData, intensity, timers, currentProject, facePosition }) => {
   const [displayContent, setDisplayContent] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
@@ -89,7 +89,7 @@ const DisplayArea = ({ socket, isListening, audioData, intensity, timers, curren
       }
       // Render Avatar if available
       if (avatarUrl) {
-          return <AvatarCanvas audioData={audioData} vrmUrl={avatarUrl} />;
+          return <AvatarCanvas audioData={audioData} vrmUrl={avatarUrl} facePosition={facePosition} />;
       }
       return <Visualizer isListening={isListening} audioData={audioData} intensity={intensity} />;
     }

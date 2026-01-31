@@ -10,16 +10,16 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] **Holographic Avatar Interface**
+- [x] **Holographic Avatar Interface**
   - **Description**: Replace the static UI with a reactive 3D avatar (using `three-vrm`) that lip-syncs to ADA's voice, tracks the user's face (via camera), and displays emotions (thinking, listening, happy).
   - **Wow Factor**: Transforms the assistant from a voice in a box to a "physical" presence in the room. The avatar looks at you when you speak.
   - **User Impact**: Higher engagement and immediate visual feedback on the agent's state (listening vs. processing).
   - **Technical Notes**: Requires installing `@pixiv/three-vrm`. Need to map audio amplitude/visemes to blend shapes and head rotation to MediaPipe face tracking coordinates. Must gracefully degrade if camera is unavailable.
-  - **Status**: **Partially Implemented**
+  - **Status**: **Implemented**
   - [x] Subtask: Dependencies & Basic Rendering
   - [x] Subtask: Audio Lip Sync & Idle Animation
   - [x] Subtask: Per-Project Avatar Loading
-  - [ ] Subtask: Head Tracking (MediaPipe)
+  - [x] Subtask: Head Tracking (MediaPipe)
 
 - [ ] **Real-World Vision (VLA)**
   - **Description**: Allow James to "see" and identify physical objects held up to the camera. "James, what size screw is this?" or "Does this 3D print look like the model?"
