@@ -453,6 +453,38 @@ class ProjectManager:
         config = self.get_project_config()
         return config.get("system_prompt", DEFAULT_SYSTEM_PROMPT)
 
+    def search_chat_history(self, query: str, limit: int = 50):
+        """Searches for a query in the chat history of the current project."""
+        log_file = self.get_current_project_path() / "chat_history.jsonl"
+        if not log_file.exists():
+            return []
+
+        results = []
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                # Read all lines to search efficiently (files are expected to be reasonable size)
+                # If files get massive, we might need 'grep' or chunked reading.
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        text = entry.get('text', '')
+                        sender = entry.get('sender', 'Unknown')
+                        timestamp = entry.get('timestamp', 0)
+
+                        # Simple case-insensitive search
+                        if query.lower() in text.lower():
+                            # Format timestamp
+                            time_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(timestamp))
+                            results.append(f"[{time_str}] {sender}: {text}")
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            print(f"[ProjectManager] [ERR] Failed to search chat history: {e}")
+            return [f"Error searching chat history: {e}"]
+
+        # Return the most recent matches first, up to limit
+        return results[::-1][:limit]
+
     def search_files(self, query: str):
         """Searches for a query in all text files within the current project."""
         project_path = self.get_current_project_path()
