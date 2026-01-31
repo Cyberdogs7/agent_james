@@ -45,6 +45,11 @@ This document serves as the single source of truth for the evolution of the A.D.
     - *Actions*: Spawn Agent with specific Prompt & Context, Send Notification, Run Script.
   - **Wow Factor**: "Sir, the nightly build failed, so I automatically deployed an agent to investigate the logs. It has identified the issue."
   - **User Impact**: Automates the "management" overhead of assigning tasks to agents.
+  - **Status**: **Partially Implemented**
+    - [x] **Backend Automation Engine**: Implemented `AutomationEngine` with background loop for checking schedules and handling events.
+    - [x] **Schedule Triggers**: Added support for Interval (every X minutes) and Daily (at HH:MM) schedules in a user-friendly format.
+    - [x] **Git Event Integration**: Connected `ProjectManager` fleet monitoring to the automation engine to trigger tasks on new commits.
+    - [ ] **Frontend Editor**: UI for creating and editing automation rules (requires frontend work).
 
 - [x] **Streamlined "One-Click" Review & Merge**
   - **Description**: A dedicated interface for reviewing Agent work.

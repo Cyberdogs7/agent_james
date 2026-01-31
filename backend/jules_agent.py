@@ -9,7 +9,7 @@ load_dotenv()
 
 class JulesAgent:
     def __init__(self, session=None, api_key=None):
-        self.api_key = api_key or os.getenv("JULES_API_KEY")
+        self.api_key = api_key or os.getenv("JULES_API_KEY") or ""
         self.base_url = "https://jules.googleapis.com/v1alpha"
         self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key})
         self.session_id = None
