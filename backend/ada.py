@@ -7,6 +7,8 @@ import sys
 import traceback
 from dotenv import load_dotenv
 import cv2
+import numpy as np
+import pyaudio
 try:
     import pyaudio
 except ImportError:
@@ -2868,17 +2870,14 @@ User: "What's the weather in London?"
 
             sct_img = sct.grab(monitor)
 
-            # Convert to PIL Image
-            img = PIL.Image.frombytes("RGB", sct_img.size, sct_img.bgra, "raw", "BGRX")
-            img.thumbnail([1024, 1024])
+            # Optimized Path: Use OpenCV directly on buffer
+            # mss returns BGRA. Convert to BGR -> Process
+            img_np = np.array(sct_img, copy=False)
 
-            # Save to buffer
-            image_io = io.BytesIO()
-            img.save(image_io, format="jpeg")
-            image_io.seek(0)
-            image_bytes = image_io.read()
+            # Drop Alpha (BGRA -> BGR)
+            frame_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
 
-            return {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode()}
+            return self._process_frame(frame_bgr)
 
     async def handle_external_event(self, event):
         """Handles external events (like Git commits) triggered by AutomationEngine."""
@@ -2906,14 +2905,29 @@ User: "What's the weather in London?"
         ret, frame = cap.read()
         if not ret:
             return None
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = PIL.Image.fromarray(frame_rgb)
-        img.thumbnail([1024, 1024])
-        image_io = io.BytesIO()
-        img.save(image_io, format="jpeg")
-        image_io.seek(0)
-        image_bytes = image_io.read()
-        return {"mime_type": "image/jpeg", "data": base64.b64encode(image_bytes).decode()}
+        return self._process_frame(frame)
+
+    def _process_frame(self, frame_bgr):
+        """Resizes and encodes a BGR frame to JPEG."""
+        h, w = frame_bgr.shape[:2]
+        max_size = 1024
+
+        if w > max_size or h > max_size:
+            scale = min(max_size/w, max_size/h)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            frame_resized = cv2.resize(frame_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        else:
+            frame_resized = frame_bgr
+
+        # Encode to JPEG (Quality 75 to match PIL default)
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 75]
+        ret, buffer = cv2.imencode('.jpg', frame_resized, encode_param)
+
+        if not ret:
+            return None
+
+        return {"mime_type": "image/jpeg", "data": base64.b64encode(buffer).decode()}
 
     async def _session_runner(self, start_message=None, is_reconnect=False):
         """Handles a single connection and run-loop of the voice agent."""
