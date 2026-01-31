@@ -336,6 +336,7 @@ from search_agent import SearchAgent
 from scraper_agent import ScraperAgent
 from proactive_agent import ProactiveAgent
 from git_ops import GitOps
+from os_agent import OSAgent
 try:
     from backend.task_manager import TaskManager
 except ImportError:
@@ -438,6 +439,7 @@ class AudioLoop:
         self.task_manager = TaskManager(self.project_manager.get_current_project_path())
         self.search_agent = SearchAgent(self.trello_agent, self.project_manager, self.scraper_agent)
         self.proactive_agent = ProactiveAgent(session=None, project_manager=self.project_manager)
+        self.os_agent = OSAgent()
 
         # Sync Initial Project State
         if self.on_project_update:
@@ -1815,6 +1817,31 @@ User: "What's the weather in London?"
                                         else:
                                             success = False
                                             msg = "Repository path does not exist and no GitHub token available for remote merge."
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "control_os":
+                                    action = fc.args.get("action")
+                                    value = fc.args.get("value")
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_os' action='{action}' value='{value}'")
+
+                                    result = "Unknown action."
+                                    if action == "launch":
+                                        result = self.os_agent.launch_app(value)
+                                    elif action == "set_volume":
+                                        result = self.os_agent.set_volume(value)
+                                    elif action == "mute":
+                                        result = self.os_agent.mute()
+                                    elif action == "unmute":
+                                        result = self.os_agent.unmute()
+                                    elif action == "lock_screen":
+                                        result = self.os_agent.lock_screen()
 
                                     function_response = types.FunctionResponse(
                                         id=fc.id,

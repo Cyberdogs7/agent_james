@@ -17,13 +17,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Requires installing `@pixiv/three-vrm`. Need to map audio amplitude/visemes to blend shapes and head rotation to MediaPipe face tracking coordinates. Must gracefully degrade if camera is unavailable.
   - **Status**: **Idea** (Dependencies missing)
 
-- [ ] **"Minority Report" 3D Manipulation**
-  - **Description**: Leverage the existing hand-tracking system to allow the user to rotate, zoom, and explode 3D CAD models in the `CadWindow` using natural hand gestures.
-  - **Wow Factor**: "James, explode this view." -> User physically pulls their hands apart to separate the model components.
-  - **User Impact**: Intuitive, mouse-free interaction with complex 3D data.
-  - **Technical Notes**: Map `HandLandmarker` pinch/drag deltas to Three.js camera controls. Requires "Modular Mode" state awareness.
-  - **Status**: **Idea** (Hand tracking implemented, 3D binding missing)
-
 - [ ] **Real-World Vision (VLA)**
   - **Description**: Allow James to "see" and identify physical objects held up to the camera. "James, what size screw is this?" or "Does this 3D print look like the model?"
   - **Wow Factor**: The assistant bridges the gap between digital and physical reality.
@@ -36,7 +29,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: True digital assistant capabilities; breaking out of the "sandbox".
   - **User Impact**: Redefines the assistant as an OS interface rather than just an app.
   - **Technical Notes**: Python `subprocess` calls. abstracting OS-specific commands (PowerShell for Windows, AppleScript/zsh for macOS). Security permission handling is critical.
-  - **Status**: **Idea**
+  - **Status**: **In Progress**
+  - [ ] Subtask: App Launching (Cross-platform)
+  - [ ] Subtask: Volume Control
+  - [ ] Subtask: System Lock / Sleep
 
 ---
 

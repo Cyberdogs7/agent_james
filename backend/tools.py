@@ -752,5 +752,23 @@ tools_list = [{"function_declarations": [
             },
             "required": ["message"]
         }
+    },
+    {
+        "name": "control_os",
+        "description": "Controls the operating system (launch apps, volume, lock screen).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "The action to perform: 'launch', 'set_volume', 'mute', 'unmute', 'lock_screen'."
+                },
+                "value": {
+                    "type": "STRING",
+                    "description": "The value for the action (e.g., app name for 'launch', volume level 0-100 for 'set_volume')."
+                }
+            },
+            "required": ["action"]
+        }
     }
 ]}]
