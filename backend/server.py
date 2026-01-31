@@ -1329,7 +1329,7 @@ async def get_fleet_status(sid):
             await sio.emit('error', {'msg': "No GitHub Token found. Please Authenticate.", 'code': 'AUTH_REQUIRED'})
             return
 
-        from backend.github_client import GitHubClient
+        from github_client import GitHubClient
         client = GitHubClient(token)
 
         fleet_status = []
@@ -1363,7 +1363,7 @@ async def get_repo_branches(sid, data):
         token = audio_loop.project_manager.get_github_token()
         if not token: return
 
-        from backend.github_client import GitHubClient
+        from github_client import GitHubClient
         client = GitHubClient(token)
 
         parts = repo_full_name.split('/')
@@ -1414,7 +1414,7 @@ async def perform_git_merge(sid, data):
              await sio.emit('error', {'msg': "Authentication Required"})
              return
 
-        from backend.github_client import GitHubClient
+        from github_client import GitHubClient
         client = GitHubClient(token)
 
         parts = repo_full_name.split('/')
