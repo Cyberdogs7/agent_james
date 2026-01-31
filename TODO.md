@@ -43,13 +43,6 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [ ] **Project Management Suite (Slack & Trello)**
-  - **Description**: Formalize the current experimental Slack and Trello agents into a core "Office Manager" feature. "James, summarize the morning standup from Slack and create Trello cards for the blockers."
-  - **Wow Factor**: The assistant handles the bureaucracy of software development.
-  - **User Impact**: Less context switching between chat, tracker, and IDE.
-  - **Technical Notes**: The agents exist (`slack_agent.py`, `trello_agent.py`) but need higher-level intent logic in `ada.py` to coordinate them.
-  - **Status**: **Partially Implemented**
-
 - [ ] **Semantic Code Search**
   - **Description**: "Where do we handle authentication?" -> James opens the exact file and highlights the lines.
   - **Wow Factor**: Instant navigation of large codebases.
@@ -74,11 +67,11 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Move video processing to a WebWorker or optimize the Python asyncio loop.
   - **Status**: **Idea** (Optimization)
 
-- [ ] **Conversation Memory Persistence**
-  - **Description**: Allow James to remember the *conversation* context across restarts, not just the project files. "As we discussed yesterday..."
-  - **User Impact**: Continuity.
-  - **Technical Notes**: Persist `chat_buffer` or a summary of it to `memory.jsonl` on session end.
-  - **Status**: **Idea**
+- [x] **Conversation Memory Persistence**
+  - **Description**: Allow James to look up past conversation history. "What did we decide about the database last week?"
+  - **User Impact**: Continuity and reference.
+  - **Technical Notes**: Implemented `search_chat_history` in `project_manager.py` and integrated it into the `search` tool via `search_agent.py`. The assistant can now search through `chat_history.jsonl`.
+  - **Status**: **Implemented**
 
 ---
 

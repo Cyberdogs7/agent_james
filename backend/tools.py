@@ -555,7 +555,7 @@ tools_list = [{"function_declarations": [
 ] + list(trello_tools.values()) + [
     {
         "name": "search",
-        "description": "Searches for a query across all available tools and local files.",
+        "description": "Searches for a query across all available tools, local files, AND conversation history. Use this to find past decisions or discussions.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
