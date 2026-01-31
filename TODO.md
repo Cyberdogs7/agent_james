@@ -29,10 +29,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: True digital assistant capabilities; breaking out of the "sandbox".
   - **User Impact**: Redefines the assistant as an OS interface rather than just an app.
   - **Technical Notes**: Python `subprocess` calls. abstracting OS-specific commands (PowerShell for Windows, AppleScript/zsh for macOS). Security permission handling is critical.
-  - **Status**: **In Progress**
-  - [ ] Subtask: App Launching (Cross-platform)
-  - [ ] Subtask: Volume Control
-  - [ ] Subtask: System Lock / Sleep
+  - **Status**: **Implemented**
+  - [x] Subtask: App Launching (Cross-platform)
+  - [x] Subtask: Volume Control
+  - [x] Subtask: System Lock / Sleep
 
 ---
 

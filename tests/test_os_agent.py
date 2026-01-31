@@ -21,12 +21,17 @@ class TestOSAgent(unittest.TestCase):
         self.assertIn("Launched Calculator", result)
 
     @patch('backend.os_agent.sys.platform', 'win32')
-    @patch('subprocess.Popen')
-    def test_launch_app_windows(self, mock_popen):
-        self.agent.platform = 'win32'
-        result = self.agent.launch_app("Notepad")
-        mock_popen.assert_called_with('start "" "Notepad"', shell=True)
-        self.assertIn("Launched Notepad", result)
+    def test_launch_app_windows(self):
+        # We need to manually mock os.startfile because it doesn't exist on linux
+        with patch('backend.os_agent.os') as mock_os:
+            self.agent.platform = 'win32'
+            # Setup mock to simulate success
+            mock_os.startfile = MagicMock()
+
+            result = self.agent.launch_app("Notepad")
+
+            mock_os.startfile.assert_called_with("Notepad")
+            self.assertIn("Launched Notepad", result)
 
     @patch('backend.os_agent.sys.platform', 'darwin')
     @patch('subprocess.run')
@@ -48,6 +53,13 @@ class TestOSAgent(unittest.TestCase):
         self.agent.platform = 'darwin'
         self.agent.lock_screen()
         mock_run.assert_called_with(["pmset", "displaysleepnow"])
+
+    @patch('backend.os_agent.sys.platform', 'darwin')
+    @patch('subprocess.run')
+    def test_sleep_mac(self, mock_run):
+        self.agent.platform = 'darwin'
+        self.agent.sleep()
+        mock_run.assert_called_with(["pmset", "sleepnow"])
 
 if __name__ == '__main__':
     unittest.main()

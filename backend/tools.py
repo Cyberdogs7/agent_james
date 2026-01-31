@@ -755,13 +755,13 @@ tools_list = [{"function_declarations": [
     },
     {
         "name": "control_os",
-        "description": "Controls the operating system (launch apps, volume, lock screen).",
+        "description": "Controls the operating system (launch apps, volume, lock screen, sleep).",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "description": "The action to perform: 'launch', 'set_volume', 'mute', 'unmute', 'lock_screen'."
+                    "description": "The action to perform: 'launch', 'set_volume', 'mute', 'unmute', 'lock_screen', 'sleep'."
                 },
                 "value": {
                     "type": "STRING",

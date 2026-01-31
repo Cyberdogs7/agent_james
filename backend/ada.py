@@ -1842,6 +1842,8 @@ User: "What's the weather in London?"
                                         result = self.os_agent.unmute()
                                     elif action == "lock_screen":
                                         result = self.os_agent.lock_screen()
+                                    elif action == "sleep":
+                                        result = self.os_agent.sleep()
 
                                     function_response = types.FunctionResponse(
                                         id=fc.id,

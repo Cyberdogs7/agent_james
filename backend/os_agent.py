@@ -3,6 +3,7 @@ import subprocess
 import logging
 import shutil
 import os
+import ctypes
 
 class OSAgent:
     def __init__(self):
@@ -15,24 +16,27 @@ class OSAgent:
         self.logger.info(f"Launching app: {app_name}")
         try:
             if self.platform == "win32":
-                # Using 'start' via cmd to handle various ways apps are registered
-                # Use shell=True for 'start' to work
-                subprocess.Popen(f'start "" "{app_name}"', shell=True)
-                return f"Launched {app_name}"
+                # Use os.startfile for better safety than shell=True, if possible.
+                # However, os.startfile generally expects a file path.
+                # If app_name is just "Notepad", startfile might fail if not in path or mapped.
+                # But 'start' in cmd handles 'Notepad' by looking up registry/path.
+                # Let's try os.startfile(app_name) first, catch error, fallback to shell?
+                # Actually, the requirement was to avoid shell=True if possible.
+                try:
+                    os.startfile(app_name)
+                    return f"Launched {app_name}"
+                except FileNotFoundError:
+                    # Fallback to shell execution if not found directly
+                    subprocess.Popen(f'start "" "{app_name}"', shell=True)
+                    return f"Launched {app_name} (via shell)"
             elif self.platform == "darwin":
                 subprocess.Popen(["open", "-a", app_name])
                 return f"Launched {app_name}"
             elif self.platform == "linux":
-                # Try generic 'xdg-open' or command directly
-                # Often linux apps are just their name in path
-                # Check if executable exists in path first
                 if shutil.which(app_name):
                     subprocess.Popen([app_name], start_new_session=True)
                     return f"Launched {app_name}"
                 else:
-                    # Try xdg-open but it usually expects files/urls
-                    # Maybe it's a flatpak? snap?
-                    # Fallback to shell execution for flexibility
                     subprocess.Popen(app_name, shell=True, start_new_session=True)
                     return f"Attempted to launch {app_name}"
             else:
@@ -41,28 +45,39 @@ class OSAgent:
             self.logger.error(f"Failed to launch {app_name}: {e}")
             return f"Failed to launch {app_name}: {str(e)}"
 
+    def _windows_send_key(self, vk_code):
+        """Sends a key press using ctypes user32.keybd_event or SendInput."""
+        # Simple keybd_event approach (deprecated but reliable for simple media keys)
+        # 0 = KeyDown, 2 = KeyUp
+        user32 = ctypes.windll.user32
+        user32.keybd_event(vk_code, 0, 0, 0)
+        user32.keybd_event(vk_code, 0, 2, 0)
+
     def set_volume(self, level):
         """Sets volume (0-100)."""
         self.logger.info(f"Setting volume to: {level}")
         try:
             level = max(0, min(100, int(level)))
             if self.platform == "win32":
-                # Windows volume is tricky without external libs like pycaw
-                # We can use a powershell script or VBS.
-                # A common lightweight way is using nircmd if installed, but we can't assume that.
-                # Or a simple PowerShell Audio module if available.
-                # Fallback: We might not be able to set EXACT volume easily without deps.
-                # But we can MUTE/UNMUTE easily.
-                # For now, let's try a PowerShell snippet that uses WScript.Shell to send keys (imprecise)
-                # OR just report not implemented fully without dependencies.
-                # BETTER: Use a small bundled VBScript or PowerShell that invokes Audio API.
-                # For simplicity in this iteration: Log warning for Windows volume SET.
-                return "Volume setting on Windows requires 3rd party libraries (pycaw)."
+                # VK_VOLUME_MUTE = 0xAD
+                # VK_VOLUME_DOWN = 0xAE
+                # VK_VOLUME_UP = 0xAF
+
+                # Reset to 0 (50 presses down)
+                for _ in range(50):
+                    self._windows_send_key(0xAE)
+
+                # Set to level (steps of 2 typically)
+                steps = int(level / 2)
+                for _ in range(steps):
+                    self._windows_send_key(0xAF)
+
+                return f"Set volume to approx {level}%"
+
             elif self.platform == "darwin":
                 subprocess.run(["osascript", "-e", f"set volume output volume {level}"])
                 return f"Set volume to {level}%"
             elif self.platform == "linux":
-                # Try pactl (PulseAudio) or amixer (ALSA)
                 if shutil.which("pactl"):
                     subprocess.run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{level}%"])
                     return f"Set volume to {level}%"
@@ -77,9 +92,8 @@ class OSAgent:
         """Mutes the system volume."""
         try:
             if self.platform == "win32":
-                # PowerShell send key VolumeMute
-                script = "$obj = New-Object -ComObject WScript.Shell; $obj.SendKeys([char]173)"
-                subprocess.run(["powershell", "-command", script])
+                # VK_VOLUME_MUTE = 0xAD
+                self._windows_send_key(0xAD)
                 return "Muted/Unmuted"
             elif self.platform == "darwin":
                 subprocess.run(["osascript", "-e", "set volume output muted true"])
@@ -97,10 +111,8 @@ class OSAgent:
         """Unmutes the system volume."""
         try:
             if self.platform == "win32":
-                # PowerShell send key VolumeMute (Toggle) - difficult to ensure state
-                # Sending it again toggles it.
-                script = "$obj = New-Object -ComObject WScript.Shell; $obj.SendKeys([char]173)"
-                subprocess.run(["powershell", "-command", script])
+                # VK_VOLUME_MUTE = 0xAD (Toggle)
+                self._windows_send_key(0xAD)
                 return "Muted/Unmuted"
             elif self.platform == "darwin":
                 subprocess.run(["osascript", "-e", "set volume output muted false"])
@@ -124,11 +136,8 @@ class OSAgent:
             elif self.platform == "darwin":
                 # MacOS High Sierra+
                 subprocess.run(["pmset", "displaysleepnow"])
-                # Or actually lock:
-                # subprocess.run(["/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession", "-suspend"])
                 return "Screen locked"
             elif self.platform == "linux":
-                # Try generic xdg-screensaver or gnome-screensaver-command
                 if shutil.which("xdg-screensaver"):
                     subprocess.run(["xdg-screensaver", "lock"])
                 elif shutil.which("gnome-screensaver-command"):
@@ -138,3 +147,20 @@ class OSAgent:
                 return "Screen locked"
         except Exception as e:
             return f"Error locking screen: {str(e)}"
+
+    def sleep(self):
+        """Puts the system to sleep."""
+        self.logger.info("Sleeping system")
+        try:
+            if self.platform == "win32":
+                # Hibernate=0 -> Sleep
+                subprocess.run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True)
+                return "System sleeping"
+            elif self.platform == "darwin":
+                subprocess.run(["pmset", "sleepnow"])
+                return "System sleeping"
+            elif self.platform == "linux":
+                subprocess.run(["systemctl", "suspend"])
+                return "System sleeping"
+        except Exception as e:
+            return f"Error sleeping: {str(e)}"
