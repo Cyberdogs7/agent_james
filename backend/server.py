@@ -1403,10 +1403,9 @@ async def perform_git_merge(sid, data):
     """Merges a specific repo's branch into main/master via GitHub API."""
     repo_full_name = data.get('repo')
     branch = data.get('branch')
-    target = data.get('target', 'main') # Default target if not specified?
-    # UI should provide target, but let's default safe.
+    target = data.get('target')
 
-    print(f"[SERVER] Client {sid} requested remote merge for {repo_full_name}: {branch} -> {target}")
+    print(f"[SERVER] Client {sid} requested remote merge for {repo_full_name}: {branch} -> {target or 'DEFAULT'}")
 
     if audio_loop and audio_loop.project_manager:
         token = audio_loop.project_manager.get_github_token()
@@ -1420,6 +1419,16 @@ async def perform_git_merge(sid, data):
         parts = repo_full_name.split('/')
         if len(parts) != 2: return
         owner, name = parts
+
+        # Resolve target if missing
+        if not target:
+            details = await client.get_repo_details(owner, name)
+            if details:
+                target = details.get('default_branch', 'main')
+                print(f"[SERVER] Resolved default branch for {repo_full_name} to {target}")
+            else:
+                target = 'main' # Fallback
+                print(f"[SERVER] Could not resolve default branch, falling back to {target}")
 
         result = await client.merge_branch(owner, name, target, branch)
 

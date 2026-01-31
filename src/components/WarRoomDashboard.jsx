@@ -967,8 +967,13 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
     }, [socket, repo.name]);
 
     const handleMerge = (branch) => {
-        if (confirm(`Merge '${branch}' into default branch?`)) {
-            socket.emit('perform_git_merge', { repo: repo.name, branch: branch });
+        const defaultBranch = branches.find(b => b.is_default)?.name || 'main';
+        if (confirm(`Merge '${branch}' into ${defaultBranch}?`)) {
+            socket.emit('perform_git_merge', {
+                repo: repo.name,
+                branch: branch,
+                target: defaultBranch
+            });
             onClose();
         }
     };
