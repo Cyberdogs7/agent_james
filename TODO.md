@@ -30,7 +30,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - [x] Subtask: Gemini Vision Integration
   - [x] Subtask: Robust Camera Capture (Cross-Platform)
 
-- [ ] **Deep OS Control (Cross-Platform)**
+- [x] **Deep OS Control (Cross-Platform)**
   - **Description**: Give James control over the operating system beyond the app window. "James, turn off WiFi", "Open Spotify", "Organize my desktop".
   - **Wow Factor**: True digital assistant capabilities; breaking out of the "sandbox".
   - **User Impact**: Redefines the assistant as an OS interface rather than just an app.
@@ -58,6 +58,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Extend `JulesAgent` to read `.git` status/diffs locally via `subprocess` (avoiding heavy `GitPython` dependency if possible) and prepend to the prompt.
   - **Status**: **Implemented**
 
+- [x] **Remote Fleet Management**
+  - **Description**: Monitor and manage remote repositories (JulesAgents) directly from the War Room. View detailed commit history, branch status, and perform remote merges.
+  - **Wow Factor**: "James, merge the feature branch on the backend repo."
+  - **User Impact**: Centralized control of the distributed agent fleet.
+  - **Technical Notes**: Integration with GitHub API via `GitHubClient` to fetch commit details and trigger merges. Dashboard UI for fleet status.
+  - **Status**: **Implemented**
+
 - [ ] **Local "Brain" (Offline Mode)**
   - **Description**: When the internet is down (or for privacy), switch to a local LLM (e.g., Llama 3 on GPU) for basic commands (timers, local device control).
   - **Wow Factor**: "Sir, the network is down, but I am still operational."
@@ -72,7 +79,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Parse the streaming `activities` from `JulesAgent` to update a dynamic UI list of "Completed Steps".
   - **Status**: **Implemented**
 
-- [ ] **Architectural Memory (RAG)**
+- [x] **Architectural Memory (RAG)**
   - **Description**: A long-term memory system where James stores architectural decisions, project constraints, and "lessons learned" to avoid repeating mistakes.
   - **Wow Factor**: "Sir, remember we decided against using `requests` in favor of `httpx` last week."
   - **User Impact**: Consistency across long development cycles.
