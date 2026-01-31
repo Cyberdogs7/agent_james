@@ -17,15 +17,15 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Implemented `_get_screen` in `ada.py` using `mss`. Added `switch_video_source` tool to dynamically toggle between camera and screen share.
   - **Status**: **Implemented**
 
-- [ ] **Swarm Intelligence (Multi-Agent Mode)**
+- [x] **Swarm Intelligence (Multi-Agent Mode)**
   - **Description**: Allow James to spawn and coordinate multiple "Jules" agents to work on different repositories or tasks simultaneously.
   - **Wow Factor**: "Sir, I have Agent 1 refactoring the frontend and Agent 2 updating the API. Both are 50% complete."
   - **User Impact**: Massive parallelism for complex refactors.
   - **Technical Notes**: Extend `JulesAgent` to manage a pool of sessions and aggregate their "thought" streams into a unified dashboard view.
-  - **Status**: **Broken Down**
-    - [ ] **Centralize Session Management**: Refactor `JulesAgent` to internally manage `asyncio` polling tasks for multiple sessions, removing ad-hoc management from `ada.py`.
-    - [ ] **Add `spawn_swarm_agent` Tool**: Create a high-level tool for the assistant to explicitly spawn agents with defined roles.
-    - [ ] **Swarm Dashboard Aggregation**: Update `get_dashboard_data` to visualize the status and active "thoughts" of the entire fleet.
+  - **Status**: **Implemented**
+    - [x] **Centralize Session Management**: Refactor `JulesAgent` to internally manage `asyncio` polling tasks for multiple sessions, removing ad-hoc management from `ada.py`.
+    - [x] **Add `spawn_swarm_agent` Tool**: Create a high-level tool for the assistant to explicitly spawn agents with defined roles.
+    - [x] **Swarm Dashboard Aggregation**: Update `get_dashboard_data` to visualize the status and active "thoughts" of the entire fleet.
 
 - [x] **Remote Fleet Management**
   - **Description**: Monitor and manage remote repositories (JulesAgents) directly from the War Room. View detailed commit history, branch status, and perform remote merges.

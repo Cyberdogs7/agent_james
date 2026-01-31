@@ -1483,7 +1483,8 @@ class AudioLoop:
             enriched_sessions.append({
                 "id": s_id,
                 "title": s_title,
-                "state": s_state
+                "state": s_state,
+                "latest_thought": self.jules_agent.get_session_insight(s_id)
             })
 
         if INCLUDE_RAW_LOGS:
@@ -1848,6 +1849,24 @@ User: "What's the weather in London?"
                                             success = False
                                             msg = "Repository path does not exist and no GitHub token available for remote merge."
 
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "spawn_swarm_agent":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'spawn_swarm_agent'")
+                                    role = fc.args.get("role")
+                                    prompt = fc.args.get("prompt")
+                                    source = fc.args.get("source")
+
+                                    # Prepend role to prompt
+                                    full_prompt = f"Role: {role}\nTask: {prompt}"
+
+                                    result = await self.handle_jules_request(full_prompt, source)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
