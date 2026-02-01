@@ -162,10 +162,11 @@ class AutomationEngine:
                         if time_diff > self.STALL_THRESHOLD:
                             pr_url = pr.get('html_url')
                             title = pr.get('title')
+                            number = pr.get('number')
 
                             last_nag = self.last_nag_times.get(pr_url, 0)
                             if now - last_nag > self.NAG_COOLDOWN:
-                                msg = f"Sir, the Pull Request '{title}' on {name} is waiting for review. Shall I merge it?"
+                                msg = f"Sir, Pull Request #{number} ('{title}') on repository {owner}/{name} has been stalled for over 2 hours. Shall I merge it?"
                                 print(f"[AutomationEngine] NAGGING: {msg}")
                                 await self.ada.handle_external_event({
                                     "type": "notification",
@@ -255,30 +256,31 @@ class AutomationEngine:
         # event_data: dict with details
         print(f"[AutomationEngine] Received event: {event_type}")
 
-        # Refresh tasks from current project
-        current_path = self.project_manager.get_current_project_path()
-        temp_manager = self.task_manager.__class__(current_path)
-        tasks = temp_manager.list_tasks()
+        # Fleet Scan: Check ALL projects for triggers
+        projects = self.project_manager.list_projects()
 
-        for task in tasks:
-            if task.get('status') != 'active':
-                continue
+        for project_name in projects:
+            project_path = self.project_manager.get_project_path(project_name)
+            temp_manager = self.task_manager.__class__(project_path)
+            tasks = temp_manager.list_tasks()
 
-            trigger = task.get('trigger', {})
-            if trigger.get('type') == 'git' and event_type == 'git_commit':
-                # Check if repo matches
-                # Trigger value might be "owner/repo" or just "repo"
-                target_repo = trigger.get('value')
-                event_repo = event_data.get('repo') # "owner/name"
+            for task in tasks:
+                if task.get('status') != 'active':
+                    continue
 
-                if target_repo and event_repo:
-                    if target_repo == event_repo or target_repo in event_repo:
-                        print(f"[AutomationEngine] Git Event matched task: {task['title']}")
-                        # Inject event data into action context if needed?
-                        # For now, just run it.
-                        await self._execute_task(task, context=event_data)
+                trigger = task.get('trigger', {})
+                if trigger.get('type') == 'git' and event_type == 'git_commit':
+                    # Check if repo matches
+                    # Trigger value might be "owner/repo" or just "repo"
+                    target_repo = trigger.get('value')
+                    event_repo = event_data.get('repo') # "owner/name"
 
-    async def _execute_task(self, task, context=None):
+                    if target_repo and event_repo:
+                        if target_repo == event_repo or target_repo in event_repo:
+                            print(f"[AutomationEngine] Git Event matched task: '{task['title']}' in project '{project_name}'")
+                            await self._execute_task(task, context=event_data, project_context=project_name)
+
+    async def _execute_task(self, task, context=None, project_context=None):
         """Executes the action defined in the task."""
         action = task.get('action', {})
         act_type = action.get('type')
@@ -299,7 +301,6 @@ class AutomationEngine:
                             "data": {"text": msg},
                             "duration": 10000
                         })
-                    # Send via Voice (if appropriate?)
                     # Send via Slack
                     if self.ada.slack_agent:
                         asyncio.create_task(self.ada.slack_agent.send_message(msg))
@@ -316,9 +317,12 @@ class AutomationEngine:
                     else:
                         prompt = str(act_value)
 
+                    if project_context and project_context != self.project_manager.current_project:
+                        prompt = f"Context: You are working on project '{project_context}'.\n\nTask: {prompt}"
+
                     if context:
                         # Append context to prompt
-                        prompt += f"\n\nContext:\n{json.dumps(context, indent=2)}"
+                        prompt += f"\n\nTrigger Context:\n{json.dumps(context, indent=2)}"
 
                     # Use ada's handler
                     # This launches a background task
@@ -345,8 +349,12 @@ class AutomationEngine:
                 # For daily, next_run is next occurrence of HH:MM (tomorrow or today)
 
             # Ensure we update the correct task manager
-            current_path = self.project_manager.get_current_project_path()
-            temp_manager = self.task_manager.__class__(current_path)
+            if project_context:
+                target_path = self.project_manager.get_project_path(project_context)
+            else:
+                target_path = self.project_manager.get_current_project_path()
+
+            temp_manager = self.task_manager.__class__(target_path)
             temp_manager.update_task(task['id'], updates)
 
         except Exception as e:

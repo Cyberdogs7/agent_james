@@ -59,3 +59,8 @@ class GitHubClient:
 
     async def list_pull_requests(self, owner, repo, state="open"):
         return await self._request("GET", f"/repos/{owner}/{repo}/pulls", params={"state": state})
+
+    async def merge_pull_request(self, owner, repo, pull_number, merge_method="merge"):
+        # merge_method can be "merge", "squash", or "rebase"
+        data = {"merge_method": merge_method}
+        return await self._request("PUT", f"/repos/{owner}/{repo}/pulls/{pull_number}/merge", json=data)
