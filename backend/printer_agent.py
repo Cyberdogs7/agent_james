@@ -615,7 +615,7 @@ class PrinterAgent:
             
             # FIX: Handle empty output_dir (when output_path has no directory prefix)
             if not output_dir:
-                output_dir = os.path.dirname(stl_path) or "."
+                output_dir = "."
             
             cmd = [
                 self.slicer_path,
