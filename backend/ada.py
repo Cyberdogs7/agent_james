@@ -453,6 +453,8 @@ class AudioLoop:
         self.proactive_agent = ProactiveAgent(session=None, project_manager=self.project_manager)
         self.os_agent = OSAgent()
 
+        self.sct = None
+
         # Sync Initial Project State
         if self.on_project_update:
             # We need to defer this slightly or just call it. 
@@ -2866,22 +2868,33 @@ User: "What's the weather in London?"
         if cap: cap.release()
 
     def _get_screen_sync(self):
-        with mss.mss() as sct:
-            if len(sct.monitors) > 1:
-                monitor = sct.monitors[1]  # Capture primary monitor
-            else:
-                monitor = sct.monitors[0]  # Fallback to all/virtual monitor
+        if self.sct is None:
+            self.sct = mss.mss()
 
-            sct_img = sct.grab(monitor)
+        if len(self.sct.monitors) > 1:
+            monitor = self.sct.monitors[1]  # Capture primary monitor
+        else:
+            monitor = self.sct.monitors[0]  # Fallback to all/virtual monitor
 
-            # Optimized Path: Use OpenCV directly on buffer
-            # mss returns BGRA. Convert to BGR -> Process
-            img_np = np.array(sct_img, copy=False)
+        sct_img = self.sct.grab(monitor)
 
-            # Drop Alpha (BGRA -> BGR)
-            frame_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
+        # Optimized Path: Use OpenCV directly on buffer
+        # mss returns BGRA. Convert to BGR -> Process
+        img_np = np.array(sct_img, copy=False)
 
-            return self._process_frame(frame_bgr)
+        # Drop Alpha (BGRA -> BGR)
+        frame_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
+
+        return self._process_frame(frame_bgr)
+
+    def close(self):
+        if self.sct:
+            try:
+                self.sct.close()
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Failed to close MSS: {e}")
+            self.sct = None
 
     async def handle_external_event(self, event):
         """Handles external events (like Git commits) triggered by AutomationEngine."""
@@ -3105,6 +3118,7 @@ User: "What's the weather in London?"
                     self.audio_stream.close()
                 except:
                     pass
+            self.close()
 
         return False
 
