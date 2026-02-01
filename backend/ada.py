@@ -2918,6 +2918,26 @@ User: "What's the weather in London?"
                 except Exception as e:
                     print(f"[ADA DEBUG] [ERR] Failed to announce git event: {e}")
 
+        elif event['type'] == 'notification':
+            msg = event.get('message', 'No message provided.')
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [NOTIFY] External Event: {msg}")
+
+            # Notify Frontend
+            if self.on_display_content:
+                self.on_display_content({
+                    "content_type": "notification",
+                    "data": {"text": msg},
+                    "duration": 10000
+                })
+
+            # Voice Announcement
+            if self.session:
+                try:
+                    await self.session.send(input=f"System Notification: {msg}", end_of_turn=False)
+                except Exception as e:
+                    print(f"[ADA DEBUG] [ERR] Failed to announce notification: {e}")
+
     def _get_frame(self, cap):
         ret, frame = cap.read()
         if not ret:

@@ -56,3 +56,6 @@ class GitHubClient:
 
     async def delete_branch(self, owner, repo, branch_name):
         return await self._request("DELETE", f"/repos/{owner}/{repo}/git/refs/heads/{branch_name}")
+
+    async def list_pull_requests(self, owner, repo, state="open"):
+        return await self._request("GET", f"/repos/{owner}/{repo}/pulls", params={"state": state})
