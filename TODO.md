@@ -10,77 +10,60 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [x] **"Omniscient" Desktop Vision**
-  - **Description**: Allow James to "see" the user's screen content on demand. "James, look at this error log" or "What do you think of this UI design?".
-  - **Wow Factor**: Bridges the gap between the assistant and the digital workspace. The AI becomes a true pair programmer that sees what you see.
-  - **User Impact**: Dramatically reduces the need to copy-paste context.
-  - **Technical Notes**: Implemented `_get_screen` in `ada.py` using `mss`. Added `switch_video_source` tool to dynamically toggle between camera and screen share.
-  - **Status**: **Implemented**
+- [ ] **"Pre-Cognition" (Anticipatory Context)**
+  - **Description**: James predicts what the user needs before they ask. If the user opens a log file, James analyzes it immediately. If the user switches to a Figma tab, James switches vision mode to design analysis.
+  - **Wow Factor**: "Sir, I noticed you're looking at the server logs. I've already identified the 500 error in the auth module."
+  - **User Impact**: Zero-latency assistance.
+  - **Technical Notes**: Hook into active window title detection (`pygetwindow`) and trigger specialized `mss` vision analysis when context changes.
+  - **Status**: Idea
 
-- [x] **Swarm Intelligence (Multi-Agent Mode)**
-  - **Description**: Allow James to spawn and coordinate multiple "Jules" agents to work on different repositories or tasks simultaneously.
-  - **Wow Factor**: "Sir, I have Agent 1 refactoring the frontend and Agent 2 updating the API. Both are 50% complete."
-  - **User Impact**: Massive parallelism for complex refactors.
-  - **Technical Notes**: Extend `JulesAgent` to manage a pool of sessions and aggregate their "thought" streams into a unified dashboard view.
-  - **Status**: **Implemented**
-    - [x] **Centralize Session Management**: Refactor `JulesAgent` to internally manage `asyncio` polling tasks for multiple sessions, removing ad-hoc management from `ada.py`.
-    - [x] **Add `spawn_swarm_agent` Tool**: Create a high-level tool for the assistant to explicitly spawn agents with defined roles.
-    - [x] **Swarm Dashboard Aggregation**: Update `get_dashboard_data` to visualize the status and active "thoughts" of the entire fleet.
+- [ ] **Self-Healing Automations**
+  - **Description**: If a scheduled task or automation fails (e.g., "Daily Build"), James automatically spawns a Jules Agent to debug the error, fix the script, and re-run it.
+  - **Wow Factor**: The system maintains itself. "The nightly build failed, but I patched the dependency issue and it passed on the second attempt."
+  - **User Impact**: Reliability without maintenance.
+  - **Technical Notes**: Catch `traceback` in `AutomationEngine`, capture stdout/stderr, and pass to a dedicated `JulesAgent` with a "fix-it" system prompt.
+  - **Status**: Idea
 
-- [x] **Remote Fleet Management**
-  - **Description**: Monitor and manage remote repositories (JulesAgents) directly from the War Room. View detailed commit history, branch status, and perform remote merges.
-  - **Wow Factor**: "James, merge the feature branch on the backend repo."
-  - **User Impact**: Centralized control of the distributed agent fleet.
-  - **Technical Notes**: Integration with GitHub API via `GitHubClient` to fetch commit details and trigger merges. Dashboard UI for fleet status.
-  - **Status**: **Implemented**
+- [ ] **Adaptive Persona Engine**
+  - **Description**: James detects user sentiment (frustration, focus, casual) via voice or text analysis and adjusts his personality.
+  - **Behavior**:
+    - *Frustrated*: Brief, direct, no jokes.
+    - *Casual*: Witty, conversational.
+    - *Focus*: Silent, only critical interruptions.
+  - **Wow Factor**: Feels like a true partner that "reads the room."
+  - **Technical Notes**: Use Gemini 1.5 Pro's native audio understanding or a lightweight local audio classifier to tag input sentiment before response generation.
+  - **Status**: Idea
 
 ---
 
-## 👔 Engineering Manager Mode (Orchestration & Review)
-*Transforming the user from a coder to a commander of agents.*
+## 🧩 Smart Enhancements
+*High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [ ] **Event-Driven Automation Engine**
-  - **Description**: A robust "If-This-Then-That" system to trigger Jules Agents based on events.
-    - *Triggers*: Schedule (Cron), Git Events (PR Open, Commit Push), Trello Card Movement.
-    - *Actions*: Spawn Agent with specific Prompt & Context, Send Notification, Run Script.
-  - **Wow Factor**: "Sir, the nightly build failed, so I automatically deployed an agent to investigate the logs. It has identified the issue."
-  - **User Impact**: Automates the "management" overhead of assigning tasks to agents.
-  - **Status**: **Partially Implemented**
-    - [x] **Backend Automation Engine**: Implemented `AutomationEngine` with background loop for checking schedules and handling events.
-    - [x] **Schedule Triggers**: Added support for Interval (every X minutes) and Daily (at HH:MM) schedules in a user-friendly format.
-    - [x] **Git Event Integration**: Connected `ProjectManager` fleet monitoring to the automation engine to trigger tasks on new commits.
-    - [ ] **Frontend Editor**: UI for creating and editing automation rules (requires frontend work).
+- [ ] **Project Context "Deep Dive" (RAG Evolution)**
+  - **Description**: Move beyond simple chat history. Index the entire codebase (AST-aware) into a vector database for semantic search.
+  - **User Impact**: "Where is the function that handles authentication?" returns the exact file and line number, explaining how it works.
+  - **Technical Notes**: Integrate a vector DB (Chroma/Pinecone) with `MemoryManager`.
+  - **Status**: Idea
 
-- [x] **Streamlined "One-Click" Review & Merge**
-  - **Description**: A dedicated interface for reviewing Agent work.
-    - View file diffs directly in the dashboard.
-    - "Approve & Merge": Single button to merge the PR and delete the remote branch, replacing the 5-click GitHub workflow.
-  - **Wow Factor**: Reviewing code becomes as fast as swiping through a feed.
-  - **User Impact**: Drastically reduces the friction of finalizing agent work.
-  - **Technical Notes**: Added `get_branch_diff` event to fetch file patches. Updated `WarRoomDashboard` with a Review UI. Implemented atomic "Merge & Delete" in backend.
-  - **Status**: **Implemented**
-
-- [ ] **Proactive Voice Notifications ("The Nagging Secretary")**
-  - **Description**: Voice announcements to ensure the human manager doesn't become the bottleneck.
-  - **Behavior**: If a Jules Agent finishes a task and it sits unreviewed for >X minutes, James verbally notifies the user. "Sir, Agent 3 has finished the refactor and is awaiting your approval."
-  - **User Impact**: Keeps the "factory line" of coding agents moving efficiently.
+- [ ] **"The Nagging Secretary" (Smart Follow-up)**
+  - **Description**: Proactive verbal nudges for stalled processes.
+  - **Behavior**: Monitor "Pending" Jules sessions or PRs. If no movement for >2 hours, verbally intervene. "Sir, the frontend refactor is waiting for your review. Shall I merge it?"
+  - **User Impact**: Prevents bottlenecks in the agent fleet.
+  - **Technical Notes**: Logic needs to be added to `AutomationEngine` to track "time since last update" for specific states.
+  - **Status**: Partially Implemented
 
 ---
 
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [x] **Conversation Memory Persistence**
-  - **Description**: Allow James to look up past conversation history. "What did we decide about the database last week?"
-  - **User Impact**: Continuity and reference.
-  - **Technical Notes**: Implemented `search_chat_history` in `project_manager.py` and integrated it into the `search` tool via `search_agent.py`. The assistant can now search through `chat_history.jsonl`.
-  - **Status**: **Implemented**
+- [ ] **Cinematic HUD & Soundscapes**
+  - **Description**: Add subtle UI sound effects (blips, hums) for agent actions and "thinking" states. Add a "Heads Up Display" overlay for the camera feed.
+  - **Wow Factor**: Makes the desktop feel like a sci-fi cockpit.
+  - **Technical Notes**: Implement a transparent, click-through Electron window for the HUD layer; use Web Audio API for spatial UI sounds.
+  - **Status**: Idea
 
----
-
-## 🛑 Deprecated / Removed
-- *Legacy "Chatbot" Interfaces*: We are moving towards purely multimodal/agentic interactions.
-- *Local "Brain"*: Removed to focus on cloud-based Swarm Intelligence.
-- *Semantic Code Search*: Removed to focus on Swarm Intelligence.
-- *Smart Home "Scenes"*: Removed to focus on Swarm Intelligence.
-- *Video Feed Optimization*: Removed to focus on Swarm Intelligence.
+- [ ] **Smart Interruption Handling**
+  - **Description**: Better handling of user interruptions during speech. If the user speaks while James is talking, cut off immediately and listen (Barge-in).
+  - **Technical Notes**: Tune VAD and audio output cancellation.
+  - **Status**: Idea
