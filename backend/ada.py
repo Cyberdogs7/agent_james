@@ -129,6 +129,33 @@ dismiss_jules_session_tool = {
     }
 }
 
+stop_jules_session_tool = {
+    "name": "stop_jules_session",
+    "description": "Stops a running Jules session (stops polling) and dismisses it from the active view.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {"type": "STRING", "description": "The ID of the session to stop."}
+        },
+        "required": ["session_id"]
+    }
+}
+
+merge_pull_request_tool = {
+    "name": "merge_pull_request",
+    "description": "Merges a specific Pull Request on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "pull_number": {"type": "INTEGER", "description": "The number of the Pull Request to merge."},
+            "merge_method": {"type": "STRING", "description": "Optional merge method: 'merge', 'squash', or 'rebase'. Defaults to 'merge'."}
+        },
+        "required": ["owner", "repo", "pull_number"]
+    }
+}
+
 list_projects_tool = {
     "name": "list_projects",
     "description": "Lists all available projects.",
@@ -327,7 +354,7 @@ tools = [{'google_search': {}}, {"function_declarations": [
     iterate_cad_tool, set_timer_tool, set_reminder_tool, list_timers_tool,
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
     set_time_format_tool, get_datetime_tool, change_voice_tool, update_persona_tool,
-    display_dashboard_tool, dismiss_jules_session_tool,
+    display_dashboard_tool, dismiss_jules_session_tool, stop_jules_session_tool, merge_pull_request_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 if pyaudio:
@@ -1346,6 +1373,37 @@ class AudioLoop:
         success, msg = self.project_manager.dismiss_jules_session(session_id)
         return msg
 
+    async def handle_stop_jules_session(self, session_id):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Stopping session: {session_id}")
+
+        # Stop polling in the agent
+        self.jules_agent.stop_polling(session_id)
+
+        # Dismiss from UI
+        success, msg = self.project_manager.dismiss_jules_session(session_id)
+        return f"Session stopped and dismissed: {msg}"
+
+    async def handle_merge_pull_request(self, owner, repo, pull_number, merge_method="merge"):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [GIT] Merging PR #{pull_number} on {owner}/{repo}")
+
+        token = self.project_manager.get_github_token()
+        if not token:
+            return "GitHub token not found. Please add it to your settings."
+
+        from backend.github_client import GitHubClient
+        client = GitHubClient(token)
+        result = await client.merge_pull_request(owner, repo, pull_number, merge_method)
+
+        if result and result.get("merged"):
+            return f"Successfully merged PR #{pull_number}."
+        elif result:
+             msg = result.get("message", "Unknown error")
+             return f"Failed to merge PR: {msg}"
+        else:
+            return "Failed to merge PR: Network or API error."
+
     async def handle_focused_session(self, session_id):
         """Notifies the model that the user is focusing on a specific session."""
         if INCLUDE_RAW_LOGS:
@@ -2263,6 +2321,32 @@ User: "What's the weather in London?"
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'dismiss_jules_session'")
                                     session_id = fc.args.get("session_id")
                                     result = await self.handle_dismiss_jules_session(session_id)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "stop_jules_session":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'stop_jules_session'")
+                                    session_id = fc.args.get("session_id")
+                                    result = await self.handle_stop_jules_session(session_id)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "merge_pull_request":
+                                    owner = fc.args["owner"]
+                                    repo = fc.args["repo"]
+                                    pull_number = int(fc.args["pull_number"])
+                                    merge_method = fc.args.get("merge_method", "merge")
+
+                                    result = await self.handle_merge_pull_request(owner, repo, pull_number, merge_method)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
