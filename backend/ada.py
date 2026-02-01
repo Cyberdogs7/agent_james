@@ -8,7 +8,6 @@ import traceback
 from dotenv import load_dotenv
 import cv2
 import numpy as np
-import pyaudio
 try:
     import pyaudio
 except ImportError:
@@ -869,6 +868,13 @@ class AudioLoop:
 
 
 
+    @staticmethod
+    def _perform_file_write(final_path, content):
+        """Helper to perform file I/O in a thread."""
+        os.makedirs(os.path.dirname(final_path), exist_ok=True)
+        with open(final_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
     async def handle_write_file(self, path, content):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [FS] Writing file: '{path}'")
@@ -914,9 +920,7 @@ class AudioLoop:
 
         try:
             # Ensure parent exists
-            os.makedirs(os.path.dirname(final_path), exist_ok=True)
-            with open(final_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+            await asyncio.to_thread(self._perform_file_write, final_path, content)
             result = f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
         except Exception as e:
             result = f"Failed to write file '{path}': {str(e)}"
