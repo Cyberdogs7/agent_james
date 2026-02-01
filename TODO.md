@@ -45,12 +45,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Integrate a vector DB (Chroma/Pinecone) with `MemoryManager`.
   - **Status**: Idea
 
-- [ ] **"The Nagging Secretary" (Smart Follow-up)**
+- [x] **"The Nagging Secretary" (Smart Follow-up)**
   - **Description**: Proactive verbal nudges for stalled processes.
   - **Behavior**: Monitor "Pending" Jules sessions or PRs. If no movement for >2 hours, verbally intervene. "Sir, the frontend refactor is waiting for your review. Shall I merge it?"
   - **User Impact**: Prevents bottlenecks in the agent fleet.
   - **Technical Notes**: Logic needs to be added to `AutomationEngine` to track "time since last update" for specific states.
-  - **Status**: Partially Implemented
+  - **Status**: Implemented
 
 ---
 

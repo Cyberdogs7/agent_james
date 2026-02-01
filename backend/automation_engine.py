@@ -4,6 +4,11 @@ import json
 import traceback
 from datetime import datetime, timedelta
 
+try:
+    from backend.github_client import GitHubClient
+except ImportError:
+    from github_client import GitHubClient
+
 class AutomationEngine:
     def __init__(self, task_manager, project_manager, ada_instance=None):
         self.task_manager = task_manager
@@ -11,6 +16,13 @@ class AutomationEngine:
         self.ada = ada_instance
         self.running = False
         self.stop_event = asyncio.Event()
+        self.last_nag_times = {} # {id: timestamp}
+        self._last_stalled_check = 0
+
+        # Configuration
+        self.STALL_THRESHOLD = 7200  # 2 hours
+        self.NAG_COOLDOWN = 86400    # 24 hours
+        self.CHECK_INTERVAL = 300    # 5 minutes
 
     async def start(self):
         """Starts the automation loop."""
@@ -30,6 +42,16 @@ class AutomationEngine:
             except Exception as e:
                 print(f"[AutomationEngine] Error in loop: {e}")
                 traceback.print_exc()
+
+            # Check for stalled items (Nagging Secretary) every 5 minutes
+            now = time.time()
+            if now - self._last_stalled_check > self.CHECK_INTERVAL:
+                try:
+                    await self._monitor_stalled_items()
+                    self._last_stalled_check = now
+                except Exception as e:
+                    print(f"[AutomationEngine] Error checking stalled items: {e}")
+                    traceback.print_exc()
 
             # Run every minute
             # We calculate sleep to align with the next minute start for cleaner scheduling
@@ -63,6 +85,95 @@ class AutomationEngine:
         print("[AutomationEngine] Stopping...")
         self.stop_event.set()
         self.running = False
+
+    async def _monitor_stalled_items(self):
+        """Checks for stalled Jules sessions and PRs and notifies (nags) the user."""
+        print("[AutomationEngine] Checking for stalled items...")
+        now = time.time()
+        now_dt = datetime.now()
+
+        # 1. Check Jules Sessions
+        if self.ada and self.ada.jules_agent:
+            sessions = await self.ada.jules_agent.list_sessions()
+            for session in sessions:
+                state = session.get('state')
+                if state in ['COMPLETED', 'FAILED']:
+                    continue
+
+                # Check updateTime
+                update_time_str = session.get('updateTime') or session.get('createTime')
+                if not update_time_str:
+                    continue
+
+                try:
+                     # Handle Z suffix
+                    if update_time_str.endswith('Z'):
+                         update_time_str = update_time_str[:-1]
+
+                    # Simple parsing (assuming UTC for Z or local if no Z, but API usually returns UTC)
+                    last_update_dt = datetime.fromisoformat(update_time_str)
+
+                    # datetime.utcnow() returns naive UTC. If parsed date is naive and came from 'Z', it is UTC.
+                    time_diff = (datetime.utcnow() - last_update_dt).total_seconds()
+
+                    if time_diff > self.STALL_THRESHOLD:
+                        session_id = session.get('name')
+                        title = session.get('title', 'Untitled Task')
+
+                        # Check cooldown
+                        last_nag = self.last_nag_times.get(session_id, 0)
+                        if now - last_nag > self.NAG_COOLDOWN:
+                            msg = f"Sir, Jules session '{title}' has been stalling for over 2 hours. Shall I intervene?"
+                            print(f"[AutomationEngine] NAGGING: {msg}")
+                            await self.ada.handle_external_event({
+                                "type": "notification",
+                                "message": msg
+                            })
+                            self.last_nag_times[session_id] = now
+
+                except Exception as e:
+                    print(f"[AutomationEngine] Error checking session {session.get('name')}: {e}")
+
+        # 2. Check Pull Requests
+        token = self.project_manager.get_github_token()
+        if token:
+            client = GitHubClient(token)
+            fleet = self.project_manager.load_fleet()
+
+            for repo in fleet:
+                try:
+                    owner = repo.get('owner')
+                    name = repo.get('name')
+                    if not owner or not name: continue
+
+                    prs = await client.list_pull_requests(owner, name)
+                    if not prs: continue
+
+                    for pr in prs:
+                        updated_at_str = pr.get('updated_at')
+                        if not updated_at_str: continue
+
+                        if updated_at_str.endswith('Z'):
+                            updated_at_str = updated_at_str[:-1]
+
+                        updated_dt = datetime.fromisoformat(updated_at_str)
+                        time_diff = (datetime.utcnow() - updated_dt).total_seconds()
+
+                        if time_diff > self.STALL_THRESHOLD:
+                            pr_url = pr.get('html_url')
+                            title = pr.get('title')
+
+                            last_nag = self.last_nag_times.get(pr_url, 0)
+                            if now - last_nag > self.NAG_COOLDOWN:
+                                msg = f"Sir, the Pull Request '{title}' on {name} is waiting for review. Shall I merge it?"
+                                print(f"[AutomationEngine] NAGGING: {msg}")
+                                await self.ada.handle_external_event({
+                                    "type": "notification",
+                                    "message": msg
+                                })
+                                self.last_nag_times[pr_url] = now
+                except Exception as e:
+                     print(f"[AutomationEngine] Error checking PRs for {repo.get('name')}: {e}")
 
     async def _check_schedules(self):
         """Iterates through tasks and executes scheduled ones."""
