@@ -33,7 +33,7 @@ if sys.version_info < (3, 11, 0):
     asyncio.TaskGroup = taskgroup.TaskGroup
     asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
 
-from tools import tools_list
+from tools import tools_list, apply_task_fix_tool
 
 if pyaudio:
     FORMAT = pyaudio.paInt16
@@ -2916,6 +2916,20 @@ User: "What's the weather in London?"
                                     result = self.timer_agent.delete_entry(name)
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "apply_task_fix":
+                                    task_id = fc.args["task_id"]
+                                    if self.automation_engine:
+                                        success, msg = self.automation_engine.apply_fix(task_id)
+                                    else:
+                                        msg = "Automation Engine not available."
+
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": msg}
                                     )
                                     function_responses.append(function_response)
 

@@ -1393,6 +1393,23 @@ async def delete_task(sid, data):
              await sio.emit('error', {'msg': 'Task not found'})
 
 @sio.event
+async def apply_task_fix(sid, data):
+    task_id = data.get('id')
+    print(f"[SERVER] Apply Task Fix: {task_id}")
+    if automation_engine:
+        success, msg = automation_engine.apply_fix(task_id)
+        if success:
+            await sio.emit('status', {'msg': msg})
+            # Force update
+            if dashboard_task:
+                data = await audio_loop.get_dashboard_data()
+                await sio.emit('dashboard_update', data)
+        else:
+            await sio.emit('error', {'msg': msg})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
 async def get_fleet_status(sid):
     """Fetches the current status of all git repos via GitHub API."""
     print(f"[SERVER] Client {sid} requested fleet status.")

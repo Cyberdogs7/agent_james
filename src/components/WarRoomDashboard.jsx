@@ -106,6 +106,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         if (socket) socket.emit('run_task', { id });
     };
 
+    const handleApplyFix = (id) => {
+        if (socket) socket.emit('apply_task_fix', { id });
+    };
+
     const handleDismissJules = (id) => {
         if (socket) socket.emit('dismiss_jules_session', { id });
     };
@@ -239,10 +243,23 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                     </div>
                                 ) : (
                                     tasks.map((task, i) => (
-                                        <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors group/item">
+                                        <div key={i} className={`bg-gold9/5 border p-3 rounded hover:bg-gold9/10 transition-colors group/item ${task.status === 'failed' ? 'border-red-500/50 bg-red-500/5' : 'border-gold9/10'}`}>
                                             <div className="flex justify-between items-start mb-1">
-                                                <div className="text-sm font-bold text-gold9">{task.title}</div>
+                                                <div className="text-sm font-bold text-gold9">
+                                                    {task.title}
+                                                    {task.status === 'failed' && <span className="ml-2 text-[10px] bg-red-500 text-white px-1 rounded">FAILED</span>}
+                                                </div>
                                                 <div className="flex items-center gap-2">
+                                                    {task.healing && (
+                                                        <button
+                                                            onClick={() => handleApplyFix(task.id)}
+                                                            className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold hover:bg-green-400 transition-colors flex items-center gap-1"
+                                                            title="Apply AI Fix"
+                                                        >
+                                                            <Zap size={10} fill="currentColor" />
+                                                            APPLY FIX
+                                                        </button>
+                                                    )}
                                                     {task.trigger.type === 'manual' && (
                                                         <button
                                                             onClick={() => handleRunTask(task.id)}
@@ -257,9 +274,14 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div className="text-[10px] text-gold9/50 flex gap-2">
+                                            <div className="text-[10px] text-gold9/50 flex gap-2 items-center">
                                                 <span className="bg-gold9/10 px-1 rounded">TRIG: {task.trigger.type.toUpperCase()}</span>
                                                 <span className="bg-blue-500/10 text-blue-400 px-1 rounded">ACT: {task.action.type.toUpperCase()}</span>
+                                                {task.healing && (
+                                                    <span className="text-green-400 italic ml-auto">
+                                                        Repair ready
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     ))
