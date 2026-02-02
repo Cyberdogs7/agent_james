@@ -347,6 +347,15 @@ display_dashboard_tool = {
     }
 }
 
+get_morning_briefing_tool = {
+    "name": "get_morning_briefing",
+    "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
 tools = [{'google_search': {}}, {"function_declarations": [
     generate_cad, run_web_agent, create_project_tool, switch_project_tool,
     list_projects_tool, list_smart_devices_tool, control_light_tool,
@@ -355,6 +364,7 @@ tools = [{'google_search': {}}, {"function_declarations": [
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
     set_time_format_tool, get_datetime_tool, change_voice_tool, update_persona_tool,
     display_dashboard_tool, dismiss_jules_session_tool, stop_jules_session_tool, merge_pull_request_tool,
+    get_morning_briefing_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 if pyaudio:
@@ -388,6 +398,7 @@ class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
         self.sio = sio
         self.slack_agent = slack_agent
+        self.automation_engine = None
         self.video_mode = video_mode
         self.on_audio_data = on_audio_data
         self.on_video_frame = on_video_frame
@@ -1630,6 +1641,36 @@ class AudioLoop:
             return "War Room Dashboard displayed."
         return "Failed to display dashboard."
 
+    async def handle_get_morning_briefing(self):
+        if INCLUDE_RAW_LOGS:
+            print("[ADA DEBUG] [TOOL] Generating/Retrieving Morning Briefing")
+
+        report = None
+        if self.automation_engine and self.automation_engine.current_briefing_report:
+            report = self.automation_engine.current_briefing_report
+            # Mark as delivered
+            self.automation_engine.briefing_status = "DELIVERED"
+        else:
+            # Generate on fly
+            report = await self.project_manager.generate_fleet_report()
+
+        if not report:
+            return "Failed to generate briefing."
+
+        # Format for speech
+        prs = report.get('prs', [])
+        total_repos = report.get('total_repos', 0)
+
+        summary = f"Morning Briefing. I am monitoring {total_repos} repositories.\n"
+        if prs:
+            summary += f"You have {len(prs)} pending Pull Requests:\n"
+            for pr in prs:
+                summary += f"- {pr['repo']}: #{pr['number']} '{pr['title']}'\n"
+        else:
+            summary += "All Pull Requests are cleared.\n"
+
+        return summary
+
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
 
@@ -2756,6 +2797,15 @@ User: "What's the weather in London?"
                                     if INCLUDE_RAW_LOGS:
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'display_dashboard'")
                                     result = await self.handle_display_dashboard()
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id, name=fc.name, response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "get_morning_briefing":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_morning_briefing'")
+                                    result = await self.handle_get_morning_briefing()
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )

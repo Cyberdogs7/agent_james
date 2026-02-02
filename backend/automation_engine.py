@@ -19,6 +19,11 @@ class AutomationEngine:
         self.last_nag_times = {} # {id: timestamp}
         self._last_stalled_check = 0
 
+        # Briefing State
+        self.briefing_status = "IDLE" # IDLE, PENDING, DELIVERED
+        self.current_briefing_report = None
+        self.briefing_time = "09:00" # Default
+
         # Configuration
         self.STALL_THRESHOLD = 7200  # 2 hours
         self.NAG_COOLDOWN = 86400    # 24 hours
@@ -39,6 +44,7 @@ class AutomationEngine:
         while not self.stop_event.is_set():
             try:
                 await self._check_schedules()
+                await self._check_briefing_schedule()
             except Exception as e:
                 print(f"[AutomationEngine] Error in loop: {e}")
                 traceback.print_exc()
@@ -85,6 +91,29 @@ class AutomationEngine:
         print("[AutomationEngine] Stopping...")
         self.stop_event.set()
         self.running = False
+
+    async def _check_briefing_schedule(self):
+        """Checks if it's time to generate the morning briefing."""
+        now_dt = datetime.now()
+        current_hm = now_dt.strftime("%H:%M")
+
+        # Reset IDLE state at midnight (or just if date changes)
+        # Simple logic: If it's briefing time and state is IDLE, generate.
+        if current_hm == self.briefing_time and self.briefing_status == "IDLE":
+             print("[AutomationEngine] Generating Morning Briefing...")
+             try:
+                 report = await self.project_manager.generate_fleet_report()
+                 self.current_briefing_report = report
+                 self.briefing_status = "PENDING"
+                 print("[AutomationEngine] Briefing Generated. Status: PENDING")
+             except Exception as e:
+                 print(f"[AutomationEngine] Failed to generate briefing: {e}")
+
+        # Reset logic: If it's NOT briefing time (e.g. 09:01), ensure we don't re-trigger tomorrow if we stay PENDING?
+        # Ideally we reset to IDLE at midnight.
+        if current_hm == "00:00":
+            self.briefing_status = "IDLE"
+            self.current_briefing_report = None
 
     async def _monitor_stalled_items(self):
         """Checks for stalled Jules sessions and PRs and notifies (nags) the user."""
