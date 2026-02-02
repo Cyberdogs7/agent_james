@@ -20,7 +20,7 @@ class AutomationEngine:
         self._last_stalled_check = 0
 
         # Briefing State
-        self.briefing_status = "IDLE" # IDLE, PENDING, DELIVERED
+        self.briefing_status = "IDLE" # IDLE, PENDING, OFFERED, DELIVERED
         self.current_briefing_report = None
         self.briefing_time = "09:00" # Default
 

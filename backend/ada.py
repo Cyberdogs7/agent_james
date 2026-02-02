@@ -493,12 +493,43 @@ class AudioLoop:
 
         self.sct = None
 
+        # Initialize Face Detector for Presence
+        try:
+            # Try to load from cv2 data
+            self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [WARN] Failed to load face cascade: {e}")
+            self.face_cascade = None
+        self._last_face_check_time = 0
+
         # Sync Initial Project State
         if self.on_project_update:
             # We need to defer this slightly or just call it. 
             # Since this is init, loop might not be running, but on_project_update in server.py uses asyncio.create_task which needs a loop.
             # We will handle this by calling it in run() or just print for now.
             pass
+
+    async def _trigger_morning_briefing_offer(self):
+        """Triggers the morning briefing offer if pending."""
+        if self.automation_engine and self.automation_engine.briefing_status == "PENDING":
+            if INCLUDE_RAW_LOGS:
+                print("[ADA DEBUG] [BRIEFING] Triggering Morning Briefing Offer (Presence/Interaction detected).")
+
+            # Mark as OFFERED so we don't spam
+            self.automation_engine.briefing_status = "OFFERED"
+
+            # Send System Notification to prompt the model
+            # We include the time generated to add context
+            gen_time = "09:00" # Default or fetch from report timestamp if available
+            msg = f"System Notification: The user's Daily Morning Briefing is ready (generated at {gen_time}). Please politely inform the user: 'Good morning, Sir. I have your daily briefing ready. Would you like to hear it?'"
+
+            if self.session:
+                try:
+                    await self.session.send(input=msg, end_of_turn=False)
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send briefing offer: {e}")
 
     def flush_chat(self):
         """Forces the current chat buffer to be written to log."""
@@ -790,6 +821,10 @@ class AudioLoop:
                     if not self._is_speaking:
                         # NEW Speech Utterance Started
                         self._is_speaking = True
+
+                        # Trigger Briefing if pending (First Interaction)
+                        asyncio.create_task(self._trigger_morning_briefing_offer())
+
                         if INCLUDE_RAW_LOGS:
                             print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Starting Stream.")
                         
@@ -2984,7 +3019,27 @@ User: "What's the weather in London?"
                 if cap is None or not cap.isOpened():
                      cap = await asyncio.to_thread(cv2.VideoCapture, 0)
 
-                frame = await asyncio.to_thread(self._get_frame, cap)
+                # Manual capture to support face detection on raw frame
+                ret, raw_frame = await asyncio.to_thread(cap.read)
+                if ret:
+                     # Face Detect (Presence)
+                     if self.face_cascade:
+                         now = time.time()
+                         if now - self._last_face_check_time > 1.0:
+                             self._last_face_check_time = now
+                             try:
+                                 gray = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY)
+                                 # Detect faces
+                                 faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
+                                 if len(faces) > 0:
+                                     await self._trigger_morning_briefing_offer()
+                             except Exception as e:
+                                 if INCLUDE_RAW_LOGS:
+                                     print(f"[ADA DEBUG] [WARN] Face detection error: {e}")
+
+                     frame = self._process_frame(raw_frame)
+                else:
+                     frame = None
 
             elif self.video_mode == "screen":
                 if cap and cap.isOpened():
@@ -3031,6 +3086,28 @@ User: "What's the weather in London?"
         frame_bgr = cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
 
         return self._process_frame(frame_bgr)
+
+    def _read_and_detect(self, cap):
+        """Reads frame, runs detection if needed, and processes for sending."""
+        ret, raw_frame = cap.read()
+        if not ret:
+            return None, False
+
+        detected = False
+        if self.face_cascade:
+            now = time.time()
+            if now - self._last_face_check_time > 1.0:
+                self._last_face_check_time = now
+                try:
+                    gray = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY)
+                    faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
+                    if len(faces) > 0:
+                        detected = True
+                except Exception:
+                    pass
+
+        frame_payload = self._process_frame(raw_frame)
+        return frame_payload, detected
 
     def close(self):
         if self.sct:
