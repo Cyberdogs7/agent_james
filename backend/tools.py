@@ -69,9 +69,28 @@ spawn_swarm_agent_tool = {
             "source": {
                 "type": "STRING",
                 "description": "Optional: The source context (repo) for the agent."
+            },
+            "swarm_id": {
+                "type": "STRING",
+                "description": "Optional: The ID of the swarm/mission this agent belongs to."
             }
         },
         "required": ["role", "prompt"]
+    }
+}
+
+create_swarm_mission_tool = {
+    "name": "create_swarm_mission",
+    "description": "Initializes a new Swarm Mission. Returns a swarm_id that should be passed to spawn_swarm_agent calls.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "title": {
+                "type": "STRING",
+                "description": "The title of the mission (e.g., 'Refactor Authentication', 'Fix UI Bugs')."
+            }
+        },
+        "required": ["title"]
     }
 }
 
@@ -596,6 +615,7 @@ tools_list = [{"function_declarations": [
     read_file_tool,
     run_jules_agent_tool,
     spawn_swarm_agent_tool,
+    create_swarm_mission_tool,
     send_jules_feedback_tool,
     list_jules_sources_tool,
     list_jules_sessions_tool,

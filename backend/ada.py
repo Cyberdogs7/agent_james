@@ -1267,7 +1267,18 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
-    async def handle_jules_request(self, prompt, source=None, role=None):
+    async def handle_create_swarm_mission(self, title):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [SWARM] Creating mission: '{title}'")
+        swarm_id, msg = self.project_manager.create_swarm(title)
+
+        if self.sio:
+             swarms = self.project_manager.get_swarms()
+             await self.sio.emit('swarms_update', swarms)
+
+        return f"{msg} (ID: {swarm_id})"
+
+    async def handle_jules_request(self, prompt, source=None, role=None, on_session_created=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}' (Role: {role})")
 
@@ -1330,6 +1341,12 @@ class AudioLoop:
                 session_id = session['name']
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [JULES] Session created: {session_id}")
+
+                if on_session_created:
+                    if asyncio.iscoroutinefunction(on_session_created):
+                        await on_session_created(session_id)
+                    else:
+                        on_session_created(session_id)
 
                 try:
                     title = session.get('title', session_id)
@@ -2037,11 +2054,32 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                     role = fc.args.get("role")
                                     prompt = fc.args.get("prompt")
                                     source = fc.args.get("source")
+                                    swarm_id = fc.args.get("swarm_id")
 
                                     # Prepend role to prompt for context, but also pass role explicitly
                                     full_prompt = f"Role: {role}\nTask: {prompt}"
 
-                                    result = await self.handle_jules_request(full_prompt, source, role=role)
+                                    async def _on_created(sid):
+                                        if swarm_id:
+                                            success, msg = self.project_manager.add_session_to_swarm(swarm_id, sid)
+                                            if INCLUDE_RAW_LOGS:
+                                                print(f"[ADA DEBUG] [SWARM] Added session {sid} to swarm {swarm_id}: {msg}")
+
+                                            if self.sio:
+                                                swarms = self.project_manager.get_swarms()
+                                                await self.sio.emit('swarms_update', swarms)
+
+                                    result = await self.handle_jules_request(full_prompt, source, role=role, on_session_created=_on_created)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "create_swarm_mission":
+                                    title = fc.args.get("title")
+                                    result = await self.handle_create_swarm_mission(title)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,

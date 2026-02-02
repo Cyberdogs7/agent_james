@@ -420,6 +420,62 @@ class ProjectManager:
         """Returns the entire UI state dictionary."""
         return self._load_jules_ui_state()
 
+    # --- Swarm Management ---
+    def _get_swarms_path(self):
+        return self.get_current_project_path() / "swarms.json"
+
+    def _load_swarms(self):
+        path = self._get_swarms_path()
+        if not path.exists():
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[ProjectManager] [ERR] Failed to read swarms: {e}")
+            return {}
+
+    def _save_swarms(self, swarms):
+        path = self._get_swarms_path()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(swarms, f, indent=4)
+        except Exception as e:
+            print(f"[ProjectManager] [ERR] Failed to save swarms: {e}")
+
+    def create_swarm(self, title: str):
+        """Creates a new swarm mission."""
+        import uuid
+        swarm_id = str(uuid.uuid4())
+        swarms = self._load_swarms()
+
+        swarms[swarm_id] = {
+            "id": swarm_id,
+            "title": title,
+            "created_at": time.time(),
+            "sessions": []
+        }
+        self._save_swarms(swarms)
+        return swarm_id, f"Swarm '{title}' created with ID {swarm_id}."
+
+    def add_session_to_swarm(self, swarm_id: str, session_id: str):
+        """Adds a session to a swarm."""
+        swarms = self._load_swarms()
+        if swarm_id not in swarms:
+            return False, "Swarm not found."
+
+        if session_id not in swarms[swarm_id]["sessions"]:
+            swarms[swarm_id]["sessions"].append(session_id)
+            self._save_swarms(swarms)
+            return True, f"Session {session_id} added to swarm {swarm_id}."
+        return True, "Session already in swarm."
+
+    def get_swarms(self):
+        """Returns all swarms."""
+        swarms = self._load_swarms()
+        # Return as list sorted by creation time desc
+        return sorted(swarms.values(), key=lambda x: x.get("created_at", 0), reverse=True)
+
     def set_time_format(self, time_format: str):
         """Sets the time format for the project."""
         if time_format not in ["12h", "24h"]:

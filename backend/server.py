@@ -1823,6 +1823,18 @@ async def sync_fleet(sid):
         # Refresh fleet view
         await get_fleet_status(sid)
 
+@sio.event
+async def get_swarms(sid):
+    """Fetches all active swarms."""
+    print(f"[SERVER] Client {sid} requested swarms.")
+    # Use global project_manager if audio_loop is not ready
+    pm = audio_loop.project_manager if (audio_loop and audio_loop.project_manager) else project_manager
+    if pm:
+        swarms = pm.get_swarms()
+        await sio.emit('swarms_update', swarms)
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
     print(f"[SERVER] Starting server on port {port}")
