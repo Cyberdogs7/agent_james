@@ -17,12 +17,12 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Triggered by schedule (09:00) but delivered only upon Face Auth or VAD (first interaction). Uses `AutomationEngine` to aggregate data.
   - **Status**: In Progress
 
-- [ ] **Smart Merge Suggestions (Fleet Command)**
+- [x] **Smart Merge Suggestions (Fleet Command)**
   - **Description**: Proactive recommendations to merge Pull Requests that are passing CI and have been open for a set duration.
   - **Wow Factor**: "The 'fix-auth' PR is passing and has been open for 24 hours. Shall I merge it for you?"
   - **User Impact**: Reduces friction in the development lifecycle.
   - **Technical Notes**: Extends "Nagging Secretary" to include "Green & Old" PR detection. Uses `merge_pull_request` tool.
-  - **Status**: In Progress
+  - **Status**: Implemented
 
 - [ ] **Adaptive Persona Engine**
   - **Description**: James detects user sentiment (frustration, focus, casual) via voice or text analysis and adjusts his personality.
