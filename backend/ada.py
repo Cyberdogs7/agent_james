@@ -2186,6 +2186,17 @@ User: "What's the weather in London?"
                                     )
                                     function_responses.append(function_response)
 
+                                elif fc.name == "set_auto_merge_threshold":
+                                    hours = fc.args["hours"]
+                                    seconds = int(hours * 3600)
+                                    success, msg = self.project_manager.update_project_config({"auto_merge_threshold": seconds})
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": f"Auto-merge threshold set to {hours} hours ({seconds} seconds)."}
+                                    )
+                                    function_responses.append(function_response)
+
                                 elif fc.name == "add_architectural_memory":
                                     content = fc.args["content"]
                                     tags = fc.args.get("tags")
