@@ -10,19 +10,19 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] **"Pre-Cognition" (Anticipatory Context)**
-  - **Description**: James predicts what the user needs before they ask. If the user opens a log file, James analyzes it immediately. If the user switches to a Figma tab, James switches vision mode to design analysis.
-  - **Wow Factor**: "Sir, I noticed you're looking at the server logs. I've already identified the 500 error in the auth module."
-  - **User Impact**: Zero-latency assistance.
-  - **Technical Notes**: Hook into active window title detection (`pygetwindow`) and trigger specialized `mss` vision analysis when context changes.
-  - **Status**: Idea
+- [ ] **Morning Briefing (Presence-Aware)**
+  - **Description**: A daily intelligence report delivered verbally by James when the user first appears or speaks in the morning. Covers fleet status, PRs, and critical issues.
+  - **Wow Factor**: "Good morning, Sir. I have your briefing. 3 PRs are pending, and the 'frontend' build is failing."
+  - **User Impact**: Starts the day with high-level situational awareness.
+  - **Technical Notes**: Triggered by schedule (09:00) but delivered only upon Face Auth or VAD (first interaction). Uses `AutomationEngine` to aggregate data.
+  - **Status**: In Progress
 
-- [ ] **Self-Healing Automations**
-  - **Description**: If a scheduled task or automation fails (e.g., "Daily Build"), James automatically spawns a Jules Agent to debug the error, fix the script, and re-run it.
-  - **Wow Factor**: The system maintains itself. "The nightly build failed, but I patched the dependency issue and it passed on the second attempt."
-  - **User Impact**: Reliability without maintenance.
-  - **Technical Notes**: Catch `traceback` in `AutomationEngine`, capture stdout/stderr, and pass to a dedicated `JulesAgent` with a "fix-it" system prompt.
-  - **Status**: Idea
+- [ ] **Smart Merge Suggestions (Fleet Command)**
+  - **Description**: Proactive recommendations to merge Pull Requests that are passing CI and have been open for a set duration.
+  - **Wow Factor**: "The 'fix-auth' PR is passing and has been open for 24 hours. Shall I merge it for you?"
+  - **User Impact**: Reduces friction in the development lifecycle.
+  - **Technical Notes**: Extends "Nagging Secretary" to include "Green & Old" PR detection. Uses `merge_pull_request` tool.
+  - **Status**: In Progress
 
 - [ ] **Adaptive Persona Engine**
   - **Description**: James detects user sentiment (frustration, focus, casual) via voice or text analysis and adjusts his personality.

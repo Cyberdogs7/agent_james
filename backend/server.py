@@ -302,6 +302,10 @@ async def connect(sid, environ):
         print(f"[SERVER] Auth status change: {is_auth}")
         await sio.emit('auth_status', {'authenticated': is_auth})
 
+        if is_auth:
+            # Trigger briefing check
+            asyncio.create_task(check_morning_briefing_trigger())
+
     # Callback for Auth Camera Frames
     async def on_auth_frame(frame_b64):
         await sio.emit('auth_frame', {'image': frame_b64})
@@ -492,7 +496,14 @@ async def start_audio(sid, data=None):
         # Connect Automation Engine to Ada for notifications
         if automation_engine:
             automation_engine.ada = audio_loop
-            print("[SERVER] Connected Automation Engine to Ada instance.")
+            audio_loop.automation_engine = automation_engine
+            print("[SERVER] Connected Automation Engine to Ada instance (Bidirectional).")
+
+        # Trigger initial briefing check after a short delay to allow connection
+        async def delayed_briefing_check():
+            await asyncio.sleep(3)
+            await check_morning_briefing_trigger()
+        asyncio.create_task(delayed_briefing_check())
 
         print("Emitting 'A.D.A Started'")
         await sio.emit('status', {'msg': 'A.D.A Started'})
@@ -520,6 +531,25 @@ async def start_audio(sid, data=None):
         await sio.emit('error', {'msg': f"Failed to start: {str(e)}"})
         audio_loop = None # Ensure we can try again
 
+
+async def check_morning_briefing_trigger():
+    """Checks if a morning briefing is pending and triggers it if appropriate."""
+    if not automation_engine or not audio_loop:
+        return
+
+    if automation_engine.briefing_status == "PENDING":
+        print("[SERVER] Triggering Morning Briefing Offer...")
+
+        # Use a system notification to prompt the model
+        # We phrase it as a "System Notification" telling the model what to do.
+        msg = "System Notification: The user's Daily Morning Briefing is ready (generated at 09:00). Please politely inform the user: 'Good morning, Sir. I have your daily briefing ready. Would you like to hear it?'"
+
+        # Ensure session is active.
+        if audio_loop.session:
+             try:
+                 await audio_loop.session.send(input=msg, end_of_turn=True)
+             except Exception as e:
+                 print(f"[SERVER] Failed to trigger briefing: {e}")
 
 async def monitor_printers_loop():
     """Background task to query printer status periodically."""

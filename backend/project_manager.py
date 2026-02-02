@@ -627,3 +627,52 @@ class ProjectManager:
                 events.append(res)
 
         return events
+
+    async def generate_fleet_report(self):
+        """Generates a summary of all fleet repositories (PRs, Issues, etc.)"""
+        fleet = self.load_fleet()
+        token = self.get_github_token()
+
+        report = {
+            "prs": [],
+            "stale_prs": [],
+            "total_repos": len(fleet),
+            "generated_at": time.time()
+        }
+
+        if not token:
+            report["error"] = "No GitHub token configured."
+            return report
+
+        client = GitHubClient(token)
+
+        for repo in fleet:
+            try:
+                owner = repo.get('owner')
+                name = repo.get('name')
+
+                # Fetch PRs
+                prs = await client.list_pull_requests(owner, name)
+                if prs:
+                    for pr in prs:
+                        pr_info = {
+                            "repo": f"{owner}/{name}",
+                            "number": pr.get("number"),
+                            "title": pr.get("title"),
+                            "url": pr.get("html_url"),
+                            "created_at": pr.get("created_at"),
+                            "updated_at": pr.get("updated_at")
+                        }
+                        report["prs"].append(pr_info)
+
+                        # Check stale (e.g. > 24 hours without update)
+                        # We can refine this logic later
+                        updated_at = pr.get("updated_at")
+                        if updated_at:
+                             # Basic stale check logic if needed
+                             pass
+
+            except Exception as e:
+                print(f"[ProjectManager] Error fetching report for {repo.get('name')}: {e}")
+
+        return report
