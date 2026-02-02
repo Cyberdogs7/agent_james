@@ -364,7 +364,7 @@ tools = [{'google_search': {}}, {"function_declarations": [
     delete_entry_tool, modify_timer_tool, check_for_updates_tool, apply_update_tool,
     set_time_format_tool, get_datetime_tool, change_voice_tool, update_persona_tool,
     display_dashboard_tool, dismiss_jules_session_tool, stop_jules_session_tool, merge_pull_request_tool,
-    get_morning_briefing_tool, apply_task_fix_tool,
+    get_morning_briefing_tool,
 ] + tools_list[0]['function_declarations'][1:]}]
 
 if pyaudio:

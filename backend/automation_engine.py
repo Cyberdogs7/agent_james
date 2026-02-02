@@ -517,14 +517,6 @@ INSTRUCTIONS:
     def apply_fix(self, task_id):
         """Applies the proposed fix for a failed task."""
         current_path = self.project_manager.get_current_project_path()
-        # Note: If tasks are cross-project, this might need better project resolution
-        # But apply_fix is usually triggered from War Room which is context-aware?
-        # Actually, self.task_manager is initialized with current project path in server.py
-        # But if the failed task was from another project (triggered by git event), we need that project context.
-        # For now, assume current project or scan.
-
-        # Try to find task in current project first
-        task = None
 
         # We need to find the task to get the 'healing' data
         tasks = self.task_manager.list_tasks()
@@ -533,29 +525,40 @@ INSTRUCTIONS:
         target_manager = self.task_manager
 
         if not task:
-            # Check other projects? (Expensive/Complex)
-            # For this iteration, assume current project context in War Room matches.
             return False, "Task not found."
 
         healing = task.get('healing')
         if not healing:
             return False, "No fix available for this task."
 
-        original_path = healing.get('script_path')
+        raw_script_path = healing.get('script_path')
         fix_code = healing.get('fix_code')
 
-        if not original_path or not fix_code:
+        if not raw_script_path or not fix_code:
             return False, "Invalid healing data."
+
+        # Resolve path relative to project root if needed
+        # We try to use the same logic as _execute_task, but here we don't have project_context easily available from just ID.
+        # Assuming current project context for War Room actions is a reasonable constraint for V1.
+        # Or, we could store 'project' in the healing metadata.
+
+        # For now, resolve against current project path if relative
+        if not os.path.isabs(raw_script_path):
+            script_path = str(current_path / raw_script_path)
+        else:
+            script_path = raw_script_path
 
         try:
             # 1. Backup
-            if os.path.exists(original_path):
+            if os.path.exists(script_path):
                 timestamp = int(time.time())
-                backup_path = f"{original_path}.{timestamp}.bak"
-                shutil.copy2(original_path, backup_path)
+                backup_path = f"{script_path}.{timestamp}.bak"
+                shutil.copy2(script_path, backup_path)
+            else:
+                return False, f"Original file not found at {script_path}"
 
             # 2. Overwrite
-            with open(original_path, 'w', encoding='utf-8') as f:
+            with open(script_path, 'w', encoding='utf-8') as f:
                 f.write(fix_code)
 
             # 3. Reset Task
@@ -687,7 +690,13 @@ INSTRUCTIONS:
             # --- SELF HEALING LOGIC ---
             if act_type == 'run_script':
                 print("[AutomationEngine] Attempting to generate fix...")
-                fix_code = await self._generate_fix(act_value, str(e))
+
+                # Resolve path again for generating fix (since script_path local var might not be available if error happened early)
+                fix_target_path = act_value
+                if not os.path.isabs(fix_target_path):
+                    fix_target_path = str(target_path / fix_target_path)
+
+                fix_code = await self._generate_fix(fix_target_path, str(e))
 
                 if fix_code:
                     print("[AutomationEngine] Fix generated. Updating task state.")
