@@ -85,7 +85,7 @@ class JulesAgent:
             self._cache.clear()
             self._cache_expiry.clear()
 
-    async def create_session(self, prompt, source):
+    async def create_session(self, prompt, source, role=None):
         """Creates a new session in the Jules API."""
         source_context = {}
         if source:
@@ -105,10 +105,16 @@ class JulesAgent:
         # Sanitize title: remove newlines and limit length
         clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
         
+        # Format title with Role if provided
+        if role:
+            title = f"[{role.upper()}] {clean_title[:40]}"
+        else:
+            title = f"Jules: {clean_title[:50]}"
+
         data = {
             "prompt": prompt,
             "automationMode": "AUTO_CREATE_PR",
-            "title": f"Jules: {clean_title[:50]}"
+            "title": title
         }
         if source_context:
             data["sourceContext"] = source_context
@@ -121,9 +127,9 @@ class JulesAgent:
 
         return session
 
-    async def spawn_agent(self, prompt, source, callback=None):
+    async def spawn_agent(self, prompt, source, role=None, callback=None):
         """High-level method to create a session and immediately start polling it."""
-        session = await self.create_session(prompt, source)
+        session = await self.create_session(prompt, source, role=role)
         if session:
             session_id = session['name']
             self.start_polling(session_id, callback)

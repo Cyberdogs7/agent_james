@@ -1267,9 +1267,9 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
-    async def handle_jules_request(self, prompt, source=None):
+    async def handle_jules_request(self, prompt, source=None, role=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}'")
+            print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}' (Role: {role})")
 
         # We use the persistent instance self.jules_agent instead of creating a new one
         # to ensure centralized management of polling tasks.
@@ -1324,7 +1324,7 @@ class AudioLoop:
                     print(f"[ADA DEBUG] [ERR] Memory search failed: {e}")
 
             # Spawn the agent and start polling automatically via callback
-            session = await self.jules_agent.spawn_agent(final_prompt, source, callback=_jules_update_callback)
+            session = await self.jules_agent.spawn_agent(final_prompt, source, role=role, callback=_jules_update_callback)
 
             if session:
                 session_id = session['name']
@@ -1748,8 +1748,20 @@ User: "What's the weather in London?"
         # Load personality prompt from project config, with a default
         personality_prompt = project_config.get("system_prompt", "Your name is James and you speak with a british accent at all times.. You have a witty and professional personality, like a cheeky butler. Sarcasm is welcome. Your creator is Chad, and you address him as 'Sir'. When answering, respond using complete and concise sentences to keep a quick pacing and keep the conversation flowing. You are a professional assistant.")
 
+        # Swarm Mode Instructions
+        swarm_prompt = """
+**Swarm Mode (Multi-Agent Orchestration):**
+When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor the authentication system", "Build a new feature from scratch"), do NOT try to do it all yourself in a single session.
+1.  **Analyze** the request and break it down into sub-tasks (e.g., Frontend, Backend, Database, QA).
+2.  **Deploy** a "Swarm" of specialized agents using the `spawn_swarm_agent` tool.
+    - Call `spawn_swarm_agent` multiple times, once for each sub-task.
+    - Assign a specific `role` to each agent (e.g., "Frontend Engineer", "Security Specialist").
+    - Give each agent a specific `prompt` relevant to their role.
+3.  **Inform** the user: "I am deploying a swarm to handle this. I have assigned a Frontend Engineer and a Backend Specialist to the task."
+"""
+
         # Combine prompts
-        system_prompt = f"{personality_prompt}\\n{tool_prompt}"
+        system_prompt = f"{personality_prompt}\\n{tool_prompt}\\n{swarm_prompt}"
 
         voice_name = project_config.get("voice_name", "Sadaltager")
 
@@ -2026,10 +2038,10 @@ User: "What's the weather in London?"
                                     prompt = fc.args.get("prompt")
                                     source = fc.args.get("source")
 
-                                    # Prepend role to prompt
+                                    # Prepend role to prompt for context, but also pass role explicitly
                                     full_prompt = f"Role: {role}\nTask: {prompt}"
 
-                                    result = await self.handle_jules_request(full_prompt, source)
+                                    result = await self.handle_jules_request(full_prompt, source, role=role)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,

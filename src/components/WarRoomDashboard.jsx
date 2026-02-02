@@ -134,6 +134,23 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         }
     };
 
+    const getRoleFromTitle = (title) => {
+        const match = title.match(/^\[(.*?)\]\s*(.*)/);
+        if (match) {
+            return { role: match[1], cleanTitle: match[2] };
+        }
+        return { role: null, cleanTitle: title };
+    };
+
+    const roleColors = {
+        'FRONTEND': 'text-blue-400 border-blue-500/50 bg-blue-500/20',
+        'BACKEND': 'text-green-400 border-green-500/50 bg-green-500/20',
+        'QA': 'text-yellow-400 border-yellow-500/50 bg-yellow-500/20',
+        'SECURITY': 'text-red-400 border-red-500/50 bg-red-500/20',
+        'DEVOPS': 'text-purple-400 border-purple-500/50 bg-purple-500/20',
+        'DEFAULT': 'text-gold9 border-gold9/50 bg-gold9/20'
+    };
+
     return (
         <AnimatePresence>
             <motion.div
@@ -324,30 +341,42 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-3">
-                                    {jules.map((session, i) => (
-                                        <div
-                                            key={i}
-                                            onClick={() => openSessionDetails(session)}
-                                            className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item"
-                                        >
-                                            <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-bold text-gold9">{session.title || session.id}</div>
-                                                <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
-                                                {session.latest_thought && (
-                                                    <div className="text-xs text-gold9/40 italic truncate mt-1">
-                                                        "{session.latest_thought}"
+                                    {jules.map((session, i) => {
+                                        const { role, cleanTitle } = getRoleFromTitle(session.title || session.id);
+                                        const roleStyle = role ? (roleColors[role.toUpperCase()] || roleColors['DEFAULT']) : '';
+
+                                        return (
+                                            <div
+                                                key={i}
+                                                onClick={() => openSessionDetails(session)}
+                                                className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item"
+                                            >
+                                                <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        {role && (
+                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border ${roleStyle}`}>
+                                                                {role.toUpperCase()}
+                                                            </span>
+                                                        )}
+                                                        <div className="text-sm font-bold text-gold9 truncate">{cleanTitle}</div>
                                                     </div>
-                                                )}
+                                                    <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
+                                                    {session.latest_thought && (
+                                                        <div className="text-xs text-gold9/40 italic truncate mt-1">
+                                                            "{session.latest_thought}"
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="text-xs font-mono text-gold9/40 mr-2">
+                                                    ID: {session.id.substring(0,6)}
+                                                </div>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDismissJules(session.id); }} className="text-gold9/20 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100">
+                                                    <Trash2 size={14} />
+                                                </button>
                                             </div>
-                                            <div className="text-xs font-mono text-gold9/40 mr-2">
-                                                ID: {session.id.substring(0,6)}
-                                            </div>
-                                            <button onClick={(e) => { e.stopPropagation(); handleDismissJules(session.id); }} className="text-gold9/20 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100">
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
