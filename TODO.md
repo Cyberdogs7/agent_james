@@ -1,6 +1,6 @@
 # Product Backlog & Vision
 
-This document serves as the single source of truth for the evolution of the A.D.A (Advanced Design Assistant) platform. It outlines the roadmap towards a "JARVIS-level" intelligence, prioritizing cinematic interactions, proactive assistance, and deep integration with development workflows.
+This document serves as the single source of truth for the evolution of the A.D.A (Advanced Design Assistant) platform. It outlines the roadmap towards a "JARVIS-level" intelligence, prioritizing cinematic interactions, proactive assistance, and deep integration.
 
 **North Star:** "Proactive, context-aware, cinematic, useful, and occasionally delightful."
 **Persona:** James (British, witty, professional).
@@ -10,28 +10,26 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [x] **Morning Briefing (Presence-Aware)**
-  - **Description**: A daily intelligence report delivered verbally by James when the user first appears or speaks in the morning. Covers fleet status, PRs, and critical issues.
-  - **Wow Factor**: "Good morning, Sir. I have your briefing. 3 PRs are pending, and the 'frontend' build is failing."
-  - **User Impact**: Starts the day with high-level situational awareness.
-  - **Technical Notes**: Triggered by schedule (09:00) but delivered only upon Face Auth or VAD (first interaction). Uses `AutomationEngine` to aggregate data.
-  - **Status**: Implemented
+- [ ] **Pre-Cognition (Context Anticipation)**
+  - **Description**: James anticipates user needs based on screen context, clipboard, and time.
+  - **Example**: User opens VS Code -> James switches project context and runs `git status`.
+  - **Wow Factor**: The assistant acts *before* being asked.
+  - **User Impact**: Eliminates the friction of context switching and manual setup.
+  - **Technical Notes**: Poll `mss` screen text or active window title; monitor clipboard changes.
+  - **Status**: Idea
 
-- [x] **Smart Merge Suggestions (Fleet Command)**
-  - **Description**: Proactive recommendations to merge Pull Requests that are passing CI and have been open for a set duration.
-  - **Wow Factor**: "The 'fix-auth' PR is passing and has been open for 24 hours. Shall I merge it for you?"
-  - **User Impact**: Reduces friction in the development lifecycle.
-  - **Technical Notes**: Extends "Nagging Secretary" to include "Green & Old" PR detection. Uses `merge_pull_request` tool.
-  - **Status**: Implemented
+- [ ] **Cinematic War Room (Swarm Visualization)**
+  - **Description**: A visual interface (possibly 3D/Spatial) to visualize the "Swarm" of agents attacking a problem.
+  - **Wow Factor**: Seeing multiple agents (Frontend, Backend, QA) spawning, thinking, and generating code in real-time, visualized as nodes in a network.
+  - **User Impact**: Provides instant, high-level situational awareness of complex parallel tasks.
+  - **Technical Notes**: Enhance `WarRoomDashboard` to group sessions by `swarm_id`. Use D3.js or Three.js for node visualization.
+  - **Status**: Designed (Backend Ready)
 
-- [ ] **Adaptive Persona Engine**
-  - **Description**: James detects user sentiment (frustration, focus, casual) via voice or text analysis and adjusts his personality.
-  - **Behavior**:
-    - *Frustrated*: Brief, direct, no jokes.
-    - *Casual*: Witty, conversational.
-    - *Focus*: Silent, only critical interruptions.
-  - **Wow Factor**: Feels like a true partner that "reads the room."
-  - **Technical Notes**: Use Gemini 1.5 Pro's native audio understanding or a lightweight local audio classifier to tag input sentiment before response generation.
+- [ ] **Visual Memory Palace**
+  - **Description**: Spatial visualization of project knowledge, architectural decisions, and artifacts.
+  - **Wow Factor**: "Show me what we decided about Auth." -> James projects a timeline or node graph of the decision process.
+  - **User Impact**: Makes retrieving complex historical context instant and intuitive.
+  - **Technical Notes**: Vector database visualization, connecting chat logs to file changes.
   - **Status**: Idea
 
 ---
@@ -39,31 +37,39 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [x] **Self-Healing Automations**
-  - **Description**: Automatically detect failed automation scripts and generate code fixes using Gemini.
-  - **User Impact**: "The build script failed. I've analyzed the error and prepared a fix. Shall I apply it?"
-  - **Technical Notes**: Catch exceptions in `AutomationEngine`, send traceback + code to Gemini, store patch, require user confirmation (Voice/UI) to apply.
-  - **Status**: Implemented
+- [ ] **Adaptive Persona Engine**
+  - **Description**: Detects user sentiment (frustration, focus, casual) and adjusts personality.
+  - **Behavior**:
+    - *Frustrated*: Brief, direct.
+    - *Casual*: Witty, conversational.
+  - **Wow Factor**: Feels like a true partner that "reads the room."
+  - **User Impact**: Reduces cognitive load by matching communication style to the user's state.
+  - **Technical Notes**: Audio sentiment analysis (Gemini or local model).
+  - **Status**: Idea
 
-- [x] **"The Nagging Secretary" (Smart Follow-up)**
-  - **Description**: Proactive verbal nudges for stalled processes.
-  - **Behavior**: Monitor "Pending" Jules sessions or PRs. If no movement for >2 hours, verbally intervene. "Sir, the frontend refactor is waiting for your review. Shall I merge it?"
-  - **User Impact**: Prevents bottlenecks in the agent fleet.
-  - **Technical Notes**: Logic needs to be added to `AutomationEngine` to track "time since last update" for specific states.
-  - **Status**: Implemented
+- [ ] **Deep OS Integration (Ghost in the Machine)**
+  - **Description**: Advanced control over the operating system beyond simple app launching.
+  - **Examples**: "Organize my desktop", "Find the PDF I downloaded yesterday", "Tile my windows for coding".
+  - **Wow Factor**: Blurring the line between the assistant and the operating system.
+  - **User Impact**: Drastically speeds up complex, multi-step system workflows.
+  - **Technical Notes**: Python scripts for OS manipulation (AppleScript/PowerShell/Linux commands).
+  - **Status**: Idea
 
 ---
 
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [ ] **Swarm Mode (Multi-Agent Orchestration)**
-  - **Description**: Enables hierarchical multi-agent tasks (e.g., "Refactor Auth" -> Frontend Agent + Backend Agent) by spawning specialized agents in parallel.
-  - **Wow Factor**: Visualizing a coordinated attack on a complex problem with multiple agents working simultaneously in the War Room.
-  - **Technical Notes**: Enhance `spawn_swarm_agent` to encode roles in session titles; update War Room to visualize agent roles and groupings.
-  - **Status**: In Progress
+- [ ] **Voice-First Code Navigation**
+  - **Description**: "Go to the `User` class", "Scroll down", "What is this function doing?".
+  - **Wow Factor**: Programming at the speed of thought, hands-free.
+  - **User Impact**: Enables coding while away from the keyboard or reduces RSI strain.
+  - **Technical Notes**: IDE extension or deep accessibility integration.
+  - **Status**: Idea
 
-- [ ] **Smart Interruption Handling**
-  - **Description**: Better handling of user interruptions during speech. If the user speaks while James is talking, cut off immediately and listen (Barge-in).
-  - **Technical Notes**: Tune VAD and audio output cancellation.
+- [ ] **Latency "Magic Tricks"**
+  - **Description**: UX hacks to mask latency.
+  - **Examples**: Filler sounds ("Hmm...", "Let me see..."), instant UI feedback before audio generation.
+  - **Wow Factor**: The assistant feels instant and alive, even when processing.
+  - **User Impact**: Maintains immersion and reduces frustration during wait times.
   - **Status**: Idea
