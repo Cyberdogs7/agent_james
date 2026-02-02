@@ -64,3 +64,14 @@ class GitHubClient:
         # merge_method can be "merge", "squash", or "rebase"
         data = {"merge_method": merge_method}
         return await self._request("PUT", f"/repos/{owner}/{repo}/pulls/{pull_number}/merge", json=data)
+
+    async def get_pull_request(self, owner, repo, pull_number):
+        return await self._request("GET", f"/repos/{owner}/{repo}/pulls/{pull_number}")
+
+    async def get_check_runs(self, owner, repo, ref):
+        # Returns check runs for a specific commit ref
+        return await self._request("GET", f"/repos/{owner}/{repo}/commits/{ref}/check-runs")
+
+    async def get_commit_status(self, owner, repo, ref):
+        # Returns the combined status for a specific ref
+        return await self._request("GET", f"/repos/{owner}/{repo}/commits/{ref}/status")

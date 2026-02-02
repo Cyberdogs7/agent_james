@@ -26,6 +26,7 @@ class AutomationEngine:
 
         # Configuration
         self.STALL_THRESHOLD = 7200  # 2 hours
+        self.MERGE_CANDIDATE_THRESHOLD = 86400 # 24 hours
         self.NAG_COOLDOWN = 86400    # 24 hours
         self.CHECK_INTERVAL = 300    # 5 minutes
 
@@ -114,6 +115,123 @@ class AutomationEngine:
         if current_hm == "00:00":
             self.briefing_status = "IDLE"
             self.current_briefing_report = None
+
+    async def _monitor_merge_candidates(self):
+        """
+        Smart Merge Suggestions (Fleet Command):
+        Identifies PRs that are:
+        1. Open
+        2. Passing CI (Green)
+        3. Stable (Open for > 24 hours)
+        4. Mergeable (No conflicts)
+        """
+        print("[AutomationEngine] Checking for smart merge candidates...")
+        now = time.time()
+        token = self.project_manager.get_github_token()
+        if not token: return
+
+        client = GitHubClient(token)
+        fleet = self.project_manager.load_fleet()
+
+        for repo in fleet:
+            try:
+                owner = repo.get('owner')
+                name = repo.get('name')
+                if not owner or not name: continue
+
+                # List PRs
+                prs = await client.list_pull_requests(owner, name)
+                if not prs: continue
+
+                for pr in prs:
+                    pr_url = pr.get('html_url')
+                    title = pr.get('title')
+                    number = pr.get('number')
+
+                    # 1. Check Age
+                    created_at_str = pr.get('created_at')
+                    if not created_at_str: continue
+                    if created_at_str.endswith('Z'): created_at_str = created_at_str[:-1]
+                    created_dt = datetime.fromisoformat(created_at_str)
+                    age_seconds = (datetime.utcnow() - created_dt).total_seconds()
+
+                    if age_seconds < self.MERGE_CANDIDATE_THRESHOLD:
+                        continue # Too young
+
+                    # Check cooldown
+                    last_nag = self.last_nag_times.get(f"merge_{pr_url}", 0)
+                    if now - last_nag < self.NAG_COOLDOWN:
+                         continue
+
+                    # 2. Check Mergeability (Detailed Fetch)
+                    full_pr = await client.get_pull_request(owner, name, number)
+                    if not full_pr or not full_pr.get('mergeable'):
+                        continue # Conflicts or unknown state
+
+                    # 3. Check CI Status (Head Commit)
+                    head_sha = full_pr.get('head', {}).get('sha')
+                    if not head_sha: continue
+
+                    # Check Combined Status
+                    status = await client.get_commit_status(owner, name, head_sha)
+                    state = status.get('state', 'pending') # pending, success, failure, error
+
+                    # Also check Check Runs (Actions) if state is not explicitly failure
+                    # GitHub API 'status' covers legacy statuses. 'check-runs' covers Actions.
+                    # A 'success' status is great. 'pending' might mean actions are running OR no legacy status exists.
+
+                    is_green = False
+
+                    if state == 'failure' or state == 'error':
+                        is_green = False
+                    else:
+                        # State is 'success' OR 'pending' OR 'unknown'
+                        # WE MUST CHECK ACTIONS regardless of 'success' status because
+                        # 'success' might only refer to a 3rd party status (e.g. Netlify) while GitHub Actions fail.
+
+                        check_runs = await client.get_check_runs(owner, name, head_sha)
+                        if check_runs:
+                            runs = check_runs.get('check_runs', [])
+                            if not runs:
+                                # No check runs found.
+                                # If status was 'success', we can trust it.
+                                # If status was 'pending', maybe it really is just pending with no checks?
+                                is_green = (state == 'success')
+                            else:
+                                # Verify all completed and success
+                                all_passed = True
+                                for run in runs:
+                                    # If any run failed, it's not green.
+                                    if run.get('conclusion') == 'failure' or run.get('conclusion') == 'timed_out' or run.get('conclusion') == 'cancelled':
+                                        all_passed = False
+                                        break
+                                    # If any run is still in progress, it's not "Green" yet (it's pending)
+                                    if run.get('status') != 'completed':
+                                        all_passed = False
+                                        break
+
+                                # If we passed all check runs, AND the commit status is not failing...
+                                if all_passed:
+                                    # If status is 'pending', but checks passed, it might be waiting on something else?
+                                    # Safe bet: Require status to be success OR pending (if checks cover it)
+                                    is_green = True
+                                else:
+                                    is_green = False
+                        else:
+                            # No checks system found via API. Trust Status.
+                            is_green = (state == 'success')
+
+                    if is_green:
+                        msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks and has been stable for over 24 hours. Shall I merge it for you?"
+                        print(f"[AutomationEngine] SMART MERGE: {msg}")
+                        await self.ada.handle_external_event({
+                            "type": "notification",
+                            "message": msg
+                        })
+                        self.last_nag_times[f"merge_{pr_url}"] = now
+
+            except Exception as e:
+                print(f"[AutomationEngine] Error checking merge candidates for {repo.get('name')}: {e}")
 
     async def _monitor_stalled_items(self):
         """Checks for stalled Jules sessions and PRs and notifies (nags) the user."""
