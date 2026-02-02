@@ -10,12 +10,12 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] **Morning Briefing (Presence-Aware)**
+- [x] **Morning Briefing (Presence-Aware)**
   - **Description**: A daily intelligence report delivered verbally by James when the user first appears or speaks in the morning. Covers fleet status, PRs, and critical issues.
   - **Wow Factor**: "Good morning, Sir. I have your briefing. 3 PRs are pending, and the 'frontend' build is failing."
   - **User Impact**: Starts the day with high-level situational awareness.
   - **Technical Notes**: Triggered by schedule (09:00) but delivered only upon Face Auth or VAD (first interaction). Uses `AutomationEngine` to aggregate data.
-  - **Status**: In Progress
+  - **Status**: Implemented
 
 - [x] **Smart Merge Suggestions (Fleet Command)**
   - **Description**: Proactive recommendations to merge Pull Requests that are passing CI and have been open for a set duration.
