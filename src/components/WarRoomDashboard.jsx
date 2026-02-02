@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import PlanVisualizer from './PlanVisualizer';
 import AutomationEditor from './AutomationEditor';
+import SwarmVisualizer from './SwarmVisualizer';
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
@@ -39,6 +40,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [selectedRepo, setSelectedRepo] = useState(null);
     const [swarms, setSwarms] = useState([]);
+    const [viewMode, setViewMode] = useState('spatial'); // 'spatial' or 'list'
 
     // Stream control
     useEffect(() => {
@@ -388,52 +390,73 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         variants={itemVariants}
                         className="col-span-5 row-span-4 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden"
                     >
-                        <div className="absolute top-0 right-0 p-2 opacity-50">
+                        <div className="absolute top-0 right-0 p-2 opacity-50 pointer-events-none">
                             <Activity className="w-24 h-24 text-gold9/5" />
                         </div>
-                        <h2 className="flex items-center gap-2 text-lg font-bold tracking-widest border-b border-gold9/10 pb-2 mb-4">
-                            <Cpu className="w-5 h-5 text-gold9" />
-                            AGENT STATUS (JULES)
-                        </h2>
-                        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4">
-                            {/* Empty State */}
-                            {jules.length === 0 && swarmGroups.length === 0 && (
-                                <div className="h-full flex flex-col items-center justify-center text-gold9/40 gap-2">
-                                    <Activity className="w-8 h-8 opacity-50" />
-                                    <span className="italic">No active agents in field.</span>
-                                </div>
-                            )}
-
-                            {/* Render Swarms */}
-                            {swarmGroups.map(swarm => (
-                                <div key={swarm.id} className="border border-purple-500/30 bg-purple-500/5 rounded-xl overflow-hidden">
-                                    <div className="flex items-center justify-between p-2 bg-purple-500/10 border-b border-purple-500/20">
-                                        <div className="flex items-center gap-2 text-purple-400">
-                                            <Layers size={14} />
-                                            <span className="text-xs font-bold tracking-widest uppercase">MISSION: {swarm.title}</span>
-                                        </div>
-                                        <span className="text-[9px] text-purple-500/50 font-mono">ID: {swarm.id.substring(0, 4)}</span>
-                                    </div>
-                                    <div className="p-2">
-                                        {swarm.activeSessions.length === 0 ? (
-                                            <div className="text-[10px] text-purple-500/40 italic text-center py-2">Deploying agents...</div>
-                                        ) : (
-                                            swarm.activeSessions.map(renderSessionItem)
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-
-                            {/* Render Solo Agents */}
-                            {soloSessions.length > 0 && (
-                                <div>
-                                    {swarmGroups.length > 0 && (
-                                        <div className="text-[10px] font-bold text-gold9/30 tracking-widest mb-2 mt-4 px-1">INDEPENDENT OPERATIVES</div>
-                                    )}
-                                    {soloSessions.map(renderSessionItem)}
-                                </div>
-                            )}
+                        <div className="relative z-10 flex items-center justify-between border-b border-gold9/10 pb-2 mb-4">
+                            <h2 className="flex items-center gap-2 text-lg font-bold tracking-widest">
+                                <Cpu className="w-5 h-5 text-gold9" />
+                                AGENT STATUS (JULES)
+                            </h2>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setViewMode('list')}
+                                    className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-gold9 text-black' : 'text-gold9/40 hover:text-gold9'}`}
+                                >
+                                    <List size={14} />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('spatial')}
+                                    className={`p-1 rounded transition-colors ${viewMode === 'spatial' ? 'bg-gold9 text-black' : 'text-gold9/40 hover:text-gold9'}`}
+                                >
+                                    <Layers size={14} />
+                                </button>
+                            </div>
                         </div>
+
+                        {viewMode === 'spatial' ? (
+                             <SwarmVisualizer swarmGroups={swarmGroups} soloSessions={soloSessions} />
+                        ) : (
+                            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4">
+                                {/* Empty State */}
+                                {jules.length === 0 && swarmGroups.length === 0 && (
+                                    <div className="h-full flex flex-col items-center justify-center text-gold9/40 gap-2">
+                                        <Activity className="w-8 h-8 opacity-50" />
+                                        <span className="italic">No active agents in field.</span>
+                                    </div>
+                                )}
+
+                                {/* Render Swarms */}
+                                {swarmGroups.map(swarm => (
+                                    <div key={swarm.id} className="border border-purple-500/30 bg-purple-500/5 rounded-xl overflow-hidden">
+                                        <div className="flex items-center justify-between p-2 bg-purple-500/10 border-b border-purple-500/20">
+                                            <div className="flex items-center gap-2 text-purple-400">
+                                                <Layers size={14} />
+                                                <span className="text-xs font-bold tracking-widest uppercase">MISSION: {swarm.title}</span>
+                                            </div>
+                                            <span className="text-[9px] text-purple-500/50 font-mono">ID: {swarm.id.substring(0, 4)}</span>
+                                        </div>
+                                        <div className="p-2">
+                                            {swarm.activeSessions.length === 0 ? (
+                                                <div className="text-[10px] text-purple-500/40 italic text-center py-2">Deploying agents...</div>
+                                            ) : (
+                                                swarm.activeSessions.map(renderSessionItem)
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Render Solo Agents */}
+                                {soloSessions.length > 0 && (
+                                    <div>
+                                        {swarmGroups.length > 0 && (
+                                            <div className="text-[10px] font-bold text-gold9/30 tracking-widest mb-2 mt-4 px-1">INDEPENDENT OPERATIVES</div>
+                                        )}
+                                        {soloSessions.map(renderSessionItem)}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </motion.div>
 
                     {/* COL 2 BOTTOM: AGENT STATS */}
