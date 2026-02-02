@@ -26,9 +26,10 @@ class AutomationEngine:
 
         # Configuration
         self.STALL_THRESHOLD = 7200  # 2 hours
-        self.MERGE_CANDIDATE_THRESHOLD = 86400 # 24 hours
+        self.MERGE_CANDIDATE_THRESHOLD = 7200 # 2 hours (default)
         self.NAG_COOLDOWN = 86400    # 24 hours
         self.CHECK_INTERVAL = 300    # 5 minutes
+        self._last_merge_check = 0
 
     async def start(self):
         """Starts the automation loop."""
@@ -58,6 +59,15 @@ class AutomationEngine:
                     self._last_stalled_check = now
                 except Exception as e:
                     print(f"[AutomationEngine] Error checking stalled items: {e}")
+                    traceback.print_exc()
+
+            # Check for smart merge candidates every 5 minutes
+            if now - self._last_merge_check > self.CHECK_INTERVAL:
+                try:
+                    await self._monitor_merge_candidates()
+                    self._last_merge_check = now
+                except Exception as e:
+                    print(f"[AutomationEngine] Error checking merge candidates: {e}")
                     traceback.print_exc()
 
             # Run every minute
@@ -155,7 +165,11 @@ class AutomationEngine:
                     created_dt = datetime.fromisoformat(created_at_str)
                     age_seconds = (datetime.utcnow() - created_dt).total_seconds()
 
-                    if age_seconds < self.MERGE_CANDIDATE_THRESHOLD:
+                    # Read dynamic threshold from config (default to constant if not set)
+                    # Support overriding per project or global
+                    threshold = self.project_manager.get_project_config().get("auto_merge_threshold", self.MERGE_CANDIDATE_THRESHOLD)
+
+                    if age_seconds < threshold:
                         continue # Too young
 
                     # Check cooldown

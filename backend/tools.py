@@ -100,6 +100,21 @@ toggle_jules_slack_notifications_tool = {
     }
 }
 
+set_auto_merge_threshold_tool = {
+    "name": "set_auto_merge_threshold",
+    "description": "Sets the minimum age (in hours) for a Pull Request to be considered for automatic smart merging.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "hours": {
+                "type": "NUMBER",
+                "description": "The number of hours a PR must be open and stable."
+            }
+        },
+        "required": ["hours"]
+    }
+}
+
 add_architectural_memory_tool = {
     "name": "add_architectural_memory",
     "description": "Stores an architectural decision, constraint, or 'lesson learned' in the project's long-term memory. Use this when you make a significant decision or discover a best practice.",
@@ -574,6 +589,7 @@ tools_list = [{"function_declarations": [
     delete_custom_system_prompt_tool,
     get_system_prompt_tool,
     toggle_jules_slack_notifications_tool,
+    set_auto_merge_threshold_tool,
     add_architectural_memory_tool,
     switch_video_source_tool
 ] + list(trello_tools.values()) + [
