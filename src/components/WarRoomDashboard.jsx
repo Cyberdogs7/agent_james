@@ -38,6 +38,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [fleetStatus, setFleetStatus] = useState([]);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [selectedRepo, setSelectedRepo] = useState(null);
+    const [swarms, setSwarms] = useState([]);
 
     // Stream control
     useEffect(() => {
@@ -45,9 +46,13 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
             socket.emit('start_dashboard_stream');
             // Initial fleet status fetch
             socket.emit('get_fleet_status');
+            socket.emit('get_swarms');
 
             const handleFleetStatus = (data) => {
                 setFleetStatus(data);
+            };
+            const handleSwarms = (data) => {
+                setSwarms(data);
             };
             const handleError = (err) => {
                 if (err.code === 'AUTH_REQUIRED') {
@@ -56,9 +61,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
             };
 
             socket.on('fleet_status_update', handleFleetStatus);
+            socket.on('swarms_update', handleSwarms);
             socket.on('error', handleError);
             return () => {
                 socket.off('fleet_status_update', handleFleetStatus);
+                socket.off('swarms_update', handleSwarms);
                 socket.off('error', handleError);
                 socket.emit('stop_dashboard_stream');
             };
@@ -149,6 +156,61 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         'SECURITY': 'text-red-400 border-red-500/50 bg-red-500/20',
         'DEVOPS': 'text-purple-400 border-purple-500/50 bg-purple-500/20',
         'DEFAULT': 'text-gold9 border-gold9/50 bg-gold9/20'
+    };
+
+    // Helper to organize sessions into swarms and solo
+    const organizeSessions = () => {
+        const swarmGroups = swarms.map(swarm => {
+            const swarmSessions = jules.filter(s => swarm.sessions.includes(s.id));
+            return {
+                ...swarm,
+                activeSessions: swarmSessions
+            };
+        }).filter(g => g.activeSessions.length > 0 || (Date.now() / 1000 - g.created_at < 3600)); // Show active or recent swarms
+
+        const swarmSessionIds = new Set(swarms.flatMap(s => s.sessions));
+        const soloSessions = jules.filter(s => !swarmSessionIds.has(s.id));
+
+        return { swarmGroups, soloSessions };
+    };
+
+    const { swarmGroups, soloSessions } = organizeSessions();
+
+    const renderSessionItem = (session, i) => {
+        const { role, cleanTitle } = getRoleFromTitle(session.title || session.id);
+        const roleStyle = role ? (roleColors[role.toUpperCase()] || roleColors['DEFAULT']) : '';
+
+        return (
+            <div
+                key={session.id}
+                onClick={() => openSessionDetails(session)}
+                className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item mb-2 last:mb-0"
+            >
+                <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        {role && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border ${roleStyle}`}>
+                                {role.toUpperCase()}
+                            </span>
+                        )}
+                        <div className="text-sm font-bold text-gold9 truncate">{cleanTitle}</div>
+                    </div>
+                    <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
+                    {session.latest_thought && (
+                        <div className="text-xs text-gold9/40 italic truncate mt-1">
+                            "{session.latest_thought}"
+                        </div>
+                    )}
+                </div>
+                <div className="text-xs font-mono text-gold9/40 mr-2">
+                    ID: {session.id.substring(0, 6)}
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); handleDismissJules(session.id); }} className="text-gold9/20 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100">
+                    <Trash2 size={14} />
+                </button>
+            </div>
+        );
     };
 
     return (
@@ -333,50 +395,42 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             <Cpu className="w-5 h-5 text-gold9" />
                             AGENT STATUS (JULES)
                         </h2>
-                        <div className="flex-1 overflow-y-auto scrollbar-hide">
-                             {jules.length === 0 ? (
+                        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4">
+                            {/* Empty State */}
+                            {jules.length === 0 && swarmGroups.length === 0 && (
                                 <div className="h-full flex flex-col items-center justify-center text-gold9/40 gap-2">
                                     <Activity className="w-8 h-8 opacity-50" />
                                     <span className="italic">No active agents in field.</span>
                                 </div>
-                            ) : (
-                                <div className="grid grid-cols-1 gap-3">
-                                    {jules.map((session, i) => {
-                                        const { role, cleanTitle } = getRoleFromTitle(session.title || session.id);
-                                        const roleStyle = role ? (roleColors[role.toUpperCase()] || roleColors['DEFAULT']) : '';
+                            )}
 
-                                        return (
-                                            <div
-                                                key={i}
-                                                onClick={() => openSessionDetails(session)}
-                                                className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-colors group/item"
-                                            >
-                                                <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-2 mb-0.5">
-                                                        {role && (
-                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border ${roleStyle}`}>
-                                                                {role.toUpperCase()}
-                                                            </span>
-                                                        )}
-                                                        <div className="text-sm font-bold text-gold9 truncate">{cleanTitle}</div>
-                                                    </div>
-                                                    <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
-                                                    {session.latest_thought && (
-                                                        <div className="text-xs text-gold9/40 italic truncate mt-1">
-                                                            "{session.latest_thought}"
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="text-xs font-mono text-gold9/40 mr-2">
-                                                    ID: {session.id.substring(0,6)}
-                                                </div>
-                                                <button onClick={(e) => { e.stopPropagation(); handleDismissJules(session.id); }} className="text-gold9/20 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100">
-                                                    <Trash2 size={14} />
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
+                            {/* Render Swarms */}
+                            {swarmGroups.map(swarm => (
+                                <div key={swarm.id} className="border border-purple-500/30 bg-purple-500/5 rounded-xl overflow-hidden">
+                                    <div className="flex items-center justify-between p-2 bg-purple-500/10 border-b border-purple-500/20">
+                                        <div className="flex items-center gap-2 text-purple-400">
+                                            <Layers size={14} />
+                                            <span className="text-xs font-bold tracking-widest uppercase">MISSION: {swarm.title}</span>
+                                        </div>
+                                        <span className="text-[9px] text-purple-500/50 font-mono">ID: {swarm.id.substring(0, 4)}</span>
+                                    </div>
+                                    <div className="p-2">
+                                        {swarm.activeSessions.length === 0 ? (
+                                            <div className="text-[10px] text-purple-500/40 italic text-center py-2">Deploying agents...</div>
+                                        ) : (
+                                            swarm.activeSessions.map(renderSessionItem)
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* Render Solo Agents */}
+                            {soloSessions.length > 0 && (
+                                <div>
+                                    {swarmGroups.length > 0 && (
+                                        <div className="text-[10px] font-bold text-gold9/30 tracking-widest mb-2 mt-4 px-1">INDEPENDENT OPERATIVES</div>
+                                    )}
+                                    {soloSessions.map(renderSessionItem)}
                                 </div>
                             )}
                         </div>
