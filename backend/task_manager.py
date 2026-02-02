@@ -105,7 +105,7 @@ class TaskManager:
         for t in tasks:
             if t['id'] == task_id:
                 # Update allowed top-level fields
-                for field in ['title', 'status', 'last_run', 'next_run']:
+                for field in ['title', 'status', 'last_run', 'next_run', 'healing']:
                     if field in updates:
                         t[field] = updates[field]
 

@@ -364,6 +364,21 @@ trello_tools = {
             "required": ["name"]
         }
     },
+apply_task_fix_tool = {
+    "name": "apply_task_fix",
+    "description": "Applies a self-healing code fix to a failed automation task. Use this when the user approves a fix for a broken script.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "task_id": {
+                "type": "STRING",
+                "description": "The ID of the failed task."
+            }
+        },
+        "required": ["task_id"]
+    }
+}
+
     "create_list": {
         "name": "trello_create_list",
         "description": "Creates a new list on a Trello board.",
@@ -591,7 +606,8 @@ tools_list = [{"function_declarations": [
     toggle_jules_slack_notifications_tool,
     set_auto_merge_threshold_tool,
     add_architectural_memory_tool,
-    switch_video_source_tool
+    switch_video_source_tool,
+    apply_task_fix_tool
 ] + list(trello_tools.values()) + [
     {
         "name": "search",

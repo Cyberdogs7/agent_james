@@ -2,12 +2,22 @@ import asyncio
 import time
 import json
 import traceback
+import os
+import shutil
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
 try:
     from backend.github_client import GitHubClient
 except ImportError:
     from github_client import GitHubClient
+
+try:
+    from google import genai
+except ImportError:
+    genai = None
+
+load_dotenv()
 
 class AutomationEngine:
     def __init__(self, task_manager, project_manager, ada_instance=None):
@@ -30,6 +40,15 @@ class AutomationEngine:
         self.NAG_COOLDOWN = 86400    # 24 hours
         self.CHECK_INTERVAL = 300    # 5 minutes
         self._last_merge_check = 0
+
+        # Gemini Client for Healing
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        self.client = None
+        if self.api_key and genai:
+             try:
+                 self.client = genai.Client(api_key=self.api_key)
+             except Exception as e:
+                 print(f"[AutomationEngine] Failed to init Gemini client: {e}")
 
     async def start(self):
         """Starts the automation loop."""
@@ -441,6 +460,116 @@ class AutomationEngine:
                             print(f"[AutomationEngine] Git Event matched task: '{task['title']}' in project '{project_name}'")
                             await self._execute_task(task, context=event_data, project_context=project_name)
 
+    async def _generate_fix(self, script_path, error_log):
+        """Uses Gemini to generate a fix for a failed script."""
+        if not self.client:
+            print("[AutomationEngine] Gemini Client not available for self-healing.")
+            return None
+
+        try:
+            # Read script
+            if not os.path.exists(script_path):
+                return None
+
+            with open(script_path, 'r', encoding='utf-8') as f:
+                script_content = f.read()
+
+            prompt = f"""
+You are an expert Python debugger.
+I am running a script that failed. I need you to analyze the code and the error trace, and provide the FULL FIXED CODE.
+
+Original Script ({script_path}):
+```python
+{script_content}
+```
+
+Error Trace:
+```
+{error_log}
+```
+
+INSTRUCTIONS:
+1. Return ONLY the python code block for the fixed file.
+2. Do not include explanations outside the code block.
+3. Fix the specific error mentioned.
+"""
+            response = await asyncio.to_thread(
+                self.client.models.generate_content,
+                model="gemini-2.0-flash", # Use a fast/capable model
+                contents=prompt
+            )
+
+            if response.text:
+                # Extract code block
+                content = response.text
+                if "```python" in content:
+                    content = content.split("```python")[1].split("```")[0].strip()
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0].strip()
+
+                return content
+            return None
+
+        except Exception as e:
+            print(f"[AutomationEngine] Healing generation failed: {e}")
+            return None
+
+    def apply_fix(self, task_id):
+        """Applies the proposed fix for a failed task."""
+        current_path = self.project_manager.get_current_project_path()
+        # Note: If tasks are cross-project, this might need better project resolution
+        # But apply_fix is usually triggered from War Room which is context-aware?
+        # Actually, self.task_manager is initialized with current project path in server.py
+        # But if the failed task was from another project (triggered by git event), we need that project context.
+        # For now, assume current project or scan.
+
+        # Try to find task in current project first
+        task = None
+
+        # We need to find the task to get the 'healing' data
+        tasks = self.task_manager.list_tasks()
+        task = next((t for t in tasks if t['id'] == task_id), None)
+
+        target_manager = self.task_manager
+
+        if not task:
+            # Check other projects? (Expensive/Complex)
+            # For this iteration, assume current project context in War Room matches.
+            return False, "Task not found."
+
+        healing = task.get('healing')
+        if not healing:
+            return False, "No fix available for this task."
+
+        original_path = healing.get('script_path')
+        fix_code = healing.get('fix_code')
+
+        if not original_path or not fix_code:
+            return False, "Invalid healing data."
+
+        try:
+            # 1. Backup
+            if os.path.exists(original_path):
+                timestamp = int(time.time())
+                backup_path = f"{original_path}.{timestamp}.bak"
+                shutil.copy2(original_path, backup_path)
+
+            # 2. Overwrite
+            with open(original_path, 'w', encoding='utf-8') as f:
+                f.write(fix_code)
+
+            # 3. Reset Task
+            updates = {
+                "status": "active",
+                "healing": None # Clear healing data
+            }
+            target_manager.update_task(task_id, updates)
+
+            return True, f"Fix applied. Original backed up to {os.path.basename(backup_path)}."
+
+        except Exception as e:
+            return False, f"Failed to apply fix: {e}"
+
     async def _execute_task(self, task, context=None, project_context=None):
         """Executes the action defined in the task."""
         action = task.get('action', {})
@@ -449,6 +578,14 @@ class AutomationEngine:
 
         success = False
         result_msg = ""
+
+        # Resolve TaskManager for the correct project
+        if project_context:
+            target_path = self.project_manager.get_project_path(project_context)
+        else:
+            target_path = self.project_manager.get_current_project_path()
+
+        temp_manager = self.task_manager.__class__(target_path)
 
         try:
             if act_type == 'notify':
@@ -492,13 +629,46 @@ class AutomationEngine:
                     success = True
 
             elif act_type == 'run_script':
-                print(f"[AutomationEngine] ACTION: Run Script (Simulated) - {act_value}")
-                # Placeholder
+                script_path = act_value
+                # If relative, resolve to project path
+                if not os.path.isabs(script_path):
+                    script_path = str(target_path / script_path)
+
+                print(f"[AutomationEngine] ACTION: Run Script - {script_path}")
+
+                if not os.path.exists(script_path):
+                    raise FileNotFoundError(f"Script not found: {script_path}")
+
+                # Execute Script
+                # Determine runner based on extension
+                if script_path.endswith('.py'):
+                    cmd = ["python", script_path]
+                elif script_path.endswith('.sh'):
+                    cmd = ["bash", script_path]
+                elif script_path.endswith('.js'):
+                    cmd = ["node", script_path]
+                else:
+                    # Default/Fallback
+                    cmd = [script_path]
+
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+
+                if process.returncode != 0:
+                    error_log = stderr.decode().strip() or stdout.decode().strip() or "Unknown Error"
+                    raise Exception(f"Script failed with code {process.returncode}:\n{error_log}")
+
+                print(f"[AutomationEngine] Script Success: {stdout.decode()[:100]}...")
                 success = True
 
-            # Update Task State
+            # Update Task State (Success)
             updates = {
-                "last_run": time.time()
+                "last_run": time.time(),
+                "status": "active" # Ensure it stays active if it was previously failed?
             }
             # Calculate next run? (Optional, good for UI)
             # For interval, next_run = now + interval
@@ -509,15 +679,40 @@ class AutomationEngine:
                      updates["next_run"] = time.time() + interval
                 # For daily, next_run is next occurrence of HH:MM (tomorrow or today)
 
-            # Ensure we update the correct task manager
-            if project_context:
-                target_path = self.project_manager.get_project_path(project_context)
-            else:
-                target_path = self.project_manager.get_current_project_path()
-
-            temp_manager = self.task_manager.__class__(target_path)
             temp_manager.update_task(task['id'], updates)
 
         except Exception as e:
             print(f"[AutomationEngine] Execution Failed: {e}")
-            traceback.print_exc()
+
+            # --- SELF HEALING LOGIC ---
+            if act_type == 'run_script':
+                print("[AutomationEngine] Attempting to generate fix...")
+                fix_code = await self._generate_fix(act_value, str(e))
+
+                if fix_code:
+                    print("[AutomationEngine] Fix generated. Updating task state.")
+                    updates = {
+                        "status": "failed",
+                        "healing": {
+                            "script_path": act_value, # Save original path from action value
+                            "error": str(e),
+                            "fix_code": fix_code,
+                            "timestamp": time.time()
+                        }
+                    }
+                    temp_manager.update_task(task['id'], updates)
+
+                    # Notify User
+                    msg = f"Task '{task['title']}' failed. I have analyzed the error and generated a fix. Please review and apply it in the War Room."
+                    if self.ada:
+                         if self.ada.on_display_content:
+                            self.ada.on_display_content({
+                                "content_type": "notification",
+                                "data": {"text": msg},
+                                "duration": 15000
+                            })
+                         # Trigger voice
+                         if self.ada.session:
+                             asyncio.create_task(self.ada.session.send(input=f"System Notification: {msg}", end_of_turn=False))
+                else:
+                    print("[AutomationEngine] Could not generate fix.")

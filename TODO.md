@@ -39,10 +39,10 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [ ] **Project Context "Deep Dive" (RAG Evolution)**
-  - **Description**: Move beyond simple chat history. Index the entire codebase (AST-aware) into a vector database for semantic search.
-  - **User Impact**: "Where is the function that handles authentication?" returns the exact file and line number, explaining how it works.
-  - **Technical Notes**: Integrate a vector DB (Chroma/Pinecone) with `MemoryManager`.
+- [ ] **Self-Healing Automations**
+  - **Description**: Automatically detect failed automation scripts and generate code fixes using Gemini.
+  - **User Impact**: "The build script failed. I've analyzed the error and prepared a fix. Shall I apply it?"
+  - **Technical Notes**: Catch exceptions in `AutomationEngine`, send traceback + code to Gemini, store patch, require user confirmation (Voice/UI) to apply.
   - **Status**: Idea
 
 - [x] **"The Nagging Secretary" (Smart Follow-up)**
