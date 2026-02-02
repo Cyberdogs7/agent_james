@@ -57,11 +57,11 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [ ] **Cinematic HUD & Soundscapes**
-  - **Description**: Add subtle UI sound effects (blips, hums) for agent actions and "thinking" states. Add a "Heads Up Display" overlay for the camera feed.
-  - **Wow Factor**: Makes the desktop feel like a sci-fi cockpit.
-  - **Technical Notes**: Implement a transparent, click-through Electron window for the HUD layer; use Web Audio API for spatial UI sounds.
-  - **Status**: Idea
+- [ ] **Swarm Mode (Multi-Agent Orchestration)**
+  - **Description**: Enables hierarchical multi-agent tasks (e.g., "Refactor Auth" -> Frontend Agent + Backend Agent) by spawning specialized agents in parallel.
+  - **Wow Factor**: Visualizing a coordinated attack on a complex problem with multiple agents working simultaneously in the War Room.
+  - **Technical Notes**: Enhance `spawn_swarm_agent` to encode roles in session titles; update War Room to visualize agent roles and groupings.
+  - **Status**: In Progress
 
 - [ ] **Smart Interruption Handling**
   - **Description**: Better handling of user interruptions during speech. If the user speaks while James is talking, cut off immediately and listen (Barge-in).
