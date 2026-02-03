@@ -1,14 +1,24 @@
 import asyncio
 import os
 import time
+import json
 from datetime import datetime
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    genai = None
+    types = None
 
 class ProactiveAgent:
-    def __init__(self, session, project_manager, suggestion_interval=300):
+    def __init__(self, session, project_manager, suggestion_interval=300, vision_provider=None, genai_client=None):
         self.session = session
         self.project_manager = project_manager
         self.suggestion_interval = suggestion_interval  # Time in seconds
+        self.vision_provider = vision_provider
+        self.genai_client = genai_client
         self.last_suggestion_time = 0
+        self.last_analyzed_project = None
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
 
     def _log(self, *args, **kwargs):
@@ -38,6 +48,72 @@ class ProactiveAgent:
             except Exception as e:
                 self._log(f"[PROACTIVE_AGENT] [ERR] Failed to make suggestion: {e}")
 
+    async def _analyze_screen(self):
+        """Analyzes the screen content using Vision."""
+        if not self.vision_provider or not self.genai_client:
+            return None
+
+        try:
+            image_payload = self.vision_provider()
+            if not image_payload:
+                return None
+
+            # Create prompt
+            prompt = "Analyze this image. Identify the active application. If it is a code editor, identify the project name or file name. If it is a browser, identify the website or repository. Return a JSON object with keys: 'app', 'project', 'file', 'repo'."
+
+            # Prepare contents
+            response = await self.genai_client.aio.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=[
+                    types.Content(
+                        parts=[
+                            types.Part(text=prompt),
+                            types.Part(inline_data=types.Blob(
+                                mime_type=image_payload["mime_type"],
+                                data=image_payload["data"]
+                            ))
+                        ]
+                    )
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            )
+
+            if response.text:
+                text = response.text.strip()
+                # Robust JSON extraction
+                if text.startswith("```json"):
+                    text = text[7:]
+                if text.startswith("```"):
+                    text = text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                return json.loads(text.strip())
+        except Exception as e:
+            self._log(f"[PROACTIVE_AGENT] [ERR] Vision analysis failed: {e}")
+            return None
+
+    async def _check_context_switch(self):
+        """Checks for context switches using Vision."""
+        analysis = await self._analyze_screen()
+        if not analysis:
+            return None
+
+        detected_project = analysis.get("project")
+        if detected_project:
+            # Clean up detected name (simple heuristic)
+            detected_project = str(detected_project).strip()
+
+            current = self.project_manager.current_project
+
+            # Avoid self-triggering if we just switched or if it matches
+            if detected_project.lower() != current.lower() and detected_project != self.last_analyzed_project:
+                self.last_analyzed_project = detected_project
+                return f"I noticed you are working on '{detected_project}'. Should I switch the project context to match?"
+
+        return None
+
     async def _get_contextual_suggestion(self):
         """Analyzes the project context and returns a suggestion."""
         project_path = self.project_manager.get_current_project_path()
@@ -59,6 +135,17 @@ class ProactiveAgent:
         """The main loop for the ProactiveAgent."""
         while True:
             await asyncio.sleep(60)  # Check every minute
+
+            # 1. Vision Check (Context Anticipation)
+            try:
+                vision_suggestion = await self._check_context_switch()
+                if vision_suggestion:
+                    await self._make_suggestion(vision_suggestion)
+                    # Don't skip other checks, but update last time
+                    self.last_suggestion_time = time.time()
+            except Exception as e:
+                self._log(f"[PROACTIVE_AGENT] [ERR] Context check failed: {e}")
+
             if self._should_suggest():
                 suggestion = await self._get_contextual_suggestion()
                 if suggestion:
