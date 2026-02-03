@@ -488,7 +488,12 @@ class AudioLoop:
         
         self.task_manager = TaskManager(self.project_manager.get_current_project_path())
         self.search_agent = SearchAgent(self.trello_agent, self.project_manager, self.scraper_agent)
-        self.proactive_agent = ProactiveAgent(session=None, project_manager=self.project_manager)
+        self.proactive_agent = ProactiveAgent(
+            session=None,
+            project_manager=self.project_manager,
+            vision_provider=lambda: self._latest_image_payload,
+            genai_client=client
+        )
         self.os_agent = OSAgent()
 
         self.sct = None

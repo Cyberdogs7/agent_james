@@ -17,6 +17,10 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Eliminates the friction of context switching and manual setup.
   - **Technical Notes**: Needs integration between `ProactiveAgent` and Vision Pipeline (OCR/Screen Analysis).
   - **Status**: Partially Implemented
+  - [x] Integrate ProactiveAgent with Vision Pipeline
+  - [x] Implement Automatic Project Context Switching
+  - [ ] Implement Clipboard Analysis
+  - [ ] Implement Auto-Git Status
 
 - [ ] **Visual Memory Palace**
   - **Description**: Spatial visualization of project knowledge, architectural decisions, and artifacts.
