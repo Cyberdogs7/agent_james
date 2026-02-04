@@ -3,6 +3,8 @@ import os
 import time
 import json
 from datetime import datetime
+import pyperclip
+
 try:
     from google import genai
     from google.genai import types
@@ -18,7 +20,10 @@ class ProactiveAgent:
         self.vision_provider = vision_provider
         self.genai_client = genai_client
         self.last_suggestion_time = 0
+        self.last_vision_check_time = 0
+        self.last_clipboard_content = ""
         self.last_analyzed_project = None
+        self.clipboard_failure_count = 0
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
 
     def _log(self, *args, **kwargs):
@@ -32,16 +37,53 @@ class ProactiveAgent:
             return True
         return False
 
+    async def _check_clipboard(self):
+        """Checks the clipboard for actionable content."""
+        try:
+            # Run in executor to avoid blocking loop
+            content = await asyncio.to_thread(pyperclip.paste)
+            content = content.strip()
+
+            # Reset failure count on success
+            self.clipboard_failure_count = 0
+
+            if not content:
+                return None
+
+            if content == self.last_clipboard_content:
+                return None
+
+            self.last_clipboard_content = content
+
+            # Simple Heuristics
+            if content.startswith("http://") or content.startswith("https://"):
+                return "I noticed you copied a link. Should I open it or summarize it?"
+
+            # Check for code-like patterns
+            if any(k in content for k in ["def ", "class ", "import ", "function ", "const ", "var ", "let "]):
+                # Only if it's multi-line or long enough to be interesting
+                if len(content.split('\n')) > 1 or len(content) > 40:
+                    return "I noticed you copied some code. Should I explain it or create a file?"
+
+            # Check for errors
+            if "error" in content.lower() or "exception" in content.lower() or "traceback" in content.lower():
+                return "I noticed an error message. Should I help debug it?"
+
+            return None
+
+        except Exception as e:
+            self.clipboard_failure_count += 1
+            if self.clipboard_failure_count <= 5:
+                self._log(f"[PROACTIVE_AGENT] [WARN] Clipboard check failed: {e}")
+            return None
+
     async def _make_suggestion(self, suggestion):
         """Sends a suggestion to the user through the AudioLoop session."""
         if self.session:
             try:
                 self._log(f"[PROACTIVE_AGENT] Making suggestion: {suggestion}")
                 await self.session.send(
-                    input={
-                        "tool_code": "proactive_suggestion",
-                        "argument": {"suggestion": suggestion},
-                    },
+                    input=f"System Notification: {suggestion}",
                     end_of_turn=True
                 )
                 self.last_suggestion_time = time.time()
@@ -110,7 +152,7 @@ class ProactiveAgent:
             # Avoid self-triggering if we just switched or if it matches
             if detected_project.lower() != current.lower() and detected_project != self.last_analyzed_project:
                 self.last_analyzed_project = detected_project
-                return f"I noticed you are working on '{detected_project}'. Should I switch the project context to match?"
+                return f"I noticed you are working on '{detected_project}'. Should I switch the project context to match and run git status?"
 
         return None
 
@@ -134,17 +176,27 @@ class ProactiveAgent:
     async def run(self):
         """The main loop for the ProactiveAgent."""
         while True:
-            await asyncio.sleep(60)  # Check every minute
+            await asyncio.sleep(5)  # Check every 5 seconds
 
-            # 1. Vision Check (Context Anticipation)
+            # 0. Clipboard Check (Fast)
             try:
-                vision_suggestion = await self._check_context_switch()
-                if vision_suggestion:
-                    await self._make_suggestion(vision_suggestion)
-                    # Don't skip other checks, but update last time
-                    self.last_suggestion_time = time.time()
+                clipboard_suggestion = await self._check_clipboard()
+                if clipboard_suggestion:
+                    await self._make_suggestion(clipboard_suggestion)
             except Exception as e:
-                self._log(f"[PROACTIVE_AGENT] [ERR] Context check failed: {e}")
+                self._log(f"[PROACTIVE_AGENT] [ERR] Clipboard check failed: {e}")
+
+            # 1. Vision Check (Context Anticipation) - Every 60s
+            current_time = time.time()
+            if current_time - self.last_vision_check_time > 60:
+                self.last_vision_check_time = current_time
+                try:
+                    vision_suggestion = await self._check_context_switch()
+                    if vision_suggestion:
+                        await self._make_suggestion(vision_suggestion)
+                        # Don't skip other checks, but update last time
+                except Exception as e:
+                    self._log(f"[PROACTIVE_AGENT] [ERR] Context check failed: {e}")
 
             if self._should_suggest():
                 suggestion = await self._get_contextual_suggestion()
