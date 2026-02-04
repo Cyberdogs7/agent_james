@@ -17,8 +17,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Eliminates the friction of context switching and manual setup.
   - **Technical Notes**: Needs integration between `ProactiveAgent` and Vision Pipeline (OCR/Screen Analysis).
   - **Status**: Partially Implemented
-  - [x] Integrate ProactiveAgent with Vision Pipeline
-  - [x] Implement Automatic Project Context Switching
   - [ ] Implement Clipboard Analysis
   - [ ] Implement Auto-Git Status
 
@@ -41,6 +39,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: Visually replaying the "battle" of software development.
   - **User Impact**: Excellent for retro/post-mortem analysis of how complex tasks were solved.
   - **Technical Notes**: Store `swarms_update` events with timestamps; React timeline slider.
+  - **Status**: Idea
+
+- [ ] **Holographic Code Projection (AR)**
+  - **Description**: 3D visualization of code structure projected into AR space or 3D viewer.
+  - **Wow Factor**: "Iron Man" style interaction with the architecture.
+  - **User Impact**: Intuitive understanding of complex dependencies.
+  - **Technical Notes**: WebXR or Three.js integration with code analysis.
   - **Status**: Idea
 
 ---
@@ -71,14 +76,21 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Examples**: "Red Team" (One agent codes, one hacks it), "Debate" (Two agents argue architectural trade-offs), "Assembly Line" (Sequential processing).
   - **Wow Factor**: Watching agents take on distinct adversarial or cooperative roles to improve quality.
   - **User Impact**: Higher quality code through dialectic verification.
-  - **Technical Notes**: `SwarmManager` with template-based session spawning.
-  - **Status**: Idea
+  - **Technical Notes**: `SwarmManager` with template-based session spawning. Basic spawning implemented.
+  - **Status**: Partially Implemented
 
 - [ ] **Neural Link (Instant Knowledge Ingestion)**
   - **Description**: Drag & Drop a folder, PDF, or URL to instantly "upload" it to the active session's context.
   - **Wow Factor**: "I know Kung Fu" moments where the assistant instantly learns a new library.
   - **User Impact**: Rapid context switching between unfamiliar domains.
   - **Technical Notes**: RAG pipeline enhancement; Drag & Drop zone in UI.
+  - **Status**: Idea
+
+- [ ] **Just-in-Time Documentation (Neural Ingestion)**
+  - **Description**: Proactively fetches and whispers summaries of imported libraries/APIs.
+  - **Wow Factor**: "It knows what I'm using before I Google it."
+  - **User Impact**: Reduces context switching to browser.
+  - **Technical Notes**: Trigger on `import` statements; RAG lookup.
   - **Status**: Idea
 
 ---
@@ -105,4 +117,11 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: Intimate, socially aware interaction (good for late nights).
   - **User Impact**: Usable in quiet environments without disturbing others.
   - **Technical Notes**: Audio volume analysis; TTS style switching.
+  - **Status**: Idea
+
+- [ ] **Ambient Flow State**
+  - **Description**: Dynamic generative soundscapes that adapt to coding velocity.
+  - **Wow Factor**: The environment reacts to the user's focus level.
+  - **User Impact**: Enhances flow state and focus.
+  - **Technical Notes**: Keystroke velocity monitoring -> Audio generation/modulation.
   - **Status**: Idea
