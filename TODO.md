@@ -10,15 +10,15 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] **Pre-Cognition (Context Anticipation)**
+- [x] **Pre-Cognition (Context Anticipation)**
   - **Description**: James anticipates user needs based on screen context, clipboard, and time.
   - **Example**: User opens VS Code -> James switches project context and runs `git status`.
   - **Wow Factor**: The assistant acts *before* being asked.
   - **User Impact**: Eliminates the friction of context switching and manual setup.
   - **Technical Notes**: Needs integration between `ProactiveAgent` and Vision Pipeline (OCR/Screen Analysis).
-  - **Status**: Partially Implemented
-  - [ ] Implement Clipboard Analysis
-  - [ ] Implement Auto-Git Status
+  - **Status**: Implemented
+  - [x] Implement Clipboard Analysis
+  - [x] Implement Auto-Git Status
 
 - [ ] **Visual Memory Palace**
   - **Description**: Spatial visualization of project knowledge, architectural decisions, and artifacts.
