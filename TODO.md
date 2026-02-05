@@ -10,15 +10,20 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [x] **Pre-Cognition (Context Anticipation)**
-  - **Description**: James anticipates user needs based on screen context, clipboard, and time.
-  - **Example**: User opens VS Code -> James switches project context and runs `git status`.
-  - **Wow Factor**: The assistant acts *before* being asked.
-  - **User Impact**: Eliminates the friction of context switching and manual setup.
-  - **Technical Notes**: Needs integration between `ProactiveAgent` and Vision Pipeline (OCR/Screen Analysis).
-  - **Status**: Implemented
-  - [x] Implement Clipboard Analysis
-  - [x] Implement Auto-Git Status
+- [ ] **The Oracle (Predictive Architecture)**
+  - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
+  - **Example**: "Sir, if you add this dependency, your bundle size will increase by 20% and TTI will degrade."
+  - **Wow Factor**: Feels like a senior architect from the future guarding the codebase.
+  - **User Impact**: Prevents long-term architectural decay.
+  - **Technical Notes**: Hook into `ProactiveAgent` or Git hooks; uses LLM to analyze diffs against best practices.
+  - **Status**: Idea
+
+- [ ] **Cinematic Debugger**
+  - **Description**: Visualize the execution flow of a script or agent interaction in real-time within the War Room 3D interface.
+  - **Wow Factor**: Watching data flow through nodes like a sci-fi movie hologram.
+  - **User Impact**: Makes debugging complex async flows or multi-agent interactions intuitive.
+  - **Technical Notes**: Instrumentation of `AutomationEngine` and Agent steps; send events to `SwarmVisualizer`.
+  - **Status**: Idea
 
 - [ ] **Visual Memory Palace**
   - **Description**: Spatial visualization of project knowledge, architectural decisions, and artifacts.
@@ -52,6 +57,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
+
+- [ ] **Biometric Sentinel**
+  - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
+  - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
+  - **User Impact**: Seamless multi-user support and enhanced security.
+  - **Technical Notes**: Voice fingerprinting (e.g., `pyannote.audio`) and face recognition (already partially in `ada.py`).
+  - **Status**: Idea
 
 - [ ] **Adaptive Persona Engine**
   - **Description**: Detects user sentiment (frustration, focus, casual) and adjusts personality.
@@ -97,6 +109,14 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
+
+- [ ] **Reality Anchor (AR Sticky Notes)**
+  - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
+  - **Example**: "James, remind me to check this server rack when the light turns red." -> Anchors task to the visual of the server.
+  - **Wow Factor**: Merging digital tasks with physical reality.
+  - **User Impact**: Contextual reminders that appear where they are relevant.
+  - **Technical Notes**: Vision pipeline object tracking + spatial memory.
+  - **Status**: Idea
 
 - [ ] **Voice-First Code Navigation**
   - **Description**: "Go to the `User` class", "Scroll down", "What is this function doing?".
