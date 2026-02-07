@@ -10,26 +10,26 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
+- [ ] **The Holo-Table (Code City)**
+  - **Description**: Visualize the codebase as a 3D metropolis where building height represents lines of code and color represents complexity or churn.
+  - **Wow Factor**: "Show me where the bugs live." -> Camera flies to the glowing red "slums" of the codebase.
+  - **User Impact**: Instant visual identification of technical debt and architectural hotspots.
+  - **Technical Notes**: Extend `SwarmVisualizer` to render static analysis data (LOC/Cyclomatic Complexity).
+  - **Status**: Idea
+
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
-  - **Example**: "Sir, if you add this dependency, your bundle size will increase by 20% and TTI will degrade."
-  - **Wow Factor**: Feels like a senior architect from the future guarding the codebase.
+  - **Example**: "Sir, if you add this dependency, your bundle size will increase by 20%."
+  - **Wow Factor**: A senior architect from the future guarding the codebase.
   - **User Impact**: Prevents long-term architectural decay.
-  - **Technical Notes**: Hook into `ProactiveAgent` or Git hooks; uses LLM to analyze diffs against best practices.
+  - **Technical Notes**: Hook into `ProactiveAgent` or Git hooks; uses LLM to analyze diffs.
   - **Status**: Idea
 
 - [ ] **Cinematic Debugger**
   - **Description**: Visualize the execution flow of a script or agent interaction in real-time within the War Room 3D interface.
   - **Wow Factor**: Watching data flow through nodes like a sci-fi movie hologram.
   - **User Impact**: Makes debugging complex async flows or multi-agent interactions intuitive.
-  - **Technical Notes**: Instrumentation of `AutomationEngine` and Agent steps; send events to `SwarmVisualizer`.
-  - **Status**: Idea
-
-- [ ] **Visual Memory Palace**
-  - **Description**: Spatial visualization of project knowledge, architectural decisions, and artifacts.
-  - **Wow Factor**: "Show me what we decided about Auth." -> James projects a timeline or node graph of the decision process.
-  - **User Impact**: Makes retrieving complex historical context instant and intuitive.
-  - **Technical Notes**: Vector database visualization, connecting chat logs to file changes.
+  - **Technical Notes**: Instrumentation of `AutomationEngine` events to `SwarmVisualizer`.
   - **Status**: Idea
 
 - [ ] **Dream Mode (Background Intelligence)**
@@ -42,15 +42,8 @@ This document serves as the single source of truth for the evolution of the A.D.
 - [ ] **Temporal Replay (War Room Time Travel)**
   - **Description**: Ability to "scrub" through the timeline of the War Room to see agents spawning, working, and completing tasks over time.
   - **Wow Factor**: Visually replaying the "battle" of software development.
-  - **User Impact**: Excellent for retro/post-mortem analysis of how complex tasks were solved.
+  - **User Impact**: Excellent for retro/post-mortem analysis.
   - **Technical Notes**: Store `swarms_update` events with timestamps; React timeline slider.
-  - **Status**: Idea
-
-- [ ] **Holographic Code Projection (AR)**
-  - **Description**: 3D visualization of code structure projected into AR space or 3D viewer.
-  - **Wow Factor**: "Iron Man" style interaction with the architecture.
-  - **User Impact**: Intuitive understanding of complex dependencies.
-  - **Technical Notes**: WebXR or Three.js integration with code analysis.
   - **Status**: Idea
 
 ---
@@ -58,51 +51,39 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [ ] **Biometric Sentinel**
-  - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
-  - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
-  - **User Impact**: Seamless multi-user support and enhanced security.
-  - **Technical Notes**: Voice fingerprinting (e.g., `pyannote.audio`) and face recognition (already partially in `ada.py`).
+- [ ] **Live Architect (Voice-to-Diagram)**
+  - **Description**: "Draw the auth flow." -> Generates and displays a Mermaid/PlantUML diagram instantly in the War Room.
+  - **Wow Factor**: Turning verbal concepts into structural diagrams in seconds.
+  - **User Impact**: Rapid prototyping and documentation of mental models.
+  - **Technical Notes**: LLM -> Mermaid JS rendering in `WarRoomDashboard`.
   - **Status**: Idea
 
-- [ ] **Adaptive Persona Engine**
-  - **Description**: Detects user sentiment (frustration, focus, casual) and adjusts personality.
-  - **Behavior**:
-    - *Frustrated*: Brief, direct.
-    - *Casual*: Witty, conversational.
-  - **Wow Factor**: Feels like a true partner that "reads the room."
-  - **User Impact**: Reduces cognitive load by matching communication style to the user's state.
-  - **Technical Notes**: Audio sentiment analysis (Gemini or local model).
+- [ ] **Quantum Focus (Deep Work Guard)**
+  - **Description**: Detects "Flow State" via keyboard velocity/screen content and suppresses notifications/distractions.
+  - **Wow Factor**: The environment adapts to protect your focus.
+  - **User Impact**: Higher productivity and less context switching.
+  - **Technical Notes**: Extend `ProactiveAgent` to monitor input velocity; toggle `NotificationManager`.
   - **Status**: Idea
 
 - [ ] **Deep OS Integration (Ghost in the Machine)**
-  - **Description**: Advanced control over the operating system beyond simple app launching.
-  - **Examples**: "Organize my desktop", "Find the PDF I downloaded yesterday", "Tile my windows for coding".
-  - **Wow Factor**: Blurring the line between the assistant and the operating system.
-  - **User Impact**: Drastically speeds up complex, multi-step system workflows.
-  - **Technical Notes**: Enhanced `OSAgent` with file system indexing and window management APIs.
+  - **Description**: Advanced control over the operating system beyond simple app launching (window tiling, file indexing, workflow automation).
+  - **Wow Factor**: Blurring the line between the assistant and the OS.
+  - **User Impact**: Drastically speeds up complex system workflows.
+  - **Technical Notes**: `os_agent.py` has basic launch/volume. Needs `pywin32`/`wmctrl` for window management.
   - **Status**: Partially Implemented
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
-  - **Description**: Pre-defined multi-agent orchestration patterns for complex tasks.
-  - **Examples**: "Red Team" (One agent codes, one hacks it), "Debate" (Two agents argue architectural trade-offs), "Assembly Line" (Sequential processing).
-  - **Wow Factor**: Watching agents take on distinct adversarial or cooperative roles to improve quality.
+  - **Description**: Pre-defined multi-agent orchestration patterns (Red Team, Debate, Assembly Line).
+  - **Wow Factor**: Watching agents take on distinct adversarial or cooperative roles.
   - **User Impact**: Higher quality code through dialectic verification.
-  - **Technical Notes**: `SwarmManager` with template-based session spawning. Basic spawning implemented.
+  - **Technical Notes**: `SwarmVisualizer` and `jules_agent` support roles. Needs pattern logic in `SwarmManager`.
   - **Status**: Partially Implemented
 
-- [ ] **Neural Link (Instant Knowledge Ingestion)**
-  - **Description**: Drag & Drop a folder, PDF, or URL to instantly "upload" it to the active session's context.
-  - **Wow Factor**: "I know Kung Fu" moments where the assistant instantly learns a new library.
-  - **User Impact**: Rapid context switching between unfamiliar domains.
-  - **Technical Notes**: RAG pipeline enhancement; Drag & Drop zone in UI.
-  - **Status**: Idea
-
-- [ ] **Just-in-Time Documentation (Neural Ingestion)**
-  - **Description**: Proactively fetches and whispers summaries of imported libraries/APIs.
-  - **Wow Factor**: "It knows what I'm using before I Google it."
-  - **User Impact**: Reduces context switching to browser.
-  - **Technical Notes**: Trigger on `import` statements; RAG lookup.
+- [ ] **Sentient Commit Messages (The Poet)**
+  - **Description**: Analyzes the diff and writes a commit message with personality/narrative flair.
+  - **Wow Factor**: "Vanquished the null pointer demon in the auth tower."
+  - **User Impact**: Adds delight to the mundane task of committing code.
+  - **Technical Notes**: `git_ops.py` enhancement with style prompts.
   - **Status**: Idea
 
 ---
@@ -110,38 +91,30 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [ ] **Reality Anchor (AR Sticky Notes)**
-  - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
-  - **Example**: "James, remind me to check this server rack when the light turns red." -> Anchors task to the visual of the server.
-  - **Wow Factor**: Merging digital tasks with physical reality.
-  - **User Impact**: Contextual reminders that appear where they are relevant.
-  - **Technical Notes**: Vision pipeline object tracking + spatial memory.
+- [ ] **Biometric Sentinel**
+  - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
+  - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
+  - **User Impact**: Seamless multi-user support and security.
+  - **Technical Notes**: `ProactiveAgent` vision + `pyannote.audio`.
   - **Status**: Idea
 
-- [ ] **Voice-First Code Navigation**
-  - **Description**: "Go to the `User` class", "Scroll down", "What is this function doing?".
-  - **Wow Factor**: Programming at the speed of thought, hands-free.
-  - **User Impact**: Enables coding while away from the keyboard or reduces RSI strain.
-  - **Technical Notes**: IDE extension or deep accessibility integration.
+- [ ] **Reality Anchor (AR Sticky Notes)**
+  - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
+  - **Wow Factor**: Merging digital tasks with physical reality.
+  - **User Impact**: Contextual reminders that appear where they are relevant.
+  - **Technical Notes**: Vision pipeline object tracking.
   - **Status**: Idea
 
 - [ ] **Latency "Magic Tricks"**
-  - **Description**: UX hacks to mask latency.
-  - **Examples**: Filler sounds ("Hmm...", "Let me see..."), instant UI feedback before audio generation.
-  - **Wow Factor**: The assistant feels instant and alive, even when processing.
-  - **User Impact**: Maintains immersion and reduces frustration during wait times.
+  - **Description**: UX hacks to mask latency (filler sounds, instant UI feedback).
+  - **Wow Factor**: The assistant feels instant and alive.
+  - **User Impact**: Maintains immersion.
+  - **Technical Notes**: Client-side prediction/optimistic UI.
   - **Status**: Idea
 
 - [ ] **Whisper Mode**
   - **Description**: Detects when the user is whispering and responds with a whispered voice.
-  - **Wow Factor**: Intimate, socially aware interaction (good for late nights).
-  - **User Impact**: Usable in quiet environments without disturbing others.
+  - **Wow Factor**: Intimate, socially aware interaction.
+  - **User Impact**: Usable in quiet environments.
   - **Technical Notes**: Audio volume analysis; TTS style switching.
-  - **Status**: Idea
-
-- [ ] **Ambient Flow State**
-  - **Description**: Dynamic generative soundscapes that adapt to coding velocity.
-  - **Wow Factor**: The environment reacts to the user's focus level.
-  - **User Impact**: Enhances flow state and focus.
-  - **Technical Notes**: Keystroke velocity monitoring -> Audio generation/modulation.
   - **Status**: Idea
