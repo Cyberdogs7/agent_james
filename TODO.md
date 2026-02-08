@@ -17,6 +17,27 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Extend `SwarmVisualizer` to render static analysis data (LOC/Cyclomatic Complexity).
   - **Status**: Idea
 
+- [ ] **Project Echoes (Contextual Voice Memory)**
+  - **Description**: Automatically extracts and stores key architectural decisions, constraints, and preferences spoken during voice sessions into a long-term vector database.
+  - **Wow Factor**: "Remember when I said we use PostgreSQL?" -> James recalls the exact constraint months later without being prompted.
+  - **User Impact**: Eliminates the need to repeat context; the assistant learns and remembers your style.
+  - **Technical Notes**: Hook into `ada.py` transcription stream -> LLM extractor -> `MemoryManager` vector store.
+  - **Status**: Idea
+
+- [ ] **Overwatch (Visual CI/CD)**
+  - **Description**: Visualize the real-time status of CI/CD pipelines as glowing energy flows in the War Room. Build failures appear as red alerts or "breaches".
+  - **Wow Factor**: Watching code deploy like a military operation.
+  - **User Impact**: Instant, visceral visibility into build health without checking logs.
+  - **Technical Notes**: Integrate GitHub Actions webhooks -> `AutomationEngine` -> `SwarmVisualizer`.
+  - **Status**: Idea
+
+- [ ] **Pre-Crime (Proactive Test Healing)**
+  - **Description**: Detects test failures in real-time and uses LLMs to generate and apply fixes automatically, running the tests again to verify.
+  - **Wow Factor**: "The tests failed, but I've already applied a fix and they are passing now."
+  - **User Impact**: Drastically reduces downtime and context switching during TDD.
+  - **Technical Notes**: Extend `AutomationEngine` self-healing to wrap `pytest` execution.
+  - **Status**: Idea
+
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
   - **Example**: "Sir, if you add this dependency, your bundle size will increase by 20%."
@@ -69,7 +90,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Advanced control over the operating system beyond simple app launching (window tiling, file indexing, workflow automation).
   - **Wow Factor**: Blurring the line between the assistant and the OS.
   - **User Impact**: Drastically speeds up complex system workflows.
-  - **Technical Notes**: `os_agent.py` has basic launch/volume. Needs `pywin32`/`wmctrl` for window management.
+  - **Technical Notes**: `OSAgent` exists with launch/volume/lock. Needs `pywin32`/`wmctrl` for window management.
   - **Status**: Partially Implemented
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
@@ -95,8 +116,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
   - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
   - **User Impact**: Seamless multi-user support and security.
-  - **Technical Notes**: `ProactiveAgent` vision + `pyannote.audio`.
-  - **Status**: Idea
+  - **Technical Notes**: `ProactiveAgent` uses `face_cascade` to trigger Morning Briefing. Needs full auth logic.
+  - **Status**: Partially Implemented
 
 - [ ] **Reality Anchor (AR Sticky Notes)**
   - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
