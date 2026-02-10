@@ -17,11 +17,25 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Extend `SwarmVisualizer` to render static analysis data (LOC/Cyclomatic Complexity).
   - **Status**: Idea
 
-- [ ] **The Weaver (Narrative Memory)**
-  - **Description**: Automatically converts daily operational logs and chat history into a "Saga" (Markdown story). Allows querying "What did we fight last week?" to get a narrative summary.
-  - **Wow Factor**: Turning the mundane history of debugging into an epic tale.
-  - **User Impact**: Effortless long-term context recall without reading raw logs.
-  - **Technical Notes**: LLM summarizer running nightly on `trace.txt` / chat logs -> `MemoryManager`.
+- [ ] **The Conductor (Dynamic Orchestration)**
+  - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
+  - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
+  - **User Impact**: The system scales its intelligence to the complexity of the problem.
+  - **Technical Notes**: `AutomationEngine` trigger -> `jules_agent.spawn_agent(role="DBA")`.
+  - **Status**: Idea
+
+- [ ] **Holographic HUD (Target Lock)**
+  - **Description**: A transparent Electron overlay that draws "target locks" or highlights on actual screen elements the user is discussing.
+  - **Wow Factor**: "It's this button right here." -> A glowing reticle appears over the UI element on the user's screen.
+  - **User Impact**: Unambiguous reference resolution in visual tasks.
+  - **Technical Notes**: Transparent window, coordinate mapping from Vision/Accessibility API.
+  - **Status**: Idea
+
+- [ ] **Temporal Anomaly Detection (Time Travel Debugging)**
+  - **Description**: Record the state of the Swarm and allows "rewinding" the 3D visualization to replay events leading up to a failure.
+  - **Wow Factor**: "James, replay the last 5 minutes of the database agent." -> The War Room rewinds like a DVR.
+  - **User Impact**: Visualizes complex async race conditions and multi-agent interactions.
+  - **Technical Notes**: Event sourcing in `MemoryManager`, playback mode in `SwarmVisualizer`.
   - **Status**: Idea
 
 - [ ] **Ghost Mode (Autonomous Input)**
@@ -40,17 +54,9 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
-  - **Example**: "Sir, if you add this dependency, your bundle size will increase by 20%."
   - **Wow Factor**: A senior architect from the future guarding the codebase.
   - **User Impact**: Prevents long-term architectural decay.
   - **Technical Notes**: Hook into `ProactiveAgent` or Git hooks; uses LLM to analyze diffs.
-  - **Status**: Idea
-
-- [ ] **Cinematic Debugger**
-  - **Description**: Visualize the execution flow of a script or agent interaction in real-time within the War Room 3D interface.
-  - **Wow Factor**: Watching data flow through nodes like a sci-fi movie hologram.
-  - **User Impact**: Makes debugging complex async flows or multi-agent interactions intuitive.
-  - **Technical Notes**: Instrumentation of `AutomationEngine` events to `SwarmVisualizer`.
   - **Status**: Idea
 
 ---
@@ -79,6 +85,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: `SwarmVisualizer` and `jules_agent` support roles/spawning. Needs complex pattern logic in `SwarmManager`.
   - **Status**: Partially Implemented (Roles & Visualization active)
 
+- [ ] **Conversational Git (The Bard)**
+  - **Description**: Analyzes git diffs and explains changes in plain English with narrative flair, rather than raw line changes.
+  - **Wow Factor**: "James, what did we just break?" -> "It appears the frontend team inverted the auth logic in the login component."
+  - **User Impact**: Rapid understanding of complex merges without reading diffs.
+  - **Technical Notes**: LLM summarization of `git diff` output.
+  - **Status**: Idea
+
 - [ ] **Deep OS Integration (Ghost in the Machine)**
   - **Description**: Advanced control over the operating system beyond simple app launching (window tiling, file indexing, workflow automation).
   - **Wow Factor**: Blurring the line between the assistant and the OS.
@@ -93,11 +106,11 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: LLM -> Mermaid JS rendering in `WarRoomDashboard`.
   - **Status**: Idea
 
-- [ ] **Dream Mode (Background Intelligence)**
-  - **Description**: When the system is idle, James performs low-priority "thinking" tasks (refactoring, organizing files, summarization, index optimization).
-  - **Wow Factor**: "While you were sleeping, I reorganized the documentation and optimized the database indexes."
-  - **User Impact**: The codebase improves passively without user effort.
-  - **Technical Notes**: Idle state trigger in `AutomationEngine`.
+- [ ] **The Weaver (Narrative Memory)**
+  - **Description**: Automatically converts daily operational logs and chat history into a "Saga" (Markdown story). Allows querying "What did we fight last week?" to get a narrative summary.
+  - **Wow Factor**: Turning the mundane history of debugging into an epic tale.
+  - **User Impact**: Effortless long-term context recall without reading raw logs.
+  - **Technical Notes**: LLM summarizer running nightly on `trace.txt` / chat logs -> `MemoryManager`.
   - **Status**: Idea
 
 ---
