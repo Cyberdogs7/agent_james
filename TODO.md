@@ -22,7 +22,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
   - **User Impact**: The system scales its intelligence to the complexity of the problem.
   - **Technical Notes**: `AutomationEngine` trigger -> `jules_agent.spawn_agent(role="DBA")`.
-  - **Status**: Idea
+  - **Status**: Idea (Partially Implemented: Spawning exists, Auto-trigger pending)
 
 - [ ] **Holographic HUD (Target Lock)**
   - **Description**: A transparent Electron overlay that draws "target locks" or highlights on actual screen elements the user is discussing.
@@ -43,6 +43,20 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Here, let me show you." -> The cursor moves and clicks autonomously.
   - **User Impact**: Reduces cognitive load during complex UI navigation or multi-step fixes.
   - **Technical Notes**: Integrate `pyautogui` with safety interlocks (failsafe corner).
+  - **Status**: Idea
+
+- [ ] **The Holo-Deck (VR/AR Integration)**
+  - **Description**: Stream the `SwarmVisualizer` (3D War Room) to a VR headset (Quest/Vision Pro) for an immersive "command center" experience.
+  - **Wow Factor**: Standing inside the codebase, physically manipulating agent nodes.
+  - **User Impact**: Unparalleled immersion and spatial organization of complex systems.
+  - **Technical Notes**: WebXR support in `@react-three/fiber` component.
+  - **Status**: Idea
+
+- [ ] **Doppelgänger (Digital Twin)**
+  - **Description**: The assistant learns the user's specific coding style (indentation, variable naming, comment patterns) and mimics it perfectly when generating code.
+  - **Wow Factor**: "It writes code exactly like me, but faster."
+  - **User Impact**: Reduces cognitive friction when reviewing generated code; feels like a seamless extension of self.
+  - **Technical Notes**: Fine-tuned LoRA or few-shot prompting with recent user commits as context.
   - **Status**: Idea
 
 - [ ] **Neural Sync (Adaptive Soundscapes)**
@@ -99,6 +113,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: `OSAgent` supports launch/volume/lock. Needs `pywin32`/`wmctrl` for window management.
   - **Status**: Partially Implemented (Basic control active)
 
+- [ ] **Subliminal Priming (Proactive Fetching)**
+  - **Description**: The assistant anticipates the next likely question or need based on current context and pre-fetches documentation or resources.
+  - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
+  - **User Impact**: Removes latency from information retrieval.
+  - **Technical Notes**: Parallel `ProactiveAgent` thread analyzing conversation for entities/intent.
+  - **Status**: Idea
+
 - [ ] **Live Architect (Voice-to-Diagram)**
   - **Description**: "Draw the auth flow." -> Generates and displays a Mermaid/PlantUML diagram instantly in the War Room.
   - **Wow Factor**: Turning verbal concepts into structural diagrams in seconds.
@@ -118,12 +139,12 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
-- [ ] **Biometric Sentinel**
+- [ ] **Biometric Sentinel (Full Auth)**
   - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
   - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
   - **User Impact**: Seamless multi-user support and security.
   - **Technical Notes**: `ProactiveAgent` uses `face_cascade` to trigger Morning Briefing (Presence). Needs full identity verification/auth logic.
-  - **Status**: Partially Implemented (Presence detection active)
+  - **Status**: Partially Implemented (Presence detection active; Auth pending)
 
 - [ ] **Reality Anchor (AR Sticky Notes)**
   - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
