@@ -3319,6 +3319,10 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=10)
 
+                    # Wire MusicAgent to the main audio queue
+                    if self.music_agent:
+                        self.music_agent.set_audio_queue(self.audio_in_queue)
+
                     tasks.append(asyncio.create_task(self.send_realtime()))
                     # Run listen_audio as a separate, non-critical background task
                     # This prevents the main session from crashing if audio input fails (e.g., in a headless environment)
