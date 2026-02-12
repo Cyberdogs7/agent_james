@@ -14,15 +14,22 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Visualize the codebase as a 3D metropolis where building height represents lines of code and color represents complexity or churn.
   - **Wow Factor**: "Show me where the bugs live." -> Camera flies to the glowing red "slums" of the codebase.
   - **User Impact**: Instant visual identification of technical debt and architectural hotspots.
-  - **Technical Notes**: Extend `SwarmVisualizer` to render static analysis data (LOC/Cyclomatic Complexity).
+  - **Technical Notes**: Extend existing `SwarmVisualizer` to render static analysis data (LOC/Cyclomatic Complexity).
   - **Status**: Idea
 
-- [ ] **The Conductor (Dynamic Orchestration)**
-  - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
-  - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
-  - **User Impact**: The system scales its intelligence to the complexity of the problem.
-  - **Technical Notes**: `AutomationEngine` trigger -> `jules_agent.spawn_agent(role="DBA")`.
-  - **Status**: Idea (Partially Implemented: Spawning exists, Auto-trigger pending)
+- [ ] **The Mirror (Digital Twin)**
+  - **Description**: The assistant learns the user's specific coding style (indentation, variable naming, comment patterns) from git history and mimics it perfectly.
+  - **Wow Factor**: "It writes code exactly like me, but faster."
+  - **User Impact**: Reduces cognitive friction when reviewing generated code; feels like a seamless extension of self.
+  - **Technical Notes**: Create `profile_manager.py` to analyze git history -> Fine-tuned LoRA or few-shot prompting.
+  - **Status**: Idea
+
+- [ ] **Cinematic Mode (Work Mode)**
+  - **Description**: A single voice command ("James, let's work") that dims the smart lights (Kasa), puts the dashboard in full screen, and plays a "boot up" sound.
+  - **Wow Factor**: The room physically changes to match the user's intent.
+  - **User Impact**: Instant flow state induction.
+  - **Technical Notes**: `AutomationEngine` trigger -> `KasaAgent` + `OSAgent` + Audio.
+  - **Status**: Idea
 
 - [ ] **Holographic HUD (Target Lock)**
   - **Description**: A transparent Electron overlay that draws "target locks" or highlights on actual screen elements the user is discussing.
@@ -52,13 +59,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: WebXR support in `@react-three/fiber` component.
   - **Status**: Idea
 
-- [ ] **Doppelgänger (Digital Twin)**
-  - **Description**: The assistant learns the user's specific coding style (indentation, variable naming, comment patterns) and mimics it perfectly when generating code.
-  - **Wow Factor**: "It writes code exactly like me, but faster."
-  - **User Impact**: Reduces cognitive friction when reviewing generated code; feels like a seamless extension of self.
-  - **Technical Notes**: Fine-tuned LoRA or few-shot prompting with recent user commits as context.
-  - **Status**: Idea
-
 - [ ] **Neural Sync (Adaptive Soundscapes)**
   - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
   - **Wow Factor**: The soundtrack of your work adapts to your flow state.
@@ -78,19 +78,26 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
+- [ ] **The Conductor (Dynamic Orchestration)**
+  - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
+  - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
+  - **User Impact**: The system scales its intelligence to the complexity of the problem.
+  - **Technical Notes**: `AutomationEngine` currently supports manual spawning; need to implement auto-trigger from log analysis.
+  - **Status**: Partially Implemented (Spawning exists; Auto-trigger pending)
+
 - [ ] **Pre-Crime (Proactive Healing)**
   - **Description**: Detects failures in real-time and uses LLMs to generate and apply fixes automatically.
   - **Wow Factor**: "The script failed, but I've already applied a fix and backed up the original."
   - **User Impact**: Drastically reduces downtime and context switching.
-  - **Technical Notes**: `AutomationEngine` currently supports script self-healing (`_generate_fix`). Need to extend to full test suite (`pytest`) wrapping.
+  - **Technical Notes**: `AutomationEngine` supports script self-healing (`_generate_fix`). Need to extend to full test suite (`pytest`) wrapping.
   - **Status**: Partially Implemented (Script healing active; Test suite healing pending)
 
-- [ ] **Project Echoes (Contextual Voice Memory)**
-  - **Description**: Automatically extracts and stores key architectural decisions, constraints, and preferences spoken during voice sessions into a long-term vector database.
-  - **Wow Factor**: "Remember when I said we use PostgreSQL?" -> James recalls the exact constraint months later without being prompted.
-  - **User Impact**: Eliminates the need to repeat context; the assistant learns and remembers your style.
-  - **Technical Notes**: Hook into `ada.py` transcription stream -> LLM extractor -> `MemoryManager` vector store.
-  - **Status**: Idea
+- [ ] **Temporal Echoes (Contextual Memory)**
+  - **Description**: Automatically surfaces relevant past decisions, mistakes, or preferences when the user starts a similar task.
+  - **Wow Factor**: "Sir, last time you touched the auth system, you broke the login page. Be careful with the token expiration."
+  - **User Impact**: Prevents regression and reinforces learning.
+  - **Technical Notes**: `MemoryManager` exists and supports vector search. Need to hook it into `ada.py` task start logic.
+  - **Status**: Partially Implemented (Infrastructure active; Hook pending)
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
   - **Description**: Pre-defined multi-agent orchestration patterns (Red Team, Debate, Assembly Line).
@@ -117,8 +124,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: The assistant anticipates the next likely question or need based on current context and pre-fetches documentation or resources.
   - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
   - **User Impact**: Removes latency from information retrieval.
-  - **Technical Notes**: Parallel `ProactiveAgent` thread analyzing conversation for entities/intent.
-  - **Status**: Idea
+  - **Technical Notes**: Parallel `ProactiveAgent` thread analyzing conversation for entities/intent. Currently supports basic clipboard/vision suggestions.
+  - **Status**: Idea (Partially Implemented: Suggestions active; Fetching pending)
 
 - [ ] **Live Architect (Voice-to-Diagram)**
   - **Description**: "Draw the auth flow." -> Generates and displays a Mermaid/PlantUML diagram instantly in the War Room.

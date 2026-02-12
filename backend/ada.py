@@ -349,10 +349,15 @@ display_dashboard_tool = {
 
 get_morning_briefing_tool = {
     "name": "get_morning_briefing",
-    "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'.",
+    "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'. Returns text that you MUST read aloud to the user.",
     "parameters": {
         "type": "OBJECT",
-        "properties": {},
+        "properties": {
+            "force_refresh": {
+                "type": "BOOLEAN",
+                "description": "Optional: Set to true to force a fresh report generation instead of using cached data."
+            }
+        },
     }
 }
 
@@ -1703,35 +1708,62 @@ class AudioLoop:
             return "War Room Dashboard displayed."
         return "Failed to display dashboard."
 
-    async def handle_get_morning_briefing(self):
+    async def handle_get_morning_briefing(self, force_refresh=False):
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [TOOL] Generating/Retrieving Morning Briefing")
+            print(f"[ADA DEBUG] [TOOL] Generating/Retrieving Morning Briefing (Force: {force_refresh})")
 
         report = None
-        if self.automation_engine and self.automation_engine.current_briefing_report:
+        if not force_refresh and self.automation_engine and self.automation_engine.current_briefing_report:
             report = self.automation_engine.current_briefing_report
             # Mark as delivered
             self.automation_engine.briefing_status = "DELIVERED"
         else:
             # Generate on fly
-            report = await self.project_manager.generate_fleet_report()
+            if self.project_manager:
+                report = await self.project_manager.generate_fleet_report()
+            else:
+                return "Project Manager not available."
 
         if not report:
             return "Failed to generate briefing."
 
-        # Format for speech
+        # Check for errors in report
+        if report.get('error'):
+            return f"Morning Briefing Error: {report['error']} Please check your configuration."
+
+        # Format for speech (Conversational)
         prs = report.get('prs', [])
         total_repos = report.get('total_repos', 0)
 
-        summary = f"Morning Briefing. I am monitoring {total_repos} repositories.\n"
-        if prs:
-            summary += f"You have {len(prs)} pending Pull Requests:\n"
-            for pr in prs:
-                summary += f"- {pr['repo']}: #{pr['number']} '{pr['title']}'\n"
-        else:
-            summary += "All Pull Requests are cleared.\n"
+        if total_repos == 0:
+            return "System Instruction: Speak this exactly: 'Your fleet is currently empty, Sir. You can add repositories in the settings or ask me to sync the fleet.'"
 
-        return summary
+        # Group PRs by repo for better flow
+        pr_counts = {}
+        for pr in prs:
+            repo = pr.get('repo', 'unknown')
+            pr_counts[repo] = pr_counts.get(repo, 0) + 1
+
+        summary = f"Good morning, Sir. I am monitoring {total_repos} repositories. "
+
+        if not prs:
+            summary += "All systems are green. There are no pending Pull Requests to review."
+        else:
+            summary += f"You have {len(prs)} pending Pull Requests waiting for your attention. "
+            # Mention top 3 repos
+            details = []
+            for repo, count in list(pr_counts.items())[:3]:
+                details.append(f"{count} in {repo.split('/')[-1]}")
+
+            summary += "Including " + ", ".join(details)
+            if len(pr_counts) > 3:
+                summary += f", and others."
+            else:
+                summary += "."
+
+        # Give the model the data as context, but explicitly script the response to force audio
+        script = f"System Notification: Here is the latest data. You MUST act as a news anchor and read this briefing aloud to the user right now:\n\n{summary}"
+        return script
 
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
@@ -2008,7 +2040,7 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status", "sync_git_repos"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status", "sync_git_repos", "get_morning_briefing"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "git_merge_branch":
@@ -2933,9 +2965,10 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                     function_responses.append(function_response)
 
                                 elif fc.name == "get_morning_briefing":
+                                    force = fc.args.get("force_refresh", False)
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_morning_briefing'")
-                                    result = await self.handle_get_morning_briefing()
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_morning_briefing' force={force}")
+                                    result = await self.handle_get_morning_briefing(force_refresh=force)
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )
