@@ -352,7 +352,12 @@ get_morning_briefing_tool = {
     "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'.",
     "parameters": {
         "type": "OBJECT",
-        "properties": {},
+        "properties": {
+            "force_refresh": {
+                "type": "BOOLEAN",
+                "description": "Optional: Set to true to force a fresh report generation instead of using cached data."
+            }
+        },
     }
 }
 
@@ -1699,27 +1704,39 @@ class AudioLoop:
             return "War Room Dashboard displayed."
         return "Failed to display dashboard."
 
-    async def handle_get_morning_briefing(self):
+    async def handle_get_morning_briefing(self, force_refresh=False):
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [TOOL] Generating/Retrieving Morning Briefing")
+            print(f"[ADA DEBUG] [TOOL] Generating/Retrieving Morning Briefing (Force: {force_refresh})")
 
         report = None
-        if self.automation_engine and self.automation_engine.current_briefing_report:
+        if not force_refresh and self.automation_engine and self.automation_engine.current_briefing_report:
             report = self.automation_engine.current_briefing_report
             # Mark as delivered
             self.automation_engine.briefing_status = "DELIVERED"
         else:
             # Generate on fly
-            report = await self.project_manager.generate_fleet_report()
+            if self.project_manager:
+                report = await self.project_manager.generate_fleet_report()
+            else:
+                return "Project Manager not available."
 
         if not report:
             return "Failed to generate briefing."
+
+        # Check for errors in report
+        if report.get('error'):
+            return f"Morning Briefing Error: {report['error']} Please check your configuration."
 
         # Format for speech
         prs = report.get('prs', [])
         total_repos = report.get('total_repos', 0)
 
         summary = f"Morning Briefing. I am monitoring {total_repos} repositories.\n"
+
+        if total_repos == 0:
+            summary += "Your fleet is currently empty. You can add repositories in the settings or ask me to 'sync fleet'."
+            return summary
+
         if prs:
             summary += f"You have {len(prs)} pending Pull Requests:\n"
             for pr in prs:
@@ -2905,9 +2922,10 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                     function_responses.append(function_response)
 
                                 elif fc.name == "get_morning_briefing":
+                                    force = fc.args.get("force_refresh", False)
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_morning_briefing'")
-                                    result = await self.handle_get_morning_briefing()
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_morning_briefing' force={force}")
+                                    result = await self.handle_get_morning_briefing(force_refresh=force)
                                     function_response = types.FunctionResponse(
                                         id=fc.id, name=fc.name, response={"result": result}
                                     )
