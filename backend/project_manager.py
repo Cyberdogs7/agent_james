@@ -702,33 +702,35 @@ class ProjectManager:
 
         client = GitHubClient(token)
 
-        for repo in fleet:
+        async def fetch_repo_prs(repo):
             try:
                 owner = repo.get('owner')
                 name = repo.get('name')
+                if not owner or not name: return []
 
-                # Fetch PRs
                 prs = await client.list_pull_requests(owner, name)
+                results = []
                 if prs:
                     for pr in prs:
-                        pr_info = {
+                        results.append({
                             "repo": f"{owner}/{name}",
                             "number": pr.get("number"),
                             "title": pr.get("title"),
                             "url": pr.get("html_url"),
                             "created_at": pr.get("created_at"),
                             "updated_at": pr.get("updated_at")
-                        }
-                        report["prs"].append(pr_info)
-
-                        # Check stale (e.g. > 24 hours without update)
-                        # We can refine this logic later
-                        updated_at = pr.get("updated_at")
-                        if updated_at:
-                             # Basic stale check logic if needed
-                             pass
-
+                        })
+                return results
             except Exception as e:
                 print(f"[ProjectManager] Error fetching report for {repo.get('name')}: {e}")
+                return []
+
+        # Execute in parallel
+        tasks = [fetch_repo_prs(repo) for repo in fleet]
+        all_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for res in all_results:
+            if isinstance(res, list):
+                report["prs"].extend(res)
 
         return report
