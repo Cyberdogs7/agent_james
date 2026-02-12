@@ -1176,6 +1176,25 @@ async def get_slicer_profiles(sid):
         await sio.emit('error', {'msg': f"Failed to get profiles: {str(e)}"})
 
 @sio.event
+async def control_music(sid, data):
+    # data: { action: "play"|"pause"|"next"|... }
+    action = data.get('action')
+    print(f"Received music control: {action}")
+
+    if not audio_loop or not audio_loop.music_agent:
+        await sio.emit('error', {'msg': "Music Agent not available"})
+        return
+
+    try:
+        result = await audio_loop.music_agent.control(action)
+        # We don't necessarily need to emit status back as the status loop handles it
+        # but a confirmation log is nice
+        print(f"Music Control Result: {result}")
+    except Exception as e:
+        print(f"Error controlling music: {e}")
+        await sio.emit('error', {'msg': f"Music Control Error: {str(e)}"})
+
+@sio.event
 async def control_kasa(sid, data):
     # data: { ip, action: "on"|"off"|"brightness"|"color", value: ... }
     ip = data.get('ip')
