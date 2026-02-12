@@ -349,7 +349,7 @@ display_dashboard_tool = {
 
 get_morning_briefing_tool = {
     "name": "get_morning_briefing",
-    "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'.",
+    "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'. Returns text that you MUST read aloud to the user.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
@@ -1735,7 +1735,7 @@ class AudioLoop:
 
         if total_repos == 0:
             summary += "Your fleet is currently empty. You can add repositories in the settings or ask me to 'sync fleet'."
-            return summary
+            return f"System Instruction: Read this aloud: {summary}"
 
         if prs:
             summary += f"You have {len(prs)} pending Pull Requests:\n"
@@ -1744,7 +1744,7 @@ class AudioLoop:
         else:
             summary += "All Pull Requests are cleared.\n"
 
-        return summary
+        return f"System Instruction: Read this aloud: {summary}"
 
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
