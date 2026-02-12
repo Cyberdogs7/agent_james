@@ -3050,30 +3050,39 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
             raise e
 
     async def play_audio(self):
-        if not pya:
-             while True:
-                # Just consume queue
-                await self.audio_in_queue.get()
+        stream = None
+        if pya:
+            try:
+                stream = await asyncio.to_thread(
+                    pya.open,
+                    format=FORMAT,
+                    channels=CHANNELS,
+                    rate=RECEIVE_SAMPLE_RATE,
+                    output=True,
+                    output_device_index=self.output_device_index,
+                )
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA] [ERR] Failed to open audio output stream: {e}")
+                stream = None
+        else:
+            if INCLUDE_RAW_LOGS:
+                print("[ADA] PyAudio not available. Audio output will only be sent to frontend.")
 
-        try:
-            stream = await asyncio.to_thread(
-                pya.open,
-                format=FORMAT,
-                channels=CHANNELS,
-                rate=RECEIVE_SAMPLE_RATE,
-                output=True,
-                output_device_index=self.output_device_index,
-            )
-            while True:
+        while True:
+            try:
                 bytestream = await self.audio_in_queue.get()
+
+                # Always send to frontend
                 if self.on_audio_data:
                     self.on_audio_data(bytestream)
-                await asyncio.to_thread(stream.write, bytestream)
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA] [ERR] Failed to play audio: {e}")
-            while True:
-                await self.audio_in_queue.get()
+
+                # Play locally if stream is available
+                if stream:
+                    await asyncio.to_thread(stream.write, bytestream)
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA] [ERR] Error in play_audio loop: {e}")
 
     async def video_loop(self):
         cap = None
