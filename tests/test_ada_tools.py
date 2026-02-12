@@ -254,6 +254,12 @@ class TestAgentImports:
         assert JulesAgent is not None
         print("JulesAgent imported")
 
+    def test_music_agent_import(self):
+        """Test MusicAgent is imported."""
+        from ada import MusicAgent
+        assert MusicAgent is not None
+        print("MusicAgent imported")
+
 
 class TestToolConfirmation:
     """Test tool confirmation handling."""

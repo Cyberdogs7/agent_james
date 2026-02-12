@@ -885,5 +885,34 @@ tools_list = [{"function_declarations": [
             },
             "required": ["action"]
         }
+    },
+    {
+        "name": "play_music",
+        "description": "Plays a song or artist on YouTube Music. Use this when the user asks to play music.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "The song, artist, or album to play."
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "control_music",
+        "description": "Controls music playback (pause, resume, next, previous, volume).",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "enum": ["play", "pause", "resume", "next", "previous", "volume_up", "volume_down"],
+                    "description": "The action to perform."
+                }
+            },
+            "required": ["action"]
+        }
     }
 ]}]
