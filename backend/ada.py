@@ -1727,24 +1727,39 @@ class AudioLoop:
         if report.get('error'):
             return f"Morning Briefing Error: {report['error']} Please check your configuration."
 
-        # Format for speech
+        # Format for speech (Conversational)
         prs = report.get('prs', [])
         total_repos = report.get('total_repos', 0)
 
-        summary = f"Morning Briefing. I am monitoring {total_repos} repositories.\n"
-
         if total_repos == 0:
-            summary += "Your fleet is currently empty. You can add repositories in the settings or ask me to 'sync fleet'."
-            return f"System Instruction: Read this aloud: {summary}"
+            return "System Instruction: Speak this exactly: 'Your fleet is currently empty, Sir. You can add repositories in the settings or ask me to sync the fleet.'"
 
-        if prs:
-            summary += f"You have {len(prs)} pending Pull Requests:\n"
-            for pr in prs:
-                summary += f"- {pr['repo']}: #{pr['number']} '{pr['title']}'\n"
+        # Group PRs by repo for better flow
+        pr_counts = {}
+        for pr in prs:
+            repo = pr.get('repo', 'unknown')
+            pr_counts[repo] = pr_counts.get(repo, 0) + 1
+
+        summary = f"Good morning, Sir. I am monitoring {total_repos} repositories. "
+
+        if not prs:
+            summary += "All systems are green. There are no pending Pull Requests to review."
         else:
-            summary += "All Pull Requests are cleared.\n"
+            summary += f"You have {len(prs)} pending Pull Requests waiting for your attention. "
+            # Mention top 3 repos
+            details = []
+            for repo, count in list(pr_counts.items())[:3]:
+                details.append(f"{count} in {repo.split('/')[-1]}")
 
-        return f"System Instruction: Read this aloud: {summary}"
+            summary += "Including " + ", ".join(details)
+            if len(pr_counts) > 3:
+                summary += f", and others."
+            else:
+                summary += "."
+
+        # Give the model the data as context, but explicitly script the response to force audio
+        script = f"System Notification: Here is the latest data. You MUST act as a news anchor and read this briefing aloud to the user right now:\n\n{summary}"
+        return script
 
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
