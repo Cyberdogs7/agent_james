@@ -389,6 +389,7 @@ from scraper_agent import ScraperAgent
 from proactive_agent import ProactiveAgent
 from git_ops import GitOps
 from os_agent import OSAgent
+from music_agent import MusicAgent
 try:
     from backend.task_manager import TaskManager
 except ImportError:
@@ -495,6 +496,7 @@ class AudioLoop:
             genai_client=client
         )
         self.os_agent = OSAgent()
+        self.music_agent = MusicAgent(sio=self.sio)
 
         self.sct = None
 
@@ -558,6 +560,8 @@ class AudioLoop:
 
     def stop(self):
         self.stop_event.set()
+        if self.music_agent:
+            asyncio.create_task(self.music_agent.stop())
         # Note: JulesAgent handles cleanup of its own internal polling tasks when the process exits
         # or we can explicitly stop them here if we exposed a method.
         # But for now, setting stop_event is main shutdown signal.
@@ -2117,6 +2121,30 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                         id=fc.id,
                                         name=fc.name,
                                         response={"result": msg}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "play_music":
+                                    query = fc.args["query"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'play_music' query='{query}'")
+                                    result = await self.music_agent.play(query)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result}
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "control_music":
+                                    action = fc.args["action"]
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_music' action='{action}'")
+                                    result = await self.music_agent.control(action)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result}
                                     )
                                     function_responses.append(function_response)
 
