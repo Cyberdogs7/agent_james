@@ -395,6 +395,7 @@ from proactive_agent import ProactiveAgent
 from git_ops import GitOps
 from os_agent import OSAgent
 from music_agent import MusicAgent
+from ollama_agent import OllamaAgent
 try:
     from backend.task_manager import TaskManager
 except ImportError:
@@ -502,6 +503,7 @@ class AudioLoop:
         )
         self.os_agent = OSAgent()
         self.music_agent = MusicAgent(sio=self.sio)
+        self.ollama_agent = OllamaAgent()
 
         self.sct = None
 
@@ -1292,6 +1294,23 @@ class AudioLoop:
 
         return f"{msg} (ID: {swarm_id})"
 
+    async def handle_ollama_request(self, prompt, source=None, role=None, model="llama3"):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OLLAMA] Task: '{prompt}' (Model: {model}, Source: {source})")
+
+        # Start the agent
+        session = await self.ollama_agent.spawn_agent(prompt, source, role, model)
+
+        # Notify
+        msg = f"System Notification: Local Ollama agent started with ID '{session['id']}'. I will notify you when it completes."
+        try:
+            await self.session.send(input=msg, end_of_turn=True)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send ollama notification: {e}")
+
+        return f"Agent started. ID: {session['id']}"
+
     async def handle_jules_request(self, prompt, source=None, role=None, on_session_created=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}' (Role: {role})")
@@ -1384,6 +1403,10 @@ class AudioLoop:
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
         
+        # Check if it's an Ollama session
+        if session_id in self.ollama_agent.sessions:
+            return await self.ollama_agent.send_message(session_id, feedback)
+
         # Use the existing agent instance
         async def _jules_update_callback(message):
             if self.session:
@@ -1428,6 +1451,11 @@ class AudioLoop:
     async def handle_list_jules_activities(self, session_id):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
+
+        # Check Ollama
+        if session_id in self.ollama_agent.sessions:
+            return await self.ollama_agent.list_activities(session_id)
+
         project_config = self.project_manager.get_project_config()
         api_key = project_config.get("jules_api_key")
         jules_agent = JulesAgent(api_key=api_key)
@@ -1536,14 +1564,23 @@ class AudioLoop:
 
         # 2. Jules Data (Fetch early for stats)
         jules_sessions = await self.jules_agent.list_sessions()
+        ollama_sessions = await self.ollama_agent.list_sessions()
+
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DASHBOARD] Jules sessions fetched: {len(jules_sessions)}")
+            print(f"[ADA DEBUG] [DASHBOARD] Jules sessions: {len(jules_sessions)}, Ollama sessions: {len(ollama_sessions)}")
 
         # 3. System Stats (REPLACED WITH AGENT STATS)
-        # Calculate stats from Jules Sessions
-        total_sessions = len(jules_sessions)
-        active_sessions_count = len([s for s in jules_sessions if s.get('state') not in ['COMPLETED', 'FAILED']])
-        completed_sessions_count = len([s for s in jules_sessions if s.get('state') == 'COMPLETED'])
+        # Calculate stats from both sources
+        all_sessions = jules_sessions + ollama_sessions
+        total_sessions = len(all_sessions)
+
+        # Jules states are uppercase, Ollama states are uppercase
+        active_states = ['RUNNING', 'PENDING', 'IN_PROGRESS']
+        failed_states = ['FAILED', 'ERROR']
+        completed_states = ['COMPLETED', 'DONE']
+
+        active_sessions_count = len([s for s in all_sessions if s.get('state') in active_states or s.get('state') not in (completed_states + failed_states)])
+        completed_sessions_count = len([s for s in all_sessions if s.get('state') in completed_states])
 
         system_stats = {
             "total_agents": total_sessions,
@@ -1590,13 +1627,11 @@ class AudioLoop:
         all_states = self.project_manager.get_all_jules_session_states()
         new_session_ids = []
 
-        # Identify new sessions
-        for s in jules_sessions:
-            s_id = s.get('name')
-            if not s_id:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Found session without name: {s}")
-                continue
+        # Identify new sessions (Jules only for persistent tracking, but we treat Ollama as ephemeral for now or same?)
+        # Let's track Ollama sessions too if they have IDs
+        for s in all_sessions:
+            s_id = s.get('name') or s.get('id')
+            if not s_id: continue
 
             if s_id not in all_states or "seen_at" not in all_states[s_id]:
                 new_session_ids.append(s_id)
@@ -1608,8 +1643,8 @@ class AudioLoop:
                 if nid not in all_states: all_states[nid] = {}
                 all_states[nid]["seen_at"] = now
 
-        for s in jules_sessions:
-            s_id = s.get('name')
+        for s in all_sessions:
+            s_id = s.get('name') or s.get('id')
             if not s_id: continue
 
             s_state = s.get('state', 'UNKNOWN')
@@ -1628,8 +1663,6 @@ class AudioLoop:
                 is_old = False
                 if completion_time_str:
                     try:
-                        # Handle 'Z' if present (Python <3.11 fromisoformat doesn't like Z, but 3.11+ does.
-                        # We are on 3.12, but to be safe/standard)
                         if completion_time_str.endswith('Z'):
                              completion_time_str = completion_time_str[:-1] + '+00:00'
                         dt = datetime.fromisoformat(completion_time_str)
@@ -1637,19 +1670,26 @@ class AudioLoop:
                         if (now - completion_ts) > (2 * 3600):
                             is_old = True
                     except Exception as e:
-                        if INCLUDE_RAW_LOGS:
-                             print(f"[ADA DEBUG] Failed to parse time {completion_time_str}: {e}")
+                        pass
 
-                # Hide if old AND has been viewed for at least 5 minutes (to avoid flashing new discoveries)
                 if is_old:
                     if (now - seen_at) > 300:
                         continue
+
+            # Determine source for insight
+            if s in ollama_sessions:
+                insight = self.ollama_agent.get_session_insight(s_id)
+                agent_type = "ollama"
+            else:
+                insight = self.jules_agent.get_session_insight(s_id)
+                agent_type = "jules"
 
             enriched_sessions.append({
                 "id": s_id,
                 "title": s_title,
                 "state": s_state,
-                "latest_thought": self.jules_agent.get_session_insight(s_id)
+                "latest_thought": insight,
+                "type": agent_type
             })
 
         if INCLUDE_RAW_LOGS:
@@ -2040,7 +2080,7 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                     response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status", "sync_git_repos", "get_morning_briefing"]:
+                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "run_ollama_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status", "sync_git_repos", "get_morning_briefing"]:
                                 prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
 
                                 if fc.name == "git_merge_branch":
@@ -2512,6 +2552,20 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                         print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
                                     source = fc.args.get("source")
                                     result = await self.handle_jules_request(prompt, source)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "run_ollama_agent":
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_ollama_agent' with prompt='{prompt}'")
+                                    source = fc.args.get("source")
+                                    role = fc.args.get("role")
+                                    model = fc.args.get("model", "llama3")
+                                    result = await self.handle_ollama_request(prompt, source, role, model)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,
