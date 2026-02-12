@@ -608,12 +608,40 @@ apply_task_fix_tool = {
     }
 }
 
+run_ollama_agent_tool = {
+    "name": "run_ollama_agent",
+    "description": "Creates a new local Ollama agent task. Use this when the user specifically asks for a local agent, or when you need to perform a task locally without sending data to the cloud. Supports reading local files for context.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The prompt to send to the local agent."
+            },
+            "source": {
+                "type": "STRING",
+                "description": "Optional: The local file path or directory to use as context."
+            },
+            "model": {
+                "type": "STRING",
+                "description": "Optional: The name of the Ollama model to use (e.g., 'llama3'). Defaults to 'llama3'."
+            },
+            "role": {
+                "type": "STRING",
+                "description": "Optional: The role of the agent."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
+
 tools_list = [{"function_declarations": [
     generate_cad_prototype_tool,
     write_file_tool,
     read_directory_tool,
     read_file_tool,
     run_jules_agent_tool,
+    run_ollama_agent_tool,
     spawn_swarm_agent_tool,
     create_swarm_mission_tool,
     send_jules_feedback_tool,
