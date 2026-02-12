@@ -1,204 +1,219 @@
 import asyncio
 import logging
 import random
-from playwright.async_api import async_playwright
+import subprocess
+import shlex
+import threading
+import time
+from ytmusicapi import YTMusic
+import yt_dlp
 
 class MusicAgent:
     def __init__(self, sio=None):
         self.sio = sio
-        self.browser = None
-        self.context = None
-        self.page = None
-        self.is_playing = False
+        self.yt = YTMusic()
         self.current_track = {"title": "Unknown", "artist": "Unknown", "time": "0:00"}
+        self.is_playing = False
         self.logger = logging.getLogger("MusicAgent")
         self.logger.setLevel(logging.INFO)
+
+        self.ffmpeg_process = None
         self._stop_event = asyncio.Event()
-        self._vis_task = None
-        self._status_task = None
+        self._audio_queue = None # Set by ada.py if pushing to global mix
+
+        # Internal state
+        self.volume = 1.0
+        self.paused = False
+
+    def set_audio_queue(self, queue):
+        """Allows ADA to inject the main audio queue."""
+        self._audio_queue = queue
 
     async def start(self):
-        """Launches the browser and navigates to YouTube Music."""
-        if self.browser:
-            return
-
-        self.logger.info("Starting MusicAgent...")
-        try:
-            p = await async_playwright().start()
-            # Launch headless for now, maybe headed for debugging if needed
-            self.browser = await p.chromium.launch(headless=True, args=["--autoplay-policy=no-user-gesture-required"])
-            self.context = await self.browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            )
-            self.page = await self.context.new_page()
-            await self.page.goto("https://music.youtube.com")
-
-            # Handle potential "Sign in" or cookie popups
-            try:
-                # Click "Reject all" cookies if present (common in EU)
-                # Selectors might vary, try common ones
-                await self.page.click("button[aria-label='Reject all']", timeout=2000)
-            except:
-                pass
-
-            self.logger.info("MusicAgent started successfully.")
-
-            # Start background loops
-            self._vis_task = asyncio.create_task(self._vis_loop())
-            self._status_task = asyncio.create_task(self._status_loop())
-
-        except Exception as e:
-            self.logger.error(f"Failed to start MusicAgent: {e}")
+        """No-op for API version, but kept for compatibility."""
+        self.logger.info("MusicAgent (API) ready.")
 
     async def stop(self):
-        """Stops the browser and background tasks."""
+        """Stops playback."""
         self._stop_event.set()
-        if self._vis_task:
-            self._vis_task.cancel()
-        if self._status_task:
-            self._status_task.cancel()
-
-        if self.browser:
-            await self.browser.close()
-            self.browser = None
+        await self._kill_ffmpeg()
+        self.is_playing = False
         self.logger.info("MusicAgent stopped.")
 
-    async def play(self, query):
-        """Searches for a query and plays the first result."""
-        if not self.browser:
-            await self.start()
+    async def _kill_ffmpeg(self):
+        if self.ffmpeg_process:
+            try:
+                self.ffmpeg_process.terminate()
+                self.ffmpeg_process.wait()
+            except:
+                pass
+            self.ffmpeg_process = None
 
+    async def play(self, query):
+        """Searches for a query and streams it."""
         self.logger.info(f"Searching for: {query}")
         try:
-            # Click search button
-            await self.page.click("ytmusic-search-box", timeout=5000)
-            await self.page.fill("input#input", query)
-            await self.page.keyboard.press("Enter")
+            # 1. Search
+            # Run in thread to avoid blocking
+            results = await asyncio.to_thread(self.yt.search, query, filter="songs")
+            if not results:
+                return f"No results found for {query}"
 
-            # Wait for results
-            await self.page.wait_for_selector("ytmusic-shelf-renderer", timeout=5000)
+            top_result = results[0]
+            video_id = top_result['videoId']
+            title = top_result['title']
+            artists = ", ".join([a['name'] for a in top_result['artists']])
 
-            # Click the first result (usually "Top result" or "Songs")
-            # We target the play button on the first result
-            # Try a generic approach: click the first item in the list
-            # Usually the top result has a play button overlay
-            await self.page.click("ytmusic-card-shelf-renderer ytmusic-play-button-renderer", timeout=2000)
+            self.current_track = {
+                "title": title,
+                "artist": artists,
+                "time": "Streaming"
+            }
+            self.logger.info(f"Found: {title} by {artists} ({video_id})")
 
-        except Exception:
-            # Fallback: try clicking the first item in the list directly
-            try:
-                await self.page.click("ytmusic-responsive-list-item-renderer", timeout=2000)
-            except Exception as e:
-                self.logger.error(f"Failed to play music: {e}")
-                return f"Failed to play music: {e}"
+            # 2. Get Stream URL via yt-dlp
+            # Run in thread
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'quiet': True,
+                'no_warnings': True,
+                'noplaylist': True
+            }
 
-        self.is_playing = True
-        return f"Playing {query} on YouTube Music."
+            def get_url(vid):
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
+                    return info['url']
+
+            stream_url = await asyncio.to_thread(get_url, video_id)
+
+            # 3. Start Streaming via FFmpeg
+            await self._kill_ffmpeg()
+
+            # FFmpeg command to output PCM S16LE 24000Hz Mono (matching ADA's default)
+            # ADA uses 24000Hz for receive/playback
+            cmd = [
+                'ffmpeg',
+                '-re', # Read at native frame rate (important for streaming)
+                '-i', stream_url,
+                '-f', 's16le',
+                '-acodec', 'pcm_s16le',
+                '-ac', '1', # Mono
+                '-ar', '24000', # Sample Rate
+                '-vn', # No video
+                '-loglevel', 'quiet',
+                '-' # Output to pipe
+            ]
+
+            self.ffmpeg_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                bufsize=1024 * 10
+            )
+
+            self.is_playing = True
+            self.paused = False
+
+            # Start background reader task
+            asyncio.create_task(self._stream_reader())
+
+            # Emit status
+            if self.sio:
+                await self.sio.emit('music_status', {
+                    "status": "playing",
+                    "track": self.current_track
+                })
+
+            return f"Playing {title} by {artists}"
+
+        except Exception as e:
+            self.logger.error(f"Play failed: {e}")
+            return f"Failed to play music: {e}"
+
+    async def _stream_reader(self):
+        """Reads from ffmpeg stdout and pushes to audio queue."""
+        chunk_size = 1024
+
+        while self.is_playing and self.ffmpeg_process:
+            if self.paused:
+                await asyncio.sleep(0.1)
+                continue
+
+            if self.ffmpeg_process.poll() is not None:
+                self.logger.info("FFmpeg process finished.")
+                self.is_playing = False
+                break
+
+            # Read chunk in thread
+            data = await asyncio.to_thread(self.ffmpeg_process.stdout.read, chunk_size)
+
+            if not data:
+                break
+
+            # Push to ADA's queue if available
+            if self._audio_queue:
+                # We can apply volume here if we want to do DSP, but for now just raw
+                # Visualization logic
+                if self.sio:
+                    # Simple volume-based vis
+                    # Sample a few bytes
+                    import struct
+                    import math
+
+                    # Async emit to avoid blocking audio loop
+                    if random.random() < 0.1: # Don't flood
+                        try:
+                            # Generate pseudo-spectrum
+                            vis_data = [min(255, b + random.randint(0, 50)) for b in data[:64]]
+                            asyncio.create_task(self.sio.emit('music_vis_data', {"data": vis_data}))
+                        except:
+                            pass
+
+                await self._audio_queue.put(data)
+
+            # Since we used -re in ffmpeg, it limits speed, but we should yield
+            await asyncio.sleep(0) # Yield
+
+        self.is_playing = False
+        if self.sio:
+             await self.sio.emit('music_status', {
+                "status": "stopped",
+                "track": None
+            })
 
     async def control(self, action):
         """Controls playback."""
-        if not self.browser:
-            return "Music agent not running."
-
         self.logger.info(f"Music Control: {action}")
-        try:
-            if action == "play" or action == "resume":
-                # Check if paused
-                # The play/pause button is usually #play-pause-button
-                # If it has 'title="Pause"', it's playing. If 'title="Play"', it's paused.
-                title = await self.page.get_attribute("#play-pause-button", "title")
-                if title == "Play":
-                    await self.page.click("#play-pause-button")
-                    self.is_playing = True
-                    return "Resumed playback."
-                else:
-                    return "Already playing."
 
-            elif action == "pause":
-                title = await self.page.get_attribute("#play-pause-button", "title")
-                if title == "Pause":
-                    await self.page.click("#play-pause-button")
-                    self.is_playing = False
-                    return "Paused playback."
-                else:
-                    return "Already paused."
+        if action == "play" or action == "resume":
+            if not self.is_playing: return "No track loaded."
+            self.paused = False
+            if self.ffmpeg_process:
+                # Sending SIGCONT is unix specific, but we are just controlling the loop reading
+                # For ffmpeg -re, stopping read might cause buffer overflow?
+                # Better to just discard data if paused? No, resume should pick up.
+                # Actually, simplest pause is to stop reading from stdout in the loop
+                pass
+            return "Resumed."
 
-            elif action == "next":
-                await self.page.click(".next-button")
-                return "Skipped to next track."
+        elif action == "pause":
+            if self.is_playing:
+                self.paused = True
+                return "Paused."
+            return "Not playing."
 
-            elif action == "previous" or action == "prev":
-                await self.page.click(".previous-button")
-                return "Skipped to previous track."
+        elif action == "stop":
+            await self.stop()
+            return "Stopped."
 
-            elif action == "volume_up":
-                # Volume slider is tricky. Use keyboard shortcut 'up arrow' focused on player?
-                # Or try to set volume via JS
-                # document.querySelector('video').volume += 0.1
-                await self.page.evaluate("document.querySelector('video').volume = Math.min(1, document.querySelector('video').volume + 0.1)")
-                return "Volume up."
+        elif action == "volume_up":
+            # Just a stub unless we implement DSP volume scaling on chunks
+            self.volume = min(1.0, self.volume + 0.1)
+            return "Volume up (Software)."
 
-            elif action == "volume_down":
-                await self.page.evaluate("document.querySelector('video').volume = Math.max(0, document.querySelector('video').volume - 0.1)")
-                return "Volume down."
+        elif action == "volume_down":
+            self.volume = max(0.0, self.volume - 0.1)
+            return "Volume down (Software)."
 
-        except Exception as e:
-            self.logger.error(f"Control error: {e}")
-            return f"Failed to perform action {action}: {e}"
-
-    async def _status_loop(self):
-        """Periodically scrapes track info."""
-        while not self._stop_event.is_set():
-            if self.browser and self.page:
-                try:
-                    # Scrape info
-                    # Title: .content-info-wrapper .title
-                    # Artist: .content-info-wrapper .subtitle
-                    # Time: .time-info
-
-                    title = await self.page.text_content(".content-info-wrapper .title", timeout=1000)
-                    artist = await self.page.text_content(".content-info-wrapper .subtitle", timeout=1000)
-                    time_info = await self.page.text_content(".time-info", timeout=1000)
-
-                    # Update state
-                    self.current_track = {
-                        "title": title or "Unknown",
-                        "artist": artist or "Unknown",
-                        "time": time_info or "0:00"
-                    }
-
-                    # Determine status
-                    play_btn_title = await self.page.get_attribute("#play-pause-button", "title", timeout=1000)
-                    status = "playing" if play_btn_title == "Pause" else "paused"
-                    self.is_playing = (status == "playing")
-
-                    # Emit status
-                    if self.sio:
-                        await self.sio.emit('music_status', {
-                            "status": status,
-                            "track": self.current_track
-                        })
-
-                except Exception:
-                    pass
-
-            await asyncio.sleep(2)
-
-    async def _vis_loop(self):
-        """Emits dummy visualization data."""
-        while not self._stop_event.is_set():
-            if self.is_playing and self.sio:
-                # Generate 64 random bytes (0-255)
-                # Make it look somewhat like a spectrum (more bass)
-                data = []
-                for i in range(64):
-                    # Simple noise
-                    val = random.randint(0, 255)
-                    # Apply some 'bass' bias
-                    if i < 10: val = max(val, random.randint(100, 255))
-                    data.append(val)
-
-                await self.sio.emit('music_vis_data', {"data": data})
-
-            # 30 FPS approx
-            await asyncio.sleep(0.033)
+        return "Action not supported."
