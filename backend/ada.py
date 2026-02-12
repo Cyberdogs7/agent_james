@@ -1525,7 +1525,12 @@ class AudioLoop:
         # 1. Project Info
         project = self.project_manager.current_project
 
-        # 2. System Stats (REPLACED WITH AGENT STATS)
+        # 2. Jules Data (Fetch early for stats)
+        jules_sessions = await self.jules_agent.list_sessions()
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [DASHBOARD] Jules sessions fetched: {len(jules_sessions)}")
+
+        # 3. System Stats (REPLACED WITH AGENT STATS)
         # Calculate stats from Jules Sessions
         total_sessions = len(jules_sessions)
         active_sessions_count = len([s for s in jules_sessions if s.get('state') not in ['COMPLETED', 'FAILED']])
@@ -1538,10 +1543,10 @@ class AudioLoop:
             "success_rate": int((completed_sessions_count / total_sessions * 100)) if total_sessions > 0 else 0
         }
 
-        # 3. Tasks (Worker Nodes)
+        # 4. Tasks (Worker Nodes)
         tasks = self.task_manager.list_tasks()
 
-        # 4. Trello Data (Active Cards)
+        # 5. Trello Data (Active Cards)
         trello_cards = []
         try:
             # Attempt to get the first board and its cards
@@ -1568,13 +1573,9 @@ class AudioLoop:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to fetch Trello data: {e}")
 
-        # 5. Jules Data
-        jules_sessions = await self.jules_agent.list_sessions()
+        # 6. Jules Data Enrichment
         enriched_sessions = []
         now = time.time()
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DASHBOARD] Jules sessions fetched: {len(jules_sessions)}")
 
         # Efficiently manage local state
         all_states = self.project_manager.get_all_jules_session_states()
