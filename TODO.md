@@ -10,6 +10,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
+- [ ] **The Sentry (Security Overwatch)**
+  - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
+  - **Wow Factor**: "Sir, I've detected an unauthorized outbound connection on port 8080."
+  - **User Impact**: Passive security and peace of mind without manual auditing.
+  - **Technical Notes**: `watchdog` library for FS, `scapy` for network, hooked into `AutomationEngine`.
+  - **Status**: Idea
+
 - [ ] **The Holo-Table (Code City)**
   - **Description**: Visualize the codebase as a 3D metropolis where building height represents lines of code and color represents complexity or churn.
   - **Wow Factor**: "Show me where the bugs live." -> Camera flies to the glowing red "slums" of the codebase.
@@ -78,6 +85,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
+- [ ] **Protocol Droid (Schema Negotiator)**
+  - **Description**: Automatically detects API schema mismatches (e.g., 400 Bad Request) and negotiates a fix between frontend and backend codebases.
+  - **Wow Factor**: "The frontend was sending a string, but the backend expected an integer. I have corrected the Pydantic model."
+  - **User Impact**: Eliminates "integration hell" and manual schema debugging.
+  - **Technical Notes**: Middleware to intercept error responses -> LLM analysis -> Auto-patching.
+  - **Status**: Idea
+
 - [ ] **The Conductor (Dynamic Orchestration)**
   - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
   - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
@@ -96,8 +110,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Automatically surfaces relevant past decisions, mistakes, or preferences when the user starts a similar task.
   - **Wow Factor**: "Sir, last time you touched the auth system, you broke the login page. Be careful with the token expiration."
   - **User Impact**: Prevents regression and reinforces learning.
-  - **Technical Notes**: `MemoryManager` exists and supports vector search. Need to hook it into `ada.py` task start logic.
-  - **Status**: Partially Implemented (Infrastructure active; Hook pending)
+  - **Technical Notes**: `MemoryManager` supports vector search. `ada.py` injects architectural memory into Jules tasks. Needs expansion to general chat.
+  - **Status**: Partially Implemented (Infrastructure active; Hook active for Jules tasks)
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
   - **Description**: Pre-defined multi-agent orchestration patterns (Red Team, Debate, Assembly Line).
@@ -125,7 +139,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
   - **User Impact**: Removes latency from information retrieval.
   - **Technical Notes**: Parallel `ProactiveAgent` thread analyzing conversation for entities/intent. Currently supports basic clipboard/vision suggestions.
-  - **Status**: Idea (Partially Implemented: Suggestions active; Fetching pending)
+  - **Status**: Partially Implemented (Suggestions active; Fetching pending)
 
 - [ ] **Live Architect (Voice-to-Diagram)**
   - **Description**: "Draw the auth flow." -> Generates and displays a Mermaid/PlantUML diagram instantly in the War Room.
@@ -145,6 +159,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
+
+- [ ] **Sonic Debugging (Auditory Feedback)**
+  - **Description**: Assigns distinct, subtle sound effects to system events (e.g., a "thud" for a 500 error, a "chime" for a successful deploy).
+  - **Wow Factor**: Monitoring the heartbeat of the system with your ears while looking elsewhere.
+  - **User Impact**: Passive situational awareness.
+  - **Technical Notes**: `SoundAgent` mapping log levels/exceptions to audio files.
+  - **Status**: Idea
 
 - [ ] **Biometric Sentinel (Full Auth)**
   - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
