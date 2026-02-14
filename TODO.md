@@ -10,12 +10,19 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
+- [ ] **The Forge (Matter Manifestation)**
+  - **Description**: "James, print a replacement knob." -> The assistant generates a 3D CAD model, slices it, and sends it to the printer autonomously.
+  - **Wow Factor**: Turning verbal requests into physical objects. The ultimate "replicator" moment.
+  - **User Impact**: Solves physical world problems with software speed.
+  - **Technical Notes**: `CadAgent` (Gemini -> build123d) + `PrinterAgent` (OctoPrint/Moonraker) already exist. Need to chain them into a single `ManifestationAgent` flow.
+  - **Status**: Partially Implemented (CAD generation active; Print pipeline active; Full automation pending)
+
 - [ ] **The Sentry (Security Overwatch)**
   - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
   - **Wow Factor**: "Sir, I've detected an unauthorized outbound connection on port 8080."
   - **User Impact**: Passive security and peace of mind without manual auditing.
-  - **Technical Notes**: `watchdog` library for FS, `scapy` for network, hooked into `AutomationEngine`.
-  - **Status**: Idea
+  - **Technical Notes**: `watchdog` library for FS, `scapy` for network, hooked into `AutomationEngine`. Currently only monitors Git commits.
+  - **Status**: Partially Implemented (Git monitoring active; FS/Network pending)
 
 - [ ] **The Holo-Table (Code City)**
   - **Description**: Visualize the codebase as a 3D metropolis where building height represents lines of code and color represents complexity or churn.
@@ -70,8 +77,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
   - **Wow Factor**: The soundtrack of your work adapts to your flow state.
   - **User Impact**: Increases immersion and focus.
-  - **Technical Notes**: Audio generation model or Spotify API controlled by `ProactiveAgent` metrics.
-  - **Status**: Idea
+  - **Technical Notes**: `MusicAgent` is active (play/control). Need to link it to `ProactiveAgent` metrics for adaptive playlist generation.
+  - **Status**: Partially Implemented (Music playback active; Adaptive logic pending)
 
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
@@ -96,8 +103,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
   - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
   - **User Impact**: The system scales its intelligence to the complexity of the problem.
-  - **Technical Notes**: `AutomationEngine` currently supports manual spawning; need to implement auto-trigger from log analysis.
-  - **Status**: Partially Implemented (Spawning exists; Auto-trigger pending)
+  - **Technical Notes**: `AutomationEngine` supports manual spawning; need to implement auto-trigger from log analysis.
+  - **Status**: Partially Implemented (Spawning active; Auto-trigger pending)
 
 - [ ] **Pre-Crime (Proactive Healing)**
   - **Description**: Detects failures in real-time and uses LLMs to generate and apply fixes automatically.
@@ -132,13 +139,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: Blurring the line between the assistant and the OS.
   - **User Impact**: Drastically speeds up complex system workflows.
   - **Technical Notes**: `OSAgent` supports launch/volume/lock. Needs `pywin32`/`wmctrl` for window management.
-  - **Status**: Partially Implemented (Basic control active)
+  - **Status**: Partially Implemented (Basic control active; Window management pending)
 
 - [ ] **Subliminal Priming (Proactive Fetching)**
   - **Description**: The assistant anticipates the next likely question or need based on current context and pre-fetches documentation or resources.
   - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
   - **User Impact**: Removes latency from information retrieval.
-  - **Technical Notes**: Parallel `ProactiveAgent` thread analyzing conversation for entities/intent. Currently supports basic clipboard/vision suggestions.
+  - **Technical Notes**: `ProactiveAgent` thread analyzing conversation for entities/intent. Currently supports basic clipboard/vision suggestions.
   - **Status**: Partially Implemented (Suggestions active; Fetching pending)
 
 - [ ] **Live Architect (Voice-to-Diagram)**
