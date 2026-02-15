@@ -14,28 +14,35 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: "James, print a replacement knob." -> The assistant generates a 3D CAD model, slices it, and sends it to the printer autonomously.
   - **Wow Factor**: Turning verbal requests into physical objects. The ultimate "replicator" moment.
   - **User Impact**: Solves physical world problems with software speed.
-  - **Technical Notes**: `CadAgent` (Gemini -> build123d) + `PrinterAgent` (OctoPrint/Moonraker) already exist. Need to chain them into a single `ManifestationAgent` flow.
-  - **Status**: Partially Implemented (CAD generation active; Print pipeline active; Full automation pending)
+  - **Technical Notes**: `CadAgent` (Gemini -> build123d) + `PrinterAgent` (OctoPrint/Moonraker) active. Orchestrator pending.
+  - **Status**: Partially Implemented
 
 - [ ] **The Sentry (Security Overwatch)**
   - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
   - **Wow Factor**: "Sir, I've detected an unauthorized outbound connection on port 8080."
   - **User Impact**: Passive security and peace of mind without manual auditing.
-  - **Technical Notes**: `watchdog` library for FS, `scapy` for network, hooked into `AutomationEngine`. Currently only monitors Git commits.
-  - **Status**: Partially Implemented (Git monitoring active; FS/Network pending)
+  - **Technical Notes**: `AutomationEngine` monitors Git commits. FS (watchdog) and Network (scapy) monitoring pending.
+  - **Status**: Partially Implemented
 
 - [ ] **The Holo-Table (Code City)**
   - **Description**: Visualize the codebase as a 3D metropolis where building height represents lines of code and color represents complexity or churn.
   - **Wow Factor**: "Show me where the bugs live." -> Camera flies to the glowing red "slums" of the codebase.
   - **User Impact**: Instant visual identification of technical debt and architectural hotspots.
-  - **Technical Notes**: Extend existing `SwarmVisualizer` to render static analysis data (LOC/Cyclomatic Complexity).
+  - **Technical Notes**: `SwarmVisualizer` renders agents. Need to extend to static analysis data (LOC/Cyclomatic Complexity).
+  - **Status**: Idea
+
+- [ ] **The Chameleon (Dynamic Theming)**
+  - **Description**: The UI automatically adapts its theme and layout based on the current task context (e.g., Coding -> Dark/Terminal, Writing -> Calm/Paper, Crisis -> Red Alert).
+  - **Wow Factor**: The interface feels like a living organism reacting to the situation.
+  - **User Impact**: Reduces cognitive load by matching visual environment to mental state.
+  - **Technical Notes**: `ProactiveAgent` detects context -> `ThemeManager` updates CSS variables/Tailwind classes.
   - **Status**: Idea
 
 - [ ] **The Mirror (Digital Twin)**
   - **Description**: The assistant learns the user's specific coding style (indentation, variable naming, comment patterns) from git history and mimics it perfectly.
   - **Wow Factor**: "It writes code exactly like me, but faster."
   - **User Impact**: Reduces cognitive friction when reviewing generated code; feels like a seamless extension of self.
-  - **Technical Notes**: Create `profile_manager.py` to analyze git history -> Fine-tuned LoRA or few-shot prompting.
+  - **Technical Notes**: `profile_manager.py` to analyze git history -> Fine-tuned LoRA or few-shot prompting.
   - **Status**: Idea
 
 - [ ] **Cinematic Mode (Work Mode)**
@@ -77,8 +84,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
   - **Wow Factor**: The soundtrack of your work adapts to your flow state.
   - **User Impact**: Increases immersion and focus.
-  - **Technical Notes**: `MusicAgent` is active (play/control). Need to link it to `ProactiveAgent` metrics for adaptive playlist generation.
-  - **Status**: Partially Implemented (Music playback active; Adaptive logic pending)
+  - **Technical Notes**: `MusicAgent` is active. Adaptive logic linking metrics to playlist selection pending.
+  - **Status**: Partially Implemented
 
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
@@ -101,31 +108,38 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 - [ ] **The Conductor (Dynamic Orchestration)**
   - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
-  - **Wow Factor**: "I noticed a database deadlock in the logs, so I've deployed a DBA agent to analyze the query plan."
+  - **Wow Factor**: "I noticed a database deadlock, so I've deployed a DBA agent to analyze the query plan."
   - **User Impact**: The system scales its intelligence to the complexity of the problem.
-  - **Technical Notes**: `AutomationEngine` supports manual spawning; need to implement auto-trigger from log analysis.
-  - **Status**: Partially Implemented (Spawning active; Auto-trigger pending)
+  - **Technical Notes**: Manual spawning active via `spawn_swarm_agent`. Auto-trigger from log analysis pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Pre-Crime (Proactive Healing)**
   - **Description**: Detects failures in real-time and uses LLMs to generate and apply fixes automatically.
   - **Wow Factor**: "The script failed, but I've already applied a fix and backed up the original."
   - **User Impact**: Drastically reduces downtime and context switching.
-  - **Technical Notes**: `AutomationEngine` supports script self-healing (`_generate_fix`). Need to extend to full test suite (`pytest`) wrapping.
-  - **Status**: Partially Implemented (Script healing active; Test suite healing pending)
+  - **Technical Notes**: `AutomationEngine` supports script healing (`_generate_fix`). Full test suite wrapping pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Temporal Echoes (Contextual Memory)**
   - **Description**: Automatically surfaces relevant past decisions, mistakes, or preferences when the user starts a similar task.
   - **Wow Factor**: "Sir, last time you touched the auth system, you broke the login page. Be careful with the token expiration."
   - **User Impact**: Prevents regression and reinforces learning.
-  - **Technical Notes**: `MemoryManager` supports vector search. `ada.py` injects architectural memory into Jules tasks. Needs expansion to general chat.
-  - **Status**: Partially Implemented (Infrastructure active; Hook active for Jules tasks)
+  - **Technical Notes**: `MemoryManager` vector search active. Hook active for Jules tasks. General chat integration pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
   - **Description**: Pre-defined multi-agent orchestration patterns (Red Team, Debate, Assembly Line).
   - **Wow Factor**: Watching agents take on distinct adversarial or cooperative roles.
   - **User Impact**: Higher quality code through dialectic verification.
-  - **Technical Notes**: `SwarmVisualizer` and `jules_agent` support roles/spawning. Needs complex pattern logic in `SwarmManager`.
-  - **Status**: Partially Implemented (Roles & Visualization active)
+  - **Technical Notes**: Roles & Visualization active. Complex interaction patterns pending.
+  - **Status**: Partially Implemented
+
+- [ ] **The Librarian (Knowledge Graph)**
+  - **Description**: A dedicated agent that builds a navigable knowledge graph of the codebase, allowing queries like "How does module X relate to Y?"
+  - **Wow Factor**: "I've mapped the dependency graph. Changing this function will impact 3 other modules."
+  - **User Impact**: rapid understanding of complex systems.
+  - **Technical Notes**: Graph database (Neo4j or similar) or deep recursive analysis by `MemoryManager`.
+  - **Status**: Idea
 
 - [ ] **Conversational Git (The Bard)**
   - **Description**: Analyzes git diffs and explains changes in plain English with narrative flair, rather than raw line changes.
@@ -138,21 +152,21 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Advanced control over the operating system beyond simple app launching (window tiling, file indexing, workflow automation).
   - **Wow Factor**: Blurring the line between the assistant and the OS.
   - **User Impact**: Drastically speeds up complex system workflows.
-  - **Technical Notes**: `OSAgent` supports launch/volume/lock. Needs `pywin32`/`wmctrl` for window management.
-  - **Status**: Partially Implemented (Basic control active; Window management pending)
+  - **Technical Notes**: `OSAgent` active (launch/volume/lock). Window management pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Subliminal Priming (Proactive Fetching)**
   - **Description**: The assistant anticipates the next likely question or need based on current context and pre-fetches documentation or resources.
   - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
   - **User Impact**: Removes latency from information retrieval.
-  - **Technical Notes**: `ProactiveAgent` thread analyzing conversation for entities/intent. Currently supports basic clipboard/vision suggestions.
-  - **Status**: Partially Implemented (Suggestions active; Fetching pending)
+  - **Technical Notes**: `ProactiveAgent` suggestions active. Resource pre-fetching pending.
+  - **Status**: Partially Implemented
 
-- [ ] **Live Architect (Voice-to-Diagram)**
-  - **Description**: "Draw the auth flow." -> Generates and displays a Mermaid/PlantUML diagram instantly in the War Room.
-  - **Wow Factor**: Turning verbal concepts into structural diagrams in seconds.
+- [ ] **The Blueprint (Live Architecture)**
+  - **Description**: "Draw the auth flow." -> Generates and displays a Mermaid/PlantUML diagram instantly. Also generates scaffolding code/folders from descriptions.
+  - **Wow Factor**: Turning verbal concepts into structural diagrams and file trees in seconds.
   - **User Impact**: Rapid prototyping and documentation of mental models.
-  - **Technical Notes**: LLM -> Mermaid JS rendering in `WarRoomDashboard`.
+  - **Technical Notes**: LLM -> Mermaid JS rendering in `WarRoomDashboard`. Folder generation agent.
   - **Status**: Idea
 
 - [ ] **The Weaver (Narrative Memory)**
@@ -178,8 +192,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
   - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
   - **User Impact**: Seamless multi-user support and security.
-  - **Technical Notes**: `ProactiveAgent` uses `face_cascade` to trigger Morning Briefing (Presence). Needs full identity verification/auth logic.
-  - **Status**: Partially Implemented (Presence detection active; Auth pending)
+  - **Technical Notes**: Presence detection active (`ProactiveAgent`). Full identity verification pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Reality Anchor (AR Sticky Notes)**
   - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
