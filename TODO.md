@@ -10,18 +10,25 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] **The Forge (Matter Manifestation)**
-  - **Description**: "James, print a replacement knob." -> The assistant generates a 3D CAD model, slices it, and sends it to the printer autonomously.
-  - **Wow Factor**: Turning verbal requests into physical objects. The ultimate "replicator" moment.
-  - **User Impact**: Solves physical world problems with software speed.
-  - **Technical Notes**: `CadAgent` (Gemini -> build123d) + `PrinterAgent` (OctoPrint/Moonraker) active. Orchestrator pending.
-  - **Status**: Partially Implemented
+- [ ] **Project Recall (Photographic Memory)**
+  - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
+  - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
+  - **User Impact**: Infinite recall of context without bookmarking.
+  - **Technical Notes**: `mss` screen capture -> OCR (Tesseract/EasyOCR) -> `MemoryManager` vector store.
+  - **Status**: Idea
+
+- [ ] **Dream Mode (Generative Idle)**
+  - **Description**: When the system is idle, the War Room visualizer shifts to a "dream state," visualizing random code structures, potential refactors, or playing back past successful missions.
+  - **Wow Factor**: The AI feels like it's "thinking" or "dreaming" when not being used.
+  - **User Impact**: Emotional connection and delight; passive system optimization.
+  - **Technical Notes**: `SwarmVisualizer` idle animation mode. Generative art based on git commit history.
+  - **Status**: Idea
 
 - [ ] **The Sentry (Security Overwatch)**
   - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
   - **Wow Factor**: "Sir, I've detected an unauthorized outbound connection on port 8080."
   - **User Impact**: Passive security and peace of mind without manual auditing.
-  - **Technical Notes**: `AutomationEngine` monitors Git commits. FS (watchdog) and Network (scapy) monitoring pending.
+  - **Technical Notes**: Git monitoring active (`AutomationEngine`). FS (watchdog) and Network (scapy) monitoring pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Holo-Table (Code City)**
@@ -59,7 +66,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Transparent window, coordinate mapping from Vision/Accessibility API.
   - **Status**: Idea
 
-- [ ] **Temporal Anomaly Detection (Time Travel Debugging)**
+- [ ] **Retro-Causality Debugger (Time Travel)**
   - **Description**: Record the state of the Swarm and allows "rewinding" the 3D visualization to replay events leading up to a failure.
   - **Wow Factor**: "James, replay the last 5 minutes of the database agent." -> The War Room rewinds like a DVR.
   - **User Impact**: Visualizes complex async race conditions and multi-agent interactions.
@@ -79,13 +86,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Unparalleled immersion and spatial organization of complex systems.
   - **Technical Notes**: WebXR support in `@react-three/fiber` component.
   - **Status**: Idea
-
-- [ ] **Neural Sync (Adaptive Soundscapes)**
-  - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
-  - **Wow Factor**: The soundtrack of your work adapts to your flow state.
-  - **User Impact**: Increases immersion and focus.
-  - **Technical Notes**: `MusicAgent` is active. Adaptive logic linking metrics to playlist selection pending.
-  - **Status**: Partially Implemented
 
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
@@ -152,7 +152,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Advanced control over the operating system beyond simple app launching (window tiling, file indexing, workflow automation).
   - **Wow Factor**: Blurring the line between the assistant and the OS.
   - **User Impact**: Drastically speeds up complex system workflows.
-  - **Technical Notes**: `OSAgent` active (launch/volume/lock). Window management pending.
+  - **Technical Notes**: `OSAgent` active (launch/volume/lock/sleep). Window management pending.
   - **Status**: Partially Implemented
 
 - [ ] **Subliminal Priming (Proactive Fetching)**
@@ -181,6 +181,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
 
+- [ ] **Neural Sync (Adaptive Soundscapes)**
+  - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
+  - **Wow Factor**: The soundtrack of your work adapts to your flow state.
+  - **User Impact**: Increases immersion and focus.
+  - **Technical Notes**: `MusicAgent` active. Adaptive logic linking metrics to playlist selection pending.
+  - **Status**: Partially Implemented
+
 - [ ] **Sonic Debugging (Auditory Feedback)**
   - **Description**: Assigns distinct, subtle sound effects to system events (e.g., a "thud" for a 500 error, a "chime" for a successful deploy).
   - **Wow Factor**: Monitoring the heartbeat of the system with your ears while looking elsewhere.
@@ -192,7 +199,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
   - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
   - **User Impact**: Seamless multi-user support and security.
-  - **Technical Notes**: Presence detection active (`ProactiveAgent`). Full identity verification pending.
+  - **Technical Notes**: Presence detection (Face) triggers briefing. Full identity verification pending.
   - **Status**: Partially Implemented
 
 - [ ] **Reality Anchor (AR Sticky Notes)**
