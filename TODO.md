@@ -14,8 +14,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
-  - **Technical Notes**: `mss` screen capture -> OCR (Tesseract/EasyOCR) -> `MemoryManager` vector store.
-  - **Status**: Idea
+  - **Technical Notes**: `mss` screen capture active (`ProactiveAgent`). Vector store active (`MemoryManager`). Continuous loop pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Dream Mode (Generative Idle)**
   - **Description**: When the system is idle, the War Room visualizer shifts to a "dream state," visualizing random code structures, potential refactors, or playing back past successful missions.
@@ -91,8 +91,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
   - **Wow Factor**: A senior architect from the future guarding the codebase.
   - **User Impact**: Prevents long-term architectural decay.
-  - **Technical Notes**: Hook into `ProactiveAgent` or Git hooks; uses LLM to analyze diffs.
-  - **Status**: Idea
+  - **Technical Notes**: Smart Merge Candidate detection active (`AutomationEngine`). Predictive architectural analysis pending.
+  - **Status**: Partially Implemented
 
 ---
 
@@ -180,6 +180,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 ## 🛠 Quality of Life & Polish
 *Features that make daily use smoother, faster, and more delightful.*
+
+- [ ] **System Pulse (Visual Heartbeat)**
+  - **Description**: Visualizing the heartbeat of the automation engine (CPU/Memory/Tasks/Agents) in the UI.
+  - **Wow Factor**: Seeing the system "breathe" and knowing it's alive.
+  - **User Impact**: System confidence and situational awareness.
+  - **Technical Notes**: Extend `SwarmVisualizer` to pulse based on `get_dashboard_data`.
+  - **Status**: Idea
 
 - [ ] **Neural Sync (Adaptive Soundscapes)**
   - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
