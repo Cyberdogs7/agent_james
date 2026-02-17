@@ -1,3 +1,46 @@
+try:
+    from time_utils import set_time_format_tool, get_datetime_tool
+except ImportError:
+    try:
+        from backend.time_utils import set_time_format_tool, get_datetime_tool
+    except ImportError:
+        # Fallback definitions if import fails (e.g. during standalone testing)
+        set_time_format_tool = {
+            "name": "set_time_format",
+            "description": "Sets the preferred time format for displaying time.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {
+                    "format": {
+                        "type": "STRING",
+                        "description": "The desired time format, either '12h' or '24h'."
+                    }
+                },
+                "required": ["format"]
+            }
+        }
+        get_datetime_tool = {
+            "name": "get_datetime",
+            "description": "Gets the current date and time in the local timezone.",
+            "parameters": {
+                "type": "OBJECT",
+                "properties": {}
+            }
+        }
+
+generate_cad_tool = {
+    "name": "generate_cad",
+    "description": "Generates a 3D CAD model based on a prompt.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The description of the object to generate."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
 generate_cad_prototype_tool = {
     "name": "generate_cad_prototype",
     "description": "Generates a 3D wireframe prototype based on a user's description. Use this when the user asks to 'visualize', 'prototype', 'create a wireframe', or 'design' something in 3D.",
@@ -13,6 +56,300 @@ generate_cad_prototype_tool = {
     }
 }
 
+run_web_agent_tool = {
+    "name": "run_web_agent",
+    "description": "Opens a web browser and performs a task according to the prompt.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The detailed instructions for the web browser agent."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
+create_project_tool = {
+    "name": "create_project",
+    "description": "Creates a new project folder to organize files.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the new project."}
+        },
+        "required": ["name"]
+    }
+}
+
+modify_timer_tool = {
+    "name": "modify_timer",
+    "description": "Modifies an existing timer or reminder.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the timer or reminder to modify."},
+            "new_duration": {"type": "INTEGER", "description": "The new duration of the timer in seconds."},
+            "new_timestamp": {"type": "STRING", "description": "The new time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."}
+        },
+        "required": ["name"]
+    }
+}
+
+switch_project_tool = {
+    "name": "switch_project",
+    "description": "Switches the current active project context.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the project to switch to."}
+        },
+        "required": ["name"]
+    }
+}
+
+dismiss_jules_session_tool = {
+    "name": "dismiss_jules_session",
+    "description": "Dismisses (hides) a Jules session from the dashboard.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {"type": "STRING", "description": "The ID of the session to dismiss."}
+        },
+        "required": ["session_id"]
+    }
+}
+
+stop_jules_session_tool = {
+    "name": "stop_jules_session",
+    "description": "Stops a running Jules session (stops polling) and dismisses it from the active view.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {"type": "STRING", "description": "The ID of the session to stop."}
+        },
+        "required": ["session_id"]
+    }
+}
+
+merge_pull_request_tool = {
+    "name": "merge_pull_request",
+    "description": "Merges a specific Pull Request on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "pull_number": {"type": "INTEGER", "description": "The number of the Pull Request to merge."},
+            "merge_method": {"type": "STRING", "description": "Optional merge method: 'merge', 'squash', or 'rebase'. Defaults to 'merge'."}
+        },
+        "required": ["owner", "repo", "pull_number"]
+    }
+}
+
+list_projects_tool = {
+    "name": "list_projects",
+    "description": "Lists all available projects.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+list_smart_devices_tool = {
+    "name": "list_smart_devices",
+    "description": "Lists all available smart home devices (lights, plugs, etc.) on the network.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+control_light_tool = {
+    "name": "control_light",
+    "description": "Controls a smart light device.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "target": {
+                "type": "STRING",
+                "description": "The IP address of the device to control. Always prefer the IP address over the alias for reliability."
+            },
+            "action": {
+                "type": "STRING",
+                "description": "The action to perform: 'turn_on', 'turn_off', or 'set'."
+            },
+            "brightness": {
+                "type": "INTEGER",
+                "description": "Optional brightness level (0-100)."
+            },
+            "color": {
+                "type": "STRING",
+                "description": "Optional color name (e.g., 'red', 'cool white') or 'warm'."
+            }
+        },
+        "required": ["target", "action"]
+    }
+}
+
+discover_printers_tool = {
+    "name": "discover_printers",
+    "description": "Discovers 3D printers available on the local network.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+print_stl_tool = {
+    "name": "print_stl",
+    "description": "Prints an STL file to a 3D printer. Handles slicing the STL to G-code and uploading to the printer.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "stl_path": {"type": "STRING", "description": "Path to STL file, or 'current' for the most recent CAD model."},
+            "printer": {"type": "STRING", "description": "Printer name or IP address."},
+            "profile": {"type": "STRING", "description": "Optional slicer profile name."}
+        },
+        "required": ["stl_path", "printer"]
+    }
+}
+
+get_print_status_tool = {
+    "name": "get_print_status",
+    "description": "Gets the current status of a 3D printer including progress, time remaining, and temperatures.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "printer": {"type": "STRING", "description": "Printer name or IP address."}
+        },
+        "required": ["printer"]
+    }
+}
+
+iterate_cad_tool = {
+    "name": "iterate_cad",
+    "description": "Modifies or iterates on the current CAD design based on user feedback. Use this when the user asks to adjust, change, modify, or iterate on the existing 3D model (e.g., 'make it taller', 'add a handle', 'reduce the thickness').",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The changes or modifications to apply to the current design."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
+set_timer_tool = {
+    "name": "set_timer",
+    "description": "Sets a timer for a specified duration.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "duration": {"type": "INTEGER", "description": "The duration of the timer in seconds."},
+            "name": {"type": "STRING", "description": "The name of the timer."}
+        },
+        "required": ["duration", "name"]
+    }
+}
+
+set_reminder_tool = {
+    "name": "set_reminder",
+    "description": "Sets a reminder for a specific time.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "timestamp": {"type": "STRING", "description": "The time for the reminder in ISO format (e.g., 'YYYY-MM-DDTHH:MM:SS')."},
+            "name": {"type": "STRING", "description": "The name of the reminder."}
+        },
+        "required": ["timestamp", "name"]
+    }
+}
+
+list_timers_tool = {
+    "name": "list_timers",
+    "description": "Lists all active timers and reminders.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+delete_entry_tool = {
+    "name": "delete_entry",
+    "description": "Deletes a timer or reminder by name.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING", "description": "The name of the timer or reminder to delete."}
+        },
+        "required": ["name"]
+    }
+}
+
+check_for_updates_tool = {
+    "name": "check_for_updates",
+    "description": "Checks if a new version of the application is available from the GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+apply_update_tool = {
+    "name": "apply_update",
+    "description": "Downloads the latest version of the application from GitHub and restarts the application to apply the changes.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+change_voice_tool = {
+    "name": "change_voice",
+    "description": "Changes the voice of the assistant for the current project. This will cause a brief reconnection.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "voice_name": {"type": "STRING", "description": "The name of the voice to switch to. Valid options are: Puck, Charon, Kore, Fenrir, Aoede, Sadaltager."}
+        },
+        "required": ["voice_name"]
+    }
+}
+
+update_persona_tool = {
+    "name": "update_persona",
+    "description": "Updates the persona (system instructions) for the current project. This effectively changes who the assistant 'is'. Use this to switch roles (e.g., from 'Cheeky Butler' to 'Strict Commander'). This will cause a brief reconnection.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "persona": {"type": "STRING", "description": "The new system prompt description of the persona."}
+        },
+        "required": ["persona"]
+    }
+}
+
+display_dashboard_tool = {
+    "name": "display_dashboard",
+    "description": "Displays the 'War Room' dashboard, aggregating project status, Trello tickets, active agents, and device health into a unified view.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {},
+    }
+}
+
+get_morning_briefing_tool = {
+    "name": "get_morning_briefing",
+    "description": "Retrieves the daily morning briefing (fleet status, PRs, issues). Use this when the user asks for 'the briefing', 'status report', or 'what's new'. Returns text that you MUST read aloud to the user.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "force_refresh": {
+                "type": "BOOLEAN",
+                "description": "Optional: Set to true to force a fresh report generation instead of using cached data."
+            }
+        },
+    }
+}
 
 send_jules_feedback_tool = {
     "name": "send_jules_feedback",
@@ -635,8 +972,30 @@ run_ollama_agent_tool = {
     }
 }
 
-tools_list = [{"function_declarations": [
+all_tools_list = [
+    generate_cad_tool,
     generate_cad_prototype_tool,
+    run_web_agent_tool,
+    create_project_tool,
+    switch_project_tool,
+    list_projects_tool,
+    list_smart_devices_tool,
+    control_light_tool,
+    discover_printers_tool,
+    print_stl_tool,
+    get_print_status_tool,
+    iterate_cad_tool,
+    set_timer_tool,
+    set_reminder_tool,
+    list_timers_tool,
+    delete_entry_tool,
+    modify_timer_tool,
+    check_for_updates_tool,
+    apply_update_tool,
+    change_voice_tool,
+    update_persona_tool,
+    display_dashboard_tool,
+    get_morning_briefing_tool,
     write_file_tool,
     read_directory_tool,
     read_file_tool,
@@ -655,7 +1014,12 @@ tools_list = [{"function_declarations": [
     set_auto_merge_threshold_tool,
     add_architectural_memory_tool,
     switch_video_source_tool,
-    apply_task_fix_tool
+    apply_task_fix_tool,
+    dismiss_jules_session_tool,
+    stop_jules_session_tool,
+    merge_pull_request_tool,
+    set_time_format_tool,
+    get_datetime_tool
 ] + list(trello_tools.values()) + [
     {
         "name": "search",
@@ -943,4 +1307,7 @@ tools_list = [{"function_declarations": [
             "required": ["action"]
         }
     }
-]}]
+]
+
+# Legacy support for existing imports
+tools_list = [{'google_search': {}}, {"function_declarations": all_tools_list}]
