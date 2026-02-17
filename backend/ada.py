@@ -1147,6 +1147,16 @@ class AudioLoop:
         else:
             return "Failed to list Jules activities."
 
+    async def handle_jules_get_diff(self, session_id, activity_id=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [JULES] Getting diff for session: {session_id} (Activity: {activity_id})")
+
+        diff = await self.jules_agent.get_diff(session_id, activity_id)
+        if diff:
+            return diff
+        else:
+            return "No code changes found."
+
     async def handle_add_architectural_memory(self, content, tags=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [MEMORY] Adding architectural memory: '{content}'")
@@ -2334,6 +2344,19 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                         print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
                                     session_id = fc.args.get("session_id")
                                     result = await self.handle_list_jules_activities(session_id)
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={"result": result},
+                                    )
+                                    function_responses.append(function_response)
+
+                                elif fc.name == "jules_get_diff":
+                                    if INCLUDE_RAW_LOGS:
+                                        print("[ADA DEBUG] [TOOL] Tool Call: 'jules_get_diff'")
+                                    session_id = fc.args.get("session_id")
+                                    activity_id = fc.args.get("activity_id")
+                                    result = await self.handle_jules_get_diff(session_id, activity_id)
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
                                         name=fc.name,

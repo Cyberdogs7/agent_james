@@ -259,6 +259,51 @@ class JulesAgent:
             return sessions
         return []
 
+    async def get_session(self, session_id):
+        """Fetches a single session by ID."""
+        return await self._request("GET", f"{self.base_url}/{session_id}", tool_name="get_session")
+
+    async def get_diff(self, session_id, activity_id=None):
+        """
+        Retrieves the code diff (unified patch) for a session or a specific activity.
+        Mimics the 'show_code_diff' tool from the MCP SDK.
+        """
+        if activity_id:
+            # Fetch specific activity and look for changeSet artifact
+            # Note: list_activities returns a list, we might need to filter or fetch single activity if API supports it.
+            # The API supports GET /sessions/{id}/activities/{activityId} based on SDK inspection.
+            response = await self._request("GET", f"{self.base_url}/{session_id}/activities/{activity_id}", tool_name="get_activity")
+            if response:
+                artifacts = response.get("artifacts", [])
+                for artifact in artifacts:
+                    if artifact.get("type") == "changeSet" or "changeSet" in artifact:
+                        # SDK structure: artifact.changeSet.gitPatch.unidiffPatch
+                        # Or artifact might be a wrapper with type="changeSet"
+                        cs = artifact.get("changeSet")
+                        if cs and "gitPatch" in cs:
+                            return cs["gitPatch"].get("unidiffPatch")
+            return None
+        else:
+            # Fetch session outcome
+            session = await self.get_session(session_id)
+            if not session:
+                return None
+
+            # Check outputs for changeSet
+            outputs = session.get("outputs", [])
+            for output in outputs:
+                if "changeSet" in output:
+                     cs = output["changeSet"]
+                     if "gitPatch" in cs:
+                         return cs["gitPatch"].get("unidiffPatch")
+
+            # Fallback: Check if session object itself has an outcome field (SDK mapping logic)
+            if "outcome" in session and session["outcome"]:
+                # This might be processed data, but let's check structure
+                pass
+
+            return None
+
     async def list_sources(self):
         """Lists all sources."""
         return await self._request("GET", f"{self.base_url}/sources", tool_name="list_sources")

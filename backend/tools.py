@@ -517,6 +517,25 @@ list_jules_activities_tool = {
     }
 }
 
+jules_get_diff_tool = {
+    "name": "jules_get_diff",
+    "description": "Retrieves the code diff (unified patch) for a Jules session or a specific activity. Use this to see what code changes the agent has made.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The ID of the session."
+            },
+            "activity_id": {
+                "type": "STRING",
+                "description": "Optional: The ID of a specific activity to get the diff from."
+            }
+        },
+        "required": ["session_id"]
+    }
+}
+
 write_file_tool = {
     "name": "write_file",
     "description": "Writes content to a file at the specified path. Overwrites if exists.",
@@ -1007,6 +1026,7 @@ all_tools_list = [
     list_jules_sources_tool,
     list_jules_sessions_tool,
     list_jules_activities_tool,
+    jules_get_diff_tool,
     append_system_prompt_tool,
     delete_custom_system_prompt_tool,
     get_system_prompt_tool,
