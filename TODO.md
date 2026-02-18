@@ -10,19 +10,19 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
+- [ ] **The Construct (Holo-Table 2.0)**
+  - **Description**: An interactive 3D environment ("The Construct") where the user can manipulate code modules, server infrastructure, and database schemas as physical objects.
+  - **Wow Factor**: "I need guns. Lots of guns." -> Summoning a fleet of testing agents instantly.
+  - **User Impact**: Spatial reasoning applied to abstract software architecture.
+  - **Technical Notes**: `SwarmVisualizer` active. VR/AR support (`@react-three/fiber`) pending.
+  - **Status**: Idea
+
 - [ ] **Project Recall (Photographic Memory)**
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
-  - **Technical Notes**: `mss` screen capture active (`ProactiveAgent`). Vector store active (`MemoryManager`). Continuous loop pending.
+  - **Technical Notes**: `ProactiveAgent` screen analysis active. Continuous recording loop and Vector store integration (`MemoryManager`) pending.
   - **Status**: Partially Implemented
-
-- [ ] **Dream Mode (Generative Idle)**
-  - **Description**: When the system is idle, the War Room visualizer shifts to a "dream state," visualizing random code structures, potential refactors, or playing back past successful missions.
-  - **Wow Factor**: The AI feels like it's "thinking" or "dreaming" when not being used.
-  - **User Impact**: Emotional connection and delight; passive system optimization.
-  - **Technical Notes**: `SwarmVisualizer` idle animation mode. Generative art based on git commit history.
-  - **Status**: Idea
 
 - [ ] **The Sentry (Security Overwatch)**
   - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
@@ -30,13 +30,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **User Impact**: Passive security and peace of mind without manual auditing.
   - **Technical Notes**: Git monitoring active (`AutomationEngine`). FS (watchdog) and Network (scapy) monitoring pending.
   - **Status**: Partially Implemented
-
-- [ ] **The Holo-Table (Code City)**
-  - **Description**: Visualize the codebase as a 3D metropolis where building height represents lines of code and color represents complexity or churn.
-  - **Wow Factor**: "Show me where the bugs live." -> Camera flies to the glowing red "slums" of the codebase.
-  - **User Impact**: Instant visual identification of technical debt and architectural hotspots.
-  - **Technical Notes**: `SwarmVisualizer` renders agents. Need to extend to static analysis data (LOC/Cyclomatic Complexity).
-  - **Status**: Idea
 
 - [ ] **The Chameleon (Dynamic Theming)**
   - **Description**: The UI automatically adapts its theme and layout based on the current task context (e.g., Coding -> Dark/Terminal, Writing -> Calm/Paper, Crisis -> Red Alert).
@@ -80,13 +73,6 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Integrate `pyautogui` with safety interlocks (failsafe corner).
   - **Status**: Idea
 
-- [ ] **The Holo-Deck (VR/AR Integration)**
-  - **Description**: Stream the `SwarmVisualizer` (3D War Room) to a VR headset (Quest/Vision Pro) for an immersive "command center" experience.
-  - **Wow Factor**: Standing inside the codebase, physically manipulating agent nodes.
-  - **User Impact**: Unparalleled immersion and spatial organization of complex systems.
-  - **Technical Notes**: WebXR support in `@react-three/fiber` component.
-  - **Status**: Idea
-
 - [ ] **The Oracle (Predictive Architecture)**
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
   - **Wow Factor**: A senior architect from the future guarding the codebase.
@@ -99,9 +85,9 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
-- [ ] **Protocol Droid (Schema Negotiator)**
-  - **Description**: Automatically detects API schema mismatches (e.g., 400 Bad Request) and negotiates a fix between frontend and backend codebases.
-  - **Wow Factor**: "The frontend was sending a string, but the backend expected an integer. I have corrected the Pydantic model."
+- [ ] **Protocol Droid (Universal Translator)**
+  - **Description**: Automatically detects language mismatches (e.g., Python backend sending snake_case to JS frontend expecting camelCase) and translates code or data structures on the fly.
+  - **Wow Factor**: "The API returned Python logic, but I've converted it to TypeScript interfaces for you."
   - **User Impact**: Eliminates "integration hell" and manual schema debugging.
   - **Technical Notes**: Middleware to intercept error responses -> LLM analysis -> Auto-patching.
   - **Status**: Idea
@@ -137,12 +123,12 @@ This document serves as the single source of truth for the evolution of the A.D.
 - [ ] **The Librarian (Knowledge Graph)**
   - **Description**: A dedicated agent that builds a navigable knowledge graph of the codebase, allowing queries like "How does module X relate to Y?"
   - **Wow Factor**: "I've mapped the dependency graph. Changing this function will impact 3 other modules."
-  - **User Impact**: rapid understanding of complex systems.
+  - **User Impact**: Rapid understanding of complex systems.
   - **Technical Notes**: Graph database (Neo4j or similar) or deep recursive analysis by `MemoryManager`.
   - **Status**: Idea
 
-- [ ] **Conversational Git (The Bard)**
-  - **Description**: Analyzes git diffs and explains changes in plain English with narrative flair, rather than raw line changes.
+- [ ] **The Historian (Conversational Git)**
+  - **Description**: Analyzes git diffs and explains changes in plain English with narrative flair. Can answer "Why did we remove the cache layer?" by analyzing commit history.
   - **Wow Factor**: "James, what did we just break?" -> "It appears the frontend team inverted the auth logic in the login component."
   - **User Impact**: Rapid understanding of complex merges without reading diffs.
   - **Technical Notes**: LLM summarization of `git diff` output.
@@ -202,14 +188,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: `SoundAgent` mapping log levels/exceptions to audio files.
   - **Status**: Idea
 
-- [ ] **Biometric Sentinel (Full Auth)**
-  - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions.
+- [ ] **Biometric Sentinel (Voiceprint Security)**
+  - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions. Unlock system by saying a passphrase.
   - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
   - **User Impact**: Seamless multi-user support and security.
-  - **Technical Notes**: Presence detection (Face) triggers briefing. Full identity verification pending.
+  - **Technical Notes**: Face presence detection active (`_check_briefing_schedule`). Voiceprint authentication pending.
   - **Status**: Partially Implemented
 
-- [ ] **Reality Anchor (AR Sticky Notes)**
+- [ ] **Spatial Anchors (AR Sticky Notes)**
   - **Description**: Use the camera to "anchor" virtual sticky notes to real-world objects.
   - **Wow Factor**: Merging digital tasks with physical reality.
   - **User Impact**: Contextual reminders that appear where they are relevant.
