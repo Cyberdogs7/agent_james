@@ -33,7 +33,8 @@ if sys.version_info < (3, 11, 0):
     asyncio.TaskGroup = taskgroup.TaskGroup
     asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
 
-from tools import tools_list
+from tools import tools_list, trello_tools
+from backend.tool_registry import ToolRegistry
 
 if pyaudio:
     FORMAT = pyaudio.paInt16
@@ -168,10 +169,7 @@ class AudioLoop:
             self.project_manager = project_manager
         else:
             from project_manager import ProjectManager
-            # Assuming we are running from backend/ or root?
-            # Using abspath of current file to find root
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            # If ada.py is in backend/, project root is one up
             project_root = os.path.dirname(current_dir)
             self.project_manager = ProjectManager(project_root)
         
@@ -191,7 +189,6 @@ class AudioLoop:
 
         # Initialize Face Detector for Presence
         try:
-            # Try to load from cv2 data
             self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         except Exception as e:
             if INCLUDE_RAW_LOGS:
@@ -199,11 +196,12 @@ class AudioLoop:
             self.face_cascade = None
         self._last_face_check_time = 0
 
+        # Initialize Tool Registry
+        self.tool_registry = ToolRegistry()
+        self._register_tools()
+
         # Sync Initial Project State
         if self.on_project_update:
-            # We need to defer this slightly or just call it. 
-            # Since this is init, loop might not be running, but on_project_update in server.py uses asyncio.create_task which needs a loop.
-            # We will handle this by calling it in run() or just print for now.
             pass
 
     async def _trigger_morning_briefing_offer(self):
@@ -251,9 +249,6 @@ class AudioLoop:
         self.stop_event.set()
         if self.music_agent:
             asyncio.create_task(self.music_agent.stop())
-        # Note: JulesAgent handles cleanup of its own internal polling tasks when the process exits
-        # or we can explicitly stop them here if we exposed a method.
-        # But for now, setting stop_event is main shutdown signal.
 
     def reconnect(self):
         """Signals the main loop to reconnect."""
@@ -569,6 +564,625 @@ class AudioLoop:
                     print(f"Error reading audio: {e}")
                 await asyncio.sleep(0.1)
 
+    def _register_tools(self):
+        """Registers all tools with the registry."""
+
+        # Trello Tools
+        for key in trello_tools:
+            # Tool name in schema is 'trello_list_boards', method is 'list_boards'
+            tool_name = trello_tools[key]['name']
+            method_name = key
+            self.tool_registry.register(tool_name, getattr(self.trello_agent, method_name))
+
+        # Explicit Registrations
+        self.tool_registry.register("generate_cad", self.handle_cad_request_wrapper)
+        self.tool_registry.register("generate_cad_prototype", self.handle_cad_request_wrapper)
+        self.tool_registry.register("run_web_agent", self.handle_web_agent_request_wrapper)
+        self.tool_registry.register("run_jules_agent", self.handle_jules_request)
+        self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
+        self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
+        self.tool_registry.register("list_jules_sources", self.handle_list_jules_sources)
+        self.tool_registry.register("list_jules_sessions", self.handle_list_jules_sessions)
+        self.tool_registry.register("list_jules_activities", self.handle_list_jules_activities)
+        self.tool_registry.register("write_file", self.handle_write_file_wrapper)
+        self.tool_registry.register("read_directory", self.handle_read_directory_wrapper)
+        self.tool_registry.register("read_file", self.handle_read_file_wrapper)
+        self.tool_registry.register("create_project", self.handle_create_project)
+        self.tool_registry.register("switch_project", self.handle_switch_project)
+        self.tool_registry.register("list_projects", self.handle_list_projects)
+        self.tool_registry.register("list_smart_devices", self.handle_list_smart_devices)
+        self.tool_registry.register("control_light", self.handle_control_light)
+        self.tool_registry.register("discover_printers", self.handle_discover_printers)
+        self.tool_registry.register("print_stl", self.handle_print_stl)
+        self.tool_registry.register("get_print_status", self.handle_get_print_status)
+        self.tool_registry.register("iterate_cad", self.handle_iterate_cad)
+        self.tool_registry.register("set_timer", self.timer_agent.set_timer)
+        self.tool_registry.register("set_reminder", self.timer_agent.set_reminder)
+        self.tool_registry.register("list_timers", self.timer_agent.list_timers)
+        self.tool_registry.register("delete_entry", self.timer_agent.delete_entry)
+        self.tool_registry.register("modify_timer", self.timer_agent.modify_timer)
+        self.tool_registry.register("check_for_updates", self.handle_check_for_updates)
+        self.tool_registry.register("apply_update", self.handle_apply_update)
+        self.tool_registry.register("search_gifs", self.handle_search_gifs)
+        self.tool_registry.register("display_content", self.handle_display_content)
+        self.tool_registry.register("get_weather", self.handle_get_weather)
+        self.tool_registry.register("set_time_format", self.handle_set_time_format)
+        self.tool_registry.register("get_datetime", self.handle_get_datetime)
+        self.tool_registry.register("restart_application", self.handle_restart_application)
+        self.tool_registry.register("search", self.search_agent.search)
+        self.tool_registry.register("proactive_suggestion", self.handle_proactive_suggestion)
+        self.tool_registry.register("send_slack_message", self.handle_send_slack_message)
+        self.tool_registry.register("append_system_prompt", self.handle_append_system_prompt)
+        self.tool_registry.register("delete_custom_system_prompt", self.handle_delete_custom_system_prompt)
+        self.tool_registry.register("get_system_prompt", self.handle_get_system_prompt)
+        self.tool_registry.register("toggle_jules_slack_notifications", self.handle_toggle_jules_slack_notifications)
+        self.tool_registry.register("git_merge_branch", self.handle_git_merge_branch)
+        self.tool_registry.register("git_commit", self.handle_git_commit)
+        self.tool_registry.register("git_push", self.handle_git_push)
+        self.tool_registry.register("git_pull", self.handle_git_pull)
+        self.tool_registry.register("git_list_repos", self.handle_git_list_repos)
+        self.tool_registry.register("git_list_branches", self.handle_git_list_branches)
+        self.tool_registry.register("git_status", self.handle_git_status)
+        self.tool_registry.register("git_fleet_status", self.handle_git_fleet_status)
+        self.tool_registry.register("sync_git_repos", self.handle_sync_git_repos)
+        self.tool_registry.register("get_morning_briefing", self.handle_get_morning_briefing)
+        self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
+        self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
+        self.tool_registry.register("control_os", self.handle_control_os)
+        self.tool_registry.register("play_music", self.handle_play_music)
+        self.tool_registry.register("control_music", self.handle_control_music)
+        self.tool_registry.register("set_auto_merge_threshold", self.handle_set_auto_merge_threshold)
+        self.tool_registry.register("add_architectural_memory", self.handle_add_architectural_memory)
+        self.tool_registry.register("switch_video_source", self.handle_switch_video_source)
+        self.tool_registry.register("apply_task_fix", self.handle_apply_task_fix)
+        self.tool_registry.register("dismiss_jules_session", self.handle_dismiss_jules_session)
+        self.tool_registry.register("stop_jules_session", self.handle_stop_jules_session)
+        self.tool_registry.register("merge_pull_request", self.handle_merge_pull_request)
+        self.tool_registry.register("jules_get_diff", self.handle_jules_get_diff)
+        self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
+        self.tool_registry.register("change_voice", self.handle_change_voice)
+        self.tool_registry.register("update_persona", self.handle_update_persona)
+
+    # --- Wrapper Methods for Async Tasks (to return immediate response) ---
+    async def handle_cad_request_wrapper(self, prompt):
+        if INCLUDE_RAW_LOGS:
+             print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad', prompt='{prompt}'")
+        asyncio.create_task(self.handle_cad_request(prompt))
+        return "CAD Generation started."
+
+    async def handle_web_agent_request_wrapper(self, prompt):
+        if INCLUDE_RAW_LOGS:
+             print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
+        asyncio.create_task(self.handle_web_agent_request(prompt))
+        return "Web Navigation started. Do not reply to this message."
+
+    async def handle_write_file_wrapper(self, path, content):
+        asyncio.create_task(self.handle_write_file(path, content))
+        return "Writing file..."
+
+    async def handle_read_directory_wrapper(self, path):
+        asyncio.create_task(self.handle_read_directory(path))
+        return "Reading directory..."
+
+    async def handle_read_file_wrapper(self, path):
+        asyncio.create_task(self.handle_read_file(path))
+        return "Reading file..."
+
+    # --- New Handler Methods ---
+
+    def handle_control_os(self, action, value=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_os' action='{action}' value='{value}'")
+
+        if action == "launch":
+            return self.os_agent.launch_app(value)
+        elif action == "set_volume":
+            return self.os_agent.set_volume(value)
+        elif action == "mute":
+            return self.os_agent.mute()
+        elif action == "unmute":
+            return self.os_agent.unmute()
+        elif action == "lock_screen":
+            return self.os_agent.lock_screen()
+        elif action == "sleep":
+            return self.os_agent.sleep()
+        return "Unknown action."
+
+    async def handle_play_music(self, query):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'play_music' query='{query}'")
+        return await self.music_agent.play(query)
+
+    async def handle_control_music(self, action):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_music' action='{action}'")
+        return await self.music_agent.control(action)
+
+    def handle_git_commit(self, message, repo_name=None):
+        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+        success, msg = GitOps.commit_changes(repo_path, message)
+        return msg
+
+    def handle_git_push(self, repo_name=None):
+        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+        success, msg = GitOps.push_changes(repo_path)
+        return msg
+
+    def handle_git_pull(self, repo_name=None):
+        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+        success, msg = GitOps.pull_changes(repo_path)
+        return msg
+
+    def handle_git_list_repos(self):
+        repos = self.project_manager.list_git_projects()
+        return f"Available Git Repositories: {', '.join(repos)}" if repos else "No git repositories found."
+
+    def handle_git_list_branches(self, repo_name=None):
+        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+        branches = GitOps.list_branches(repo_path)
+        return f"Branches in '{repo_path.name}': {', '.join(branches)}" if branches else f"No branches found or failed to list branches for '{repo_path.name}'."
+
+    def handle_git_status(self, repo_name=None):
+        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+        current_branch = GitOps.get_current_branch(repo_path)
+        status = GitOps.get_status(repo_path)
+        last_commit = GitOps.get_last_commit_info(repo_path)
+
+        result_str = f"Status for '{repo_path.name}':\n"
+        result_str += f"Branch: {current_branch or 'Unknown'}\n"
+        result_str += f"State: {'Dirty' if status else 'Clean'}\n"
+        if status:
+            result_str += f"Changes:\n{status}\n"
+        if last_commit:
+            result_str += f"Last Commit: {last_commit['hash']} - {last_commit['message']} ({last_commit['author']}, {last_commit['date']})"
+        return result_str
+
+    def handle_git_fleet_status(self):
+        repos = self.project_manager.list_git_projects()
+        if not repos:
+            return "No git repositories found."
+
+        result_str = "Fleet Status Report:\n"
+        for repo in repos:
+            repo_path = self.project_manager.get_project_path(repo)
+            current_branch = GitOps.get_current_branch(repo_path)
+            status = GitOps.get_status(repo_path)
+            last_commit = GitOps.get_last_commit_info(repo_path)
+
+            result_str += f"--- {repo} ---\n"
+            result_str += f"Branch: {current_branch or 'Unknown'}\n"
+            result_str += f"Status: {'Dirty' if status else 'Clean'}\n"
+            if last_commit:
+                result_str += f"Commit: {last_commit['message'][:50]}... ({last_commit['date']})\n"
+            result_str += "\n"
+        return result_str
+
+    async def handle_sync_git_repos(self):
+        # Trigger the sync via a background task so we don't block
+        async def perform_sync_and_respond():
+            sources = await self.handle_list_jules_sources()
+            if not isinstance(sources, list):
+                # If error fetching sources
+                return f"Failed to fetch sources: {sources}"
+
+            # Use executor for blocking git operations
+            results, status = await asyncio.to_thread(self.project_manager.sync_jules_repos, sources)
+
+            if status == "AUTH_REQUIRED":
+                if self.on_display_content:
+                    self.on_display_content({
+                        "content_type": "notification",
+                        "data": {"text": "GitHub Authentication Required. Please provide your token in the dashboard settings or modal."},
+                        "duration": 10000
+                    })
+                return "I need a GitHub token to access some repositories. Please provide it in the dashboard."
+
+            summary = ", ".join(results) if results else "All up to date."
+            return f"Sync Complete: {summary}"
+
+        asyncio.create_task(perform_sync_and_respond())
+        return "Sync initiated. I will notify you if authentication is required."
+
+    def handle_toggle_jules_slack_notifications(self, enabled):
+        success, msg = self.project_manager.update_project_config({"jules_slack_notifications": enabled})
+        return f"Slack notifications for Jules status updates have been {'enabled' if enabled else 'disabled'}."
+
+    def handle_set_auto_merge_threshold(self, hours):
+        seconds = int(hours * 3600)
+        success, msg = self.project_manager.update_project_config({"auto_merge_threshold": seconds})
+        return f"Auto-merge threshold set to {hours} hours ({seconds} seconds)."
+
+    def handle_append_system_prompt(self, text):
+        success, msg = self.project_manager.append_system_prompt(text)
+        if success:
+            self.reconnect()
+        return msg
+
+    def handle_delete_custom_system_prompt(self):
+        success, msg = self.project_manager.reset_system_prompt()
+        if success:
+            self.reconnect()
+        return msg
+
+    def handle_get_system_prompt(self):
+        return self.project_manager.get_system_prompt()
+
+    def handle_send_slack_message(self, message):
+        if self.slack_agent:
+            asyncio.create_task(self.slack_agent.send_message(message))
+            return "Message sent to Slack."
+        else:
+            return "Slack agent not available."
+
+    def handle_proactive_suggestion(self, suggestion):
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "suggestion",
+                "suggestion": suggestion,
+            })
+        return "Suggestion displayed."
+
+    def handle_set_time_format(self, format):
+        success, msg = self.project_manager.set_time_format(format)
+        return msg
+
+    def handle_get_datetime(self):
+        time_format = self.project_manager.get_project_config().get("time_format", "12h")
+        current_time = get_local_time()
+        formatted_time = format_datetime(current_time, time_format)
+        return f"The current date and time is {formatted_time}."
+
+    def handle_change_voice(self, voice_name):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'change_voice' voice_name='{voice_name}'", flush=True)
+        success, msg = self.project_manager.set_voice(voice_name)
+        if success:
+            self.reconnect()
+        return msg
+
+    def handle_update_persona(self, persona):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'update_persona' len(persona)='{len(persona)}'", flush=True)
+        success, msg = self.project_manager.update_persona(persona)
+        if success:
+            self.reconnect()
+        return msg
+
+    def handle_apply_task_fix(self, task_id):
+        if self.automation_engine:
+            success, msg = self.automation_engine.apply_fix(task_id)
+        else:
+            msg = "Automation Engine not available."
+        return msg
+
+    async def handle_check_for_updates(self):
+        try:
+            print(f"[ADA DEBUG] [TOOL] check_for_updates was called.", flush=True)
+            result = await self.update_agent.check_for_updates()
+            return result
+        except Exception as update_err:
+            print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
+            traceback.print_exc()
+            return f"Error checking for updates: {str(update_err)}"
+
+    async def handle_apply_update(self):
+        try:
+            result = await self.update_agent.apply_update()
+            return result
+        except Exception as update_err:
+            print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
+            traceback.print_exc()
+            return f"Error applying update: {str(update_err)}"
+
+    def handle_switch_video_source(self, source):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_video_source' source='{source}'")
+
+        if source in ["camera", "screen"]:
+            self.video_mode = source
+            return f"Switched video source to {source}."
+        else:
+            return f"Invalid source '{source}'. Use 'camera' or 'screen'."
+
+    async def handle_spawn_swarm_agent(self, role, prompt, source=None, swarm_id=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'spawn_swarm_agent'")
+
+        # Prepend role to prompt for context, but also pass role explicitly
+        full_prompt = f"Role: {role}\nTask: {prompt}"
+
+        async def _on_created(sid):
+            if swarm_id:
+                success, msg = self.project_manager.add_session_to_swarm(swarm_id, sid)
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [SWARM] Added session {sid} to swarm {swarm_id}: {msg}")
+
+                if self.sio:
+                    swarms = self.project_manager.get_swarms()
+                    await self.sio.emit('swarms_update', swarms)
+
+        result = await self.handle_jules_request(full_prompt, source, role=role, on_session_created=_on_created)
+        return result
+
+    async def handle_git_merge_branch(self, branch_name, repo_name=None):
+        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
+
+        # Check if local repo exists
+        if repo_path.exists():
+            success, msg = GitOps.merge_branch(repo_path, branch_name)
+            return msg
+        else:
+            # Attempt Remote Merge
+            token = self.project_manager.get_github_token()
+            if token and repo_name:
+                # Assume repo_name is owner/name or name
+                # We need owner/name. If just name, we might struggle if it's not in fleet.json with full info.
+                # But `repo_path.name` is sanitized name.
+                # Let's search fleet for full name
+                fleet = self.project_manager.load_fleet()
+                target_repo = next((r for r in fleet if r['name'] == repo_name or f"{r['owner']}/{r['name']}" == repo_name), None)
+
+                if target_repo:
+                    from backend.github_client import GitHubClient
+                    client = GitHubClient(token)
+                    # Fetch default branch
+                    details = await client.get_repo_details(target_repo['owner'], target_repo['name'])
+                    target_branch = details.get('default_branch', 'main') if details else 'main'
+
+                    result = await client.merge_branch(target_repo['owner'], target_repo['name'], target_branch, branch_name)
+                    if result:
+                        return f"Merged {branch_name} into {target_branch} remotely."
+                    else:
+                        return "Remote merge failed."
+                else:
+                    return f"Repository '{repo_name}' not found locally or in fleet config."
+            else:
+                return "Repository path does not exist and no GitHub token available for remote merge."
+
+    def handle_create_project(self, name):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
+        success, msg = self.project_manager.create_project(name)
+        if success:
+            # Auto-switch to the newly created project
+            self.project_manager.switch_project(name)
+            msg += f" Switched to '{name}'."
+            if self.on_project_update:
+                self.on_project_update(name)
+            self.reconnect()
+        return msg
+
+    def handle_switch_project(self, name):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
+        success, msg = self.project_manager.switch_project(name)
+        if success:
+            if self.on_project_update:
+                self.on_project_update(name)
+
+            # Trigger a reconnect to load the new project's system prompt
+            self.reconnect()
+        return msg
+
+    def handle_list_projects(self):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
+        projects = self.project_manager.list_projects()
+        return f"Available projects: {', '.join(projects)}"
+
+    def handle_list_smart_devices(self):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
+        # Use cached devices directly for speed
+        # devices_dict is {ip: SmartDevice}
+        # Use cached devices directly for speed
+        # devices_dict is {ip: SmartDevice}
+
+        dev_summaries = []
+        frontend_list = []
+
+        for ip, d in self.kasa_agent.devices.items():
+            dev_type = "unknown"
+            if d.is_bulb: dev_type = "bulb"
+            elif d.is_plug: dev_type = "plug"
+            elif d.is_strip: dev_type = "strip"
+            elif d.is_dimmer: dev_type = "dimmer"
+
+            # Format for Model
+            info = f"{d.alias} (IP: {ip}, Type: {dev_type})"
+            if d.is_on:
+                info += " [ON]"
+            else:
+                info += " [OFF]"
+            dev_summaries.append(info)
+
+            # Format for Frontend
+            frontend_list.append({
+                "ip": ip,
+                    "alias": d.alias,
+                    "model": d.model,
+                "type": dev_type,
+                    "is_on": d.is_on,
+                    "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
+                    "hsv": d.hsv if d.is_bulb and d.is_color else None,
+                    "has_color": d.is_color if d.is_bulb else False,
+                    "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
+            })
+
+        result_str = "No devices found in cache."
+        if dev_summaries:
+            result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
+
+        # Trigger frontend update
+        if self.on_device_update:
+            self.on_device_update(frontend_list)
+        return result_str
+
+    async def handle_control_light(self, target, action, brightness=None, color=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
+
+        result_msg = f"Action '{action}' on '{target}' failed."
+        success = False
+
+        if action == "turn_on":
+            success = await self.kasa_agent.turn_on(target)
+            if success:
+                result_msg = f"Turned ON '{target}'."
+        elif action == "turn_off":
+            success = await self.kasa_agent.turn_off(target)
+            if success:
+                result_msg = f"Turned OFF '{target}'."
+        elif action == "set":
+            success = True
+            result_msg = f"Updated '{target}':"
+
+        # Apply extra attributes if 'set' or if we just turned it on and want to set them too
+        if success or action == "set":
+            if brightness is not None:
+                sb = await self.kasa_agent.set_brightness(target, brightness)
+                if sb:
+                    result_msg += f" Set brightness to {brightness}."
+            if color is not None:
+                sc = await self.kasa_agent.set_color(target, color)
+                if sc:
+                    result_msg += f" Set color to {color}."
+
+        # Notify Frontend of State Change
+        if success:
+            # We don't need full discovery, just refresh known state or push update
+            # But for simplicity, let's get the standard list representation
+            # KasaAgent updates its internal state on control, so we can rebuild the list
+
+            # Quick rebuild of list from internal dict
+            updated_list = []
+            for ip, dev in self.kasa_agent.devices.items():
+                # We need to ensure we have the correct dict structure expected by frontend
+                # We duplicate logic from KasaAgent.discover_devices a bit, but that's okay for now or we can add a helper
+                # Ideally KasaAgent has a 'get_devices_list()' method.
+                # Use the cached objects in self.kasa_agent.devices
+
+                dev_type = "unknown"
+                if dev.is_bulb: dev_type = "bulb"
+                elif dev.is_plug: dev_type = "plug"
+                elif dev.is_strip: dev_type = "strip"
+                elif dev.is_dimmer: dev_type = "dimmer"
+
+                d_info = {
+                    "ip": ip,
+                    "alias": dev.alias,
+                    "model": dev.model,
+                    "type": dev_type,
+                    "is_on": dev.is_on,
+                    "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
+                    "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
+                    "has_color": dev.is_color if dev.is_bulb else False,
+                    "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
+                }
+                updated_list.append(d_info)
+
+            if self.on_device_update:
+                self.on_device_update(updated_list)
+        else:
+            # Report Error
+            if self.on_error:
+                self.on_error(result_msg)
+        return result_msg
+
+    async def handle_discover_printers(self):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
+        printers = await self.printer_agent.discover_printers()
+        # Format for model
+        if printers:
+            printer_list = []
+            for p in printers:
+                printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
+            result_str = "Found Printers:\n" + "\n".join(printer_list)
+        else:
+            result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
+        return result_str
+
+    async def handle_print_stl(self, stl_path, printer, profile=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
+
+        # Resolve 'current' to project STL
+        if stl_path.lower() == "current":
+            stl_path = "output.stl" # Let printer agent resolve it in root_path
+
+        # Get current project path
+        project_path = str(self.project_manager.get_current_project_path())
+
+        result = await self.printer_agent.print_stl(
+            stl_path,
+            printer,
+            profile,
+            root_path=project_path
+        )
+        return result.get("message", "Unknown result")
+
+    async def handle_get_print_status(self, printer):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
+
+        status = await self.printer_agent.get_print_status(printer)
+        if status:
+            result_str = f"Printer: {status.printer}\n"
+            result_str += f"State: {status.state}\n"
+            result_str += f"Progress: {status.progress_percent:.1f}%\n"
+            if status.time_remaining:
+                result_str += f"Time Remaining: {status.time_remaining}\n"
+            if status.time_elapsed:
+                result_str += f"Time Elapsed: {status.time_elapsed}\n"
+            if status.filename:
+                result_str += f"File: {status.filename}\n"
+            if status.temperatures:
+                temps = status.temperatures
+                if "hotend" in temps:
+                    result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
+                if "bed" in temps:
+                    result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
+        else:
+            result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
+        return result_str
+
+    async def handle_iterate_cad(self, prompt):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
+
+        # Emit status
+        if self.on_cad_status:
+            self.on_cad_status("generating")
+
+        # Get project cad folder path
+        cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
+
+        # Call CadAgent to iterate on the design
+        cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
+
+        if cad_data:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
+
+            # Dispatch to frontend
+            if self.on_cad_data:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
+                self.on_cad_data(cad_data)
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
+
+            # Save to Project
+            self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
+
+            result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
+        else:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
+            result_str = f"Failed to iterate design with prompt: {prompt}"
+        return result_str
+
     async def handle_cad_request(self, prompt):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [CAD] Background Task Started: handle_cad_request('{prompt}')")
@@ -638,8 +1252,6 @@ class AudioLoop:
                 await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
             except Exception:
                 pass
-
-
 
     @staticmethod
     def _perform_file_write(final_path, content):
@@ -1715,12 +2327,11 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                 # Basic log as requested: tool, endpoint, status
                                 print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
 
-                            # Unified confirmation logic
-                            destructive_keywords = ['delete', 'remove', 'wipe', 'destroy']
-                            confirmation_required = any(keyword in fc.name.lower() for keyword in destructive_keywords)
+                            # --- Tool Registry Dispatch ---
 
+                            # Confirmation Logic
                             confirmed = True
-                            if confirmation_required:
+                            if self.tool_registry.is_confirmation_required(fc.name):
                                 if self.on_tool_confirmation:
                                     import uuid
                                     request_id = str(uuid.uuid4())
@@ -1761,1081 +2372,17 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                 function_responses.append(function_response)
                                 continue
 
-                            # If confirmed, proceed with execution
-                            if fc.name.startswith("trello_"):
-                                tool_name = fc.name.replace("trello_", "")
-                                trello_func = getattr(self.trello_agent, tool_name)
-                                result = await trello_func(**fc.args)
-                                function_response = types.FunctionResponse(
-                                    id=fc.id,
-                                    name=fc.name,
-                                    response={"result": result}
-                                )
-                                function_responses.append(function_response)
-                            elif fc.name in ["generate_cad", "generate_cad_prototype", "run_web_agent", "run_jules_agent", "run_ollama_agent", "send_jules_feedback", "list_jules_sources", "list_jules_activities", "write_file", "read_directory", "read_file", "create_project", "switch_project", "list_projects", "list_smart_devices", "control_light", "discover_printers", "print_stl", "get_print_status", "iterate_cad", "set_timer", "set_reminder", "list_timers", "delete_entry", "modify_timer", "check_for_updates", "apply_update", "search_gifs", "display_content", "get_weather", "set_time_format", "get_datetime", "restart_application", "search", "proactive_suggestion", "send_slack_message", "append_system_prompt", "delete_custom_system_prompt", "get_system_prompt", "toggle_jules_slack_notifications", "git_merge_branch", "git_commit", "git_push", "git_pull", "git_list_repos", "git_list_branches", "git_status", "git_fleet_status", "sync_git_repos", "get_morning_briefing"]:
-                                prompt = fc.args.get("prompt", "") # Prompt is not present for all tools
+                            # Execute Tool via Registry
+                            result = await self.tool_registry.dispatch(fc.name, fc.args)
+
+                            # Construct Response
+                            function_response = types.FunctionResponse(
+                                id=fc.id,
+                                name=fc.name,
+                                response={"result": result}
+                            )
+                            function_responses.append(function_response)
 
-                                if fc.name == "git_merge_branch":
-                                    branch_name = fc.args["branch_name"]
-                                    repo_name = fc.args.get("repo_name")
-                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-
-                                    # Check if local repo exists
-                                    if repo_path.exists():
-                                        success, msg = GitOps.merge_branch(repo_path, branch_name)
-                                    else:
-                                        # Attempt Remote Merge
-                                        token = self.project_manager.get_github_token()
-                                        if token and repo_name:
-                                            # Assume repo_name is owner/name or name
-                                            # We need owner/name. If just name, we might struggle if it's not in fleet.json with full info.
-                                            # But `repo_path.name` is sanitized name.
-                                            # Let's search fleet for full name
-                                            fleet = self.project_manager.load_fleet()
-                                            target_repo = next((r for r in fleet if r['name'] == repo_name or f"{r['owner']}/{r['name']}" == repo_name), None)
-
-                                            if target_repo:
-                                                from backend.github_client import GitHubClient
-                                                client = GitHubClient(token)
-                                                # Fetch default branch
-                                                details = await client.get_repo_details(target_repo['owner'], target_repo['name'])
-                                                target_branch = details.get('default_branch', 'main') if details else 'main'
-
-                                                result = await client.merge_branch(target_repo['owner'], target_repo['name'], target_branch, branch_name)
-                                                if result:
-                                                    success = True
-                                                    msg = f"Merged {branch_name} into {target_branch} remotely."
-                                                else:
-                                                    success = False
-                                                    msg = "Remote merge failed."
-                                            else:
-                                                success = False
-                                                msg = f"Repository '{repo_name}' not found locally or in fleet config."
-                                        else:
-                                            success = False
-                                            msg = "Repository path does not exist and no GitHub token available for remote merge."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "spawn_swarm_agent":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'spawn_swarm_agent'")
-                                    role = fc.args.get("role")
-                                    prompt = fc.args.get("prompt")
-                                    source = fc.args.get("source")
-                                    swarm_id = fc.args.get("swarm_id")
-
-                                    # Prepend role to prompt for context, but also pass role explicitly
-                                    full_prompt = f"Role: {role}\nTask: {prompt}"
-
-                                    async def _on_created(sid):
-                                        if swarm_id:
-                                            success, msg = self.project_manager.add_session_to_swarm(swarm_id, sid)
-                                            if INCLUDE_RAW_LOGS:
-                                                print(f"[ADA DEBUG] [SWARM] Added session {sid} to swarm {swarm_id}: {msg}")
-
-                                            if self.sio:
-                                                swarms = self.project_manager.get_swarms()
-                                                await self.sio.emit('swarms_update', swarms)
-
-                                    result = await self.handle_jules_request(full_prompt, source, role=role, on_session_created=_on_created)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "create_swarm_mission":
-                                    title = fc.args.get("title")
-                                    result = await self.handle_create_swarm_mission(title)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "control_os":
-                                    action = fc.args.get("action")
-                                    value = fc.args.get("value")
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_os' action='{action}' value='{value}'")
-
-                                    result = "Unknown action."
-                                    if action == "launch":
-                                        result = self.os_agent.launch_app(value)
-                                    elif action == "set_volume":
-                                        result = self.os_agent.set_volume(value)
-                                    elif action == "mute":
-                                        result = self.os_agent.mute()
-                                    elif action == "unmute":
-                                        result = self.os_agent.unmute()
-                                    elif action == "lock_screen":
-                                        result = self.os_agent.lock_screen()
-                                    elif action == "sleep":
-                                        result = self.os_agent.sleep()
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "play_music":
-                                    query = fc.args["query"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'play_music' query='{query}'")
-                                    result = await self.music_agent.play(query)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "control_music":
-                                    action = fc.args["action"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_music' action='{action}'")
-                                    result = await self.music_agent.control(action)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_commit":
-                                    message = fc.args["message"]
-                                    repo_name = fc.args.get("repo_name")
-                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-                                    success, msg = GitOps.commit_changes(repo_path, message)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_push":
-                                    repo_name = fc.args.get("repo_name")
-                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-                                    success, msg = GitOps.push_changes(repo_path)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_pull":
-                                    repo_name = fc.args.get("repo_name")
-                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-                                    success, msg = GitOps.pull_changes(repo_path)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_list_repos":
-                                    repos = self.project_manager.list_git_projects()
-                                    result_str = f"Available Git Repositories: {', '.join(repos)}" if repos else "No git repositories found."
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_list_branches":
-                                    repo_name = fc.args.get("repo_name")
-                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-                                    branches = GitOps.list_branches(repo_path)
-                                    result_str = f"Branches in '{repo_path.name}': {', '.join(branches)}" if branches else f"No branches found or failed to list branches for '{repo_path.name}'."
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_status":
-                                    repo_name = fc.args.get("repo_name")
-                                    repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-
-                                    current_branch = GitOps.get_current_branch(repo_path)
-                                    status = GitOps.get_status(repo_path)
-                                    last_commit = GitOps.get_last_commit_info(repo_path)
-
-                                    result_str = f"Status for '{repo_path.name}':\n"
-                                    result_str += f"Branch: {current_branch or 'Unknown'}\n"
-                                    result_str += f"State: {'Dirty' if status else 'Clean'}\n"
-                                    if status:
-                                        result_str += f"Changes:\n{status}\n"
-                                    if last_commit:
-                                        result_str += f"Last Commit: {last_commit['hash']} - {last_commit['message']} ({last_commit['author']}, {last_commit['date']})"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "git_fleet_status":
-                                    repos = self.project_manager.list_git_projects()
-                                    if not repos:
-                                        result_str = "No git repositories found."
-                                    else:
-                                        result_str = "Fleet Status Report:\n"
-                                        for repo in repos:
-                                            repo_path = self.project_manager.get_project_path(repo)
-                                            current_branch = GitOps.get_current_branch(repo_path)
-                                            status = GitOps.get_status(repo_path)
-                                            last_commit = GitOps.get_last_commit_info(repo_path)
-
-                                            result_str += f"--- {repo} ---\n"
-                                            result_str += f"Branch: {current_branch or 'Unknown'}\n"
-                                            result_str += f"Status: {'Dirty' if status else 'Clean'}\n"
-                                            if last_commit:
-                                                result_str += f"Commit: {last_commit['message'][:50]}... ({last_commit['date']})\n"
-                                            result_str += "\n"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "sync_git_repos":
-                                    # Trigger the sync via a background task so we don't block
-                                    async def perform_sync_and_respond():
-                                        sources = await self.handle_list_jules_sources()
-                                        if not isinstance(sources, list):
-                                            # If error fetching sources
-                                            return f"Failed to fetch sources: {sources}"
-
-                                        # Use executor for blocking git operations
-                                        results, status = await asyncio.to_thread(self.project_manager.sync_jules_repos, sources)
-
-                                        if status == "AUTH_REQUIRED":
-                                            if self.on_display_content:
-                                                # Trigger frontend modal via notification or special type
-                                                # Actually, we should emit the socket event for auth, but here we are in tool logic.
-                                                # We can use display_content to tell user.
-                                                self.on_display_content({
-                                                    "content_type": "notification",
-                                                    "data": {"text": "GitHub Authentication Required. Please provide your token in the dashboard settings or modal."},
-                                                    "duration": 10000
-                                                })
-                                            return "I need a GitHub token to access some repositories. Please provide it in the dashboard."
-
-                                        summary = ", ".join(results) if results else "All up to date."
-                                        return f"Sync Complete: {summary}"
-
-                                    # Run it
-                                    # Since we need to return a tool response, we await it.
-                                    # Ideally sync is fast enough or we accept a small delay. Cloning can be slow.
-                                    # So we should probably kick it off and return "Started".
-
-                                    asyncio.create_task(perform_sync_and_respond())
-
-                                    # We can't easily return the result if we background it.
-                                    # Let's say "Syncing started..."
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": "Sync initiated. I will notify you if authentication is required."}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "toggle_jules_slack_notifications":
-                                    enabled = fc.args["enabled"]
-                                    success, msg = self.project_manager.update_project_config({"jules_slack_notifications": enabled})
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": f"Slack notifications for Jules status updates have been {'enabled' if enabled else 'disabled'}."}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "set_auto_merge_threshold":
-                                    hours = fc.args["hours"]
-                                    seconds = int(hours * 3600)
-                                    success, msg = self.project_manager.update_project_config({"auto_merge_threshold": seconds})
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": f"Auto-merge threshold set to {hours} hours ({seconds} seconds)."}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "add_architectural_memory":
-                                    content = fc.args["content"]
-                                    tags = fc.args.get("tags")
-                                    result = await self.handle_add_architectural_memory(content, tags)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "append_system_prompt":
-                                    text = fc.args["text"]
-                                    success, msg = self.project_manager.append_system_prompt(text)
-                                    if success:
-                                        self.reconnect() # Reconnect to load the new prompt
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "delete_custom_system_prompt":
-                                    success, msg = self.project_manager.reset_system_prompt()
-                                    if success:
-                                        self.reconnect() # Reconnect to load the default prompt
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "get_system_prompt":
-                                    prompt_text = self.project_manager.get_system_prompt()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": prompt_text}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "send_slack_message":
-                                    message = fc.args["message"]
-                                    if self.slack_agent:
-                                        asyncio.create_task(self.slack_agent.send_message(message))
-                                        result = "Message sent to Slack."
-                                    else:
-                                        result = "Slack agent not available."
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "proactive_suggestion":
-                                    suggestion = fc.args["suggestion"]
-                                    if self.on_display_content:
-                                        self.on_display_content({
-                                            "content_type": "suggestion",
-                                            "suggestion": suggestion,
-                                        })
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": "Suggestion displayed."},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "search":
-                                    query = fc.args["query"]
-                                    result = await self.search_agent.search(query)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "restart_application":
-                                    result = await self.handle_restart_application()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "set_time_format":
-                                    time_format = fc.args["format"]
-                                    success, msg = self.project_manager.set_time_format(time_format)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "get_datetime":
-                                    time_format = self.project_manager.get_project_config().get("time_format", "12h")
-                                    current_time = get_local_time()
-                                    formatted_time = format_datetime(current_time, time_format)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": f"The current date and time is {formatted_time}."}
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "get_weather":
-                                    location = fc.args["location"]
-                                    result = await self.handle_get_weather(location)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "search_gifs":
-                                    query = fc.args["query"]
-                                    result = await self.handle_search_gifs(query)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "display_content":
-                                    content_type = fc.args["content_type"]
-                                    url = fc.args.get("url")
-                                    widget_type = fc.args.get("widget_type")
-                                    data = fc.args.get("data")
-                                    duration = fc.args.get("duration")
-                                    result = await self.handle_display_content(content_type, url, widget_type, data, duration)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-                                elif fc.name == "generate_cad" or fc.name == "generate_cad_prototype":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"\n[ADA DEBUG] --------------------------------------------------")
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad'")
-                                        print(f"[ADA DEBUG] [IN] Arguments: prompt='{prompt}'")
-
-                                    asyncio.create_task(self.handle_cad_request(prompt))
-                                    # No function response needed - model already acknowledged when user asked
-
-                                elif fc.name == "run_web_agent":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
-                                    asyncio.create_task(self.handle_web_agent_request(prompt))
-
-                                    result_text = "Web Navigation started. Do not reply to this message."
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={
-                                            "result": result_text,
-                                        }
-                                    )
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [RESPONSE] Sending function response: {function_response}")
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "run_jules_agent":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_jules_agent' with prompt='{prompt}'")
-                                    source = fc.args.get("source")
-                                    result = await self.handle_jules_request(prompt, source)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "run_ollama_agent":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_ollama_agent' with prompt='{prompt}'")
-                                    source = fc.args.get("source")
-                                    role = fc.args.get("role")
-                                    model = fc.args.get("model", "llama3")
-                                    result = await self.handle_ollama_request(prompt, source, role, model)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "dismiss_jules_session":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'dismiss_jules_session'")
-                                    session_id = fc.args.get("session_id")
-                                    result = await self.handle_dismiss_jules_session(session_id)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "stop_jules_session":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'stop_jules_session'")
-                                    session_id = fc.args.get("session_id")
-                                    result = await self.handle_stop_jules_session(session_id)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "merge_pull_request":
-                                    owner = fc.args["owner"]
-                                    repo = fc.args["repo"]
-                                    pull_number = int(fc.args["pull_number"])
-                                    merge_method = fc.args.get("merge_method", "merge")
-
-                                    result = await self.handle_merge_pull_request(owner, repo, pull_number, merge_method)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "send_jules_feedback":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'send_jules_feedback'")
-                                    session_id = fc.args.get("session_id")
-                                    feedback = fc.args.get("feedback")
-                                    result = await self.handle_jules_feedback(session_id, feedback)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-
-                                elif fc.name == "list_jules_sources":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sources'")
-                                    result = await self.handle_list_jules_sources()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_jules_sessions":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_sessions'")
-                                    result = await self.handle_list_jules_sessions()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_jules_activities":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'list_jules_activities'")
-                                    session_id = fc.args.get("session_id")
-                                    result = await self.handle_list_jules_activities(session_id)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "jules_get_diff":
-                                    if INCLUDE_RAW_LOGS:
-                                        print("[ADA DEBUG] [TOOL] Tool Call: 'jules_get_diff'")
-                                    session_id = fc.args.get("session_id")
-                                    activity_id = fc.args.get("activity_id")
-                                    result = await self.handle_jules_get_diff(session_id, activity_id)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": result},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "switch_video_source":
-                                    source = fc.args.get("source")
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_video_source' source='{source}'")
-
-                                    if source in ["camera", "screen"]:
-                                        self.video_mode = source
-                                        msg = f"Switched video source to {source}."
-                                    else:
-                                        msg = f"Invalid source '{source}'. Use 'camera' or 'screen'."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg},
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "write_file":
-                                    path = fc.args["path"]
-                                    content = fc.args["content"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'write_file' path='{path}'")
-                                    asyncio.create_task(self.handle_write_file(path, content))
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": "Writing file..."}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "read_directory":
-                                    path = fc.args["path"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_directory' path='{path}'", flush=True)
-                                    asyncio.create_task(self.handle_read_directory(path))
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": "Reading directory..."}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "read_file":
-                                    path = fc.args["path"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'read_file' path='{path}'", flush=True)
-                                    asyncio.create_task(self.handle_read_file(path))
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": "Reading file..."}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "create_project":
-                                    name = fc.args["name"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
-                                    success, msg = self.project_manager.create_project(name)
-                                    if success:
-                                        # Auto-switch to the newly created project
-                                        self.project_manager.switch_project(name)
-                                        msg += f" Switched to '{name}'."
-                                        if self.on_project_update:
-                                            self.on_project_update(name)
-                                        self.reconnect()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "switch_project":
-                                    name = fc.args["name"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
-                                    success, msg = self.project_manager.switch_project(name)
-                                    if success:
-                                        if self.on_project_update:
-                                            self.on_project_update(name)
-
-                                        # Trigger a reconnect to load the new project's system prompt
-                                        self.reconnect()
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_projects":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
-                                    projects = self.project_manager.list_projects()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": f"Available projects: {', '.join(projects)}"}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_smart_devices":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
-                                    # Use cached devices directly for speed
-                                    # devices_dict is {ip: SmartDevice}
-                                    # Use cached devices directly for speed
-                                    # devices_dict is {ip: SmartDevice}
-
-                                    dev_summaries = []
-                                    frontend_list = []
-
-                                    for ip, d in self.kasa_agent.devices.items():
-                                        dev_type = "unknown"
-                                        if d.is_bulb: dev_type = "bulb"
-                                        elif d.is_plug: dev_type = "plug"
-                                        elif d.is_strip: dev_type = "strip"
-                                        elif d.is_dimmer: dev_type = "dimmer"
-
-                                        # Format for Model
-                                        info = f"{d.alias} (IP: {ip}, Type: {dev_type})"
-                                        if d.is_on:
-                                            info += " [ON]"
-                                        else:
-                                            info += " [OFF]"
-                                        dev_summaries.append(info)
-
-                                        # Format for Frontend
-                                        frontend_list.append({
-                                            "ip": ip,
-                                                "alias": d.alias,
-                                                "model": d.model,
-                                            "type": dev_type,
-                                                "is_on": d.is_on,
-                                                "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
-                                                "hsv": d.hsv if d.is_bulb and d.is_color else None,
-                                                "has_color": d.is_color if d.is_bulb else False,
-                                                "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
-                                        })
-
-                                    result_str = "No devices found in cache."
-                                    if dev_summaries:
-                                        result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
-
-                                    # Trigger frontend update
-                                    if self.on_device_update:
-                                        self.on_device_update(frontend_list)
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "control_light":
-                                    target = fc.args["target"]
-                                    action = fc.args["action"]
-                                    brightness = fc.args.get("brightness")
-                                    color = fc.args.get("color")
-
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
-
-                                    result_msg = f"Action '{action}' on '{target}' failed."
-                                    success = False
-
-                                    if action == "turn_on":
-                                        success = await self.kasa_agent.turn_on(target)
-                                        if success:
-                                            result_msg = f"Turned ON '{target}'."
-                                    elif action == "turn_off":
-                                        success = await self.kasa_agent.turn_off(target)
-                                        if success:
-                                            result_msg = f"Turned OFF '{target}'."
-                                    elif action == "set":
-                                        success = True
-                                        result_msg = f"Updated '{target}':"
-
-                                    # Apply extra attributes if 'set' or if we just turned it on and want to set them too
-                                    if success or action == "set":
-                                        if brightness is not None:
-                                            sb = await self.kasa_agent.set_brightness(target, brightness)
-                                            if sb:
-                                                result_msg += f" Set brightness to {brightness}."
-                                        if color is not None:
-                                            sc = await self.kasa_agent.set_color(target, color)
-                                            if sc:
-                                                result_msg += f" Set color to {color}."
-
-                                    # Notify Frontend of State Change
-                                    if success:
-                                        # We don't need full discovery, just refresh known state or push update
-                                        # But for simplicity, let's get the standard list representation
-                                        # KasaAgent updates its internal state on control, so we can rebuild the list
-
-                                        # Quick rebuild of list from internal dict
-                                        updated_list = []
-                                        for ip, dev in self.kasa_agent.devices.items():
-                                            # We need to ensure we have the correct dict structure expected by frontend
-                                            # We duplicate logic from KasaAgent.discover_devices a bit, but that's okay for now or we can add a helper
-                                            # Ideally KasaAgent has a 'get_devices_list()' method.
-                                            # Use the cached objects in self.kasa_agent.devices
-
-                                            dev_type = "unknown"
-                                            if dev.is_bulb: dev_type = "bulb"
-                                            elif dev.is_plug: dev_type = "plug"
-                                            elif dev.is_strip: dev_type = "strip"
-                                            elif dev.is_dimmer: dev_type = "dimmer"
-
-                                            d_info = {
-                                                "ip": ip,
-                                                "alias": dev.alias,
-                                                "model": dev.model,
-                                                "type": dev_type,
-                                                "is_on": dev.is_on,
-                                                "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
-                                                "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
-                                                "has_color": dev.is_color if dev.is_bulb else False,
-                                                "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
-                                            }
-                                            updated_list.append(d_info)
-
-                                        if self.on_device_update:
-                                            self.on_device_update(updated_list)
-                                    else:
-                                        # Report Error
-                                        if self.on_error:
-                                            self.on_error(result_msg)
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "discover_printers":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
-                                    printers = await self.printer_agent.discover_printers()
-                                    # Format for model
-                                    if printers:
-                                        printer_list = []
-                                        for p in printers:
-                                            printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
-                                        result_str = "Found Printers:\n" + "\n".join(printer_list)
-                                    else:
-                                        result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "print_stl":
-                                    stl_path = fc.args["stl_path"]
-                                    printer = fc.args["printer"]
-                                    profile = fc.args.get("profile")
-
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
-
-                                    # Resolve 'current' to project STL
-                                    if stl_path.lower() == "current":
-                                        stl_path = "output.stl" # Let printer agent resolve it in root_path
-
-                                    # Get current project path
-                                    project_path = str(self.project_manager.get_current_project_path())
-
-                                    result = await self.printer_agent.print_stl(
-                                        stl_path,
-                                        printer,
-                                        profile,
-                                        root_path=project_path
-                                    )
-                                    result_str = result.get("message", "Unknown result")
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "get_print_status":
-                                    printer = fc.args["printer"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
-
-                                    status = await self.printer_agent.get_print_status(printer)
-                                    if status:
-                                        result_str = f"Printer: {status.printer}\n"
-                                        result_str += f"State: {status.state}\n"
-                                        result_str += f"Progress: {status.progress_percent:.1f}%\n"
-                                        if status.time_remaining:
-                                            result_str += f"Time Remaining: {status.time_remaining}\n"
-                                        if status.time_elapsed:
-                                            result_str += f"Time Elapsed: {status.time_elapsed}\n"
-                                        if status.filename:
-                                            result_str += f"File: {status.filename}\n"
-                                        if status.temperatures:
-                                            temps = status.temperatures
-                                            if "hotend" in temps:
-                                                result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
-                                            if "bed" in temps:
-                                                result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
-                                    else:
-                                        result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "iterate_cad":
-                                    prompt = fc.args["prompt"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
-
-                                    # Emit status
-                                    if self.on_cad_status:
-                                        self.on_cad_status("generating")
-
-                                    # Get project cad folder path
-                                    cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
-
-                                    # Call CadAgent to iterate on the design
-                                    cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
-
-                                    if cad_data:
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
-
-                                        # Dispatch to frontend
-                                        if self.on_cad_data:
-                                            if INCLUDE_RAW_LOGS:
-                                                print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
-                                            self.on_cad_data(cad_data)
-                                            if INCLUDE_RAW_LOGS:
-                                                print(f"[ADA DEBUG] [SENT] Dispatch complete.")
-
-                                        # Save to Project
-                                        self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
-
-                                        result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
-                                    else:
-                                        if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
-                                        result_str = f"Failed to iterate design with prompt: {prompt}"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result_str}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "set_timer":
-                                    duration = fc.args["duration"]
-                                    name = fc.args["name"]
-                                    result = await self.timer_agent.set_timer(duration, name)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "display_dashboard":
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'display_dashboard'")
-                                    result = await self.handle_display_dashboard()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "get_morning_briefing":
-                                    force = fc.args.get("force_refresh", False)
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_morning_briefing' force={force}")
-                                    result = await self.handle_get_morning_briefing(force_refresh=force)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "change_voice":
-                                    voice_name = fc.args["voice_name"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'change_voice' voice_name='{voice_name}'", flush=True)
-                                    success, msg = self.project_manager.set_voice(voice_name)
-                                    if success:
-                                        self.reconnect()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "update_persona":
-                                    persona = fc.args["persona"]
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool Call: 'update_persona' len(persona)='{len(persona)}'", flush=True)
-                                    success, msg = self.project_manager.update_persona(persona)
-                                    if success:
-                                        self.reconnect()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "modify_timer":
-                                    name = fc.args["name"]
-                                    new_duration = fc.args.get("new_duration")
-                                    new_timestamp = fc.args.get("new_timestamp")
-                                    result = await self.timer_agent.modify_timer(name, new_duration, new_timestamp)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "set_reminder":
-                                    timestamp = fc.args["timestamp"]
-                                    name = fc.args["name"]
-                                    result = await self.timer_agent.set_reminder(timestamp, name)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "list_timers":
-                                    result = self.timer_agent.list_timers()
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "delete_entry":
-                                    name = fc.args["name"]
-                                    result = self.timer_agent.delete_entry(name)
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "apply_task_fix":
-                                    task_id = fc.args["task_id"]
-                                    if self.automation_engine:
-                                        success, msg = self.automation_engine.apply_fix(task_id)
-                                    else:
-                                        msg = "Automation Engine not available."
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id,
-                                        name=fc.name,
-                                        response={"result": msg}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "check_for_updates":
-                                    try:
-                                        print(f"[ADA DEBUG] [TOOL] check_for_updates was called. INCLUDE_RAW_LOGS={INCLUDE_RAW_LOGS}", flush=True)
-                                        result = await self.update_agent.check_for_updates()
-                                        print(f"[ADA DEBUG] [TOOL] check_for_updates result: {result}", flush=True)
-                                    except Exception as update_err:
-                                        print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
-                                        traceback.print_exc()
-                                        result = f"Error checking for updates: {str(update_err)}"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
-
-                                elif fc.name == "apply_update":
-                                    try:
-                                        result = await self.update_agent.apply_update()
-                                    except Exception as update_err:
-                                        print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
-                                        traceback.print_exc()
-                                        result = f"Error applying update: {str(update_err)}"
-
-                                    function_response = types.FunctionResponse(
-                                        id=fc.id, name=fc.name, response={"result": result}
-                                    )
-                                    function_responses.append(function_response)
                         if function_responses:
                             if INCLUDE_RAW_LOGS:
                                 print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
