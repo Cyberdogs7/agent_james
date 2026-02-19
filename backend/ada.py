@@ -79,6 +79,8 @@ from git_ops import GitOps
 from os_agent import OSAgent
 from music_agent import MusicAgent
 from ollama_agent import OllamaAgent
+from backend.fs_agent import FileSystemAgent
+from backend.git_agent import GitAgent
 try:
     from backend.task_manager import TaskManager
 except ImportError:
@@ -184,6 +186,8 @@ class AudioLoop:
         self.os_agent = OSAgent()
         self.music_agent = MusicAgent(sio=self.sio)
         self.ollama_agent = OllamaAgent()
+        self.fs_agent = FileSystemAgent(self.project_manager)
+        self.git_agent = GitAgent(self.project_manager)
 
         self.sct = None
 
@@ -584,9 +588,6 @@ class AudioLoop:
         self.tool_registry.register("list_jules_sources", self.handle_list_jules_sources)
         self.tool_registry.register("list_jules_sessions", self.handle_list_jules_sessions)
         self.tool_registry.register("list_jules_activities", self.handle_list_jules_activities)
-        self.tool_registry.register("write_file", self.handle_write_file_wrapper)
-        self.tool_registry.register("read_directory", self.handle_read_directory_wrapper)
-        self.tool_registry.register("read_file", self.handle_read_file_wrapper)
         self.tool_registry.register("create_project", self.handle_create_project)
         self.tool_registry.register("switch_project", self.handle_switch_project)
         self.tool_registry.register("list_projects", self.handle_list_projects)
@@ -616,32 +617,41 @@ class AudioLoop:
         self.tool_registry.register("delete_custom_system_prompt", self.handle_delete_custom_system_prompt)
         self.tool_registry.register("get_system_prompt", self.handle_get_system_prompt)
         self.tool_registry.register("toggle_jules_slack_notifications", self.handle_toggle_jules_slack_notifications)
-        self.tool_registry.register("git_merge_branch", self.handle_git_merge_branch)
-        self.tool_registry.register("git_commit", self.handle_git_commit)
-        self.tool_registry.register("git_push", self.handle_git_push)
-        self.tool_registry.register("git_pull", self.handle_git_pull)
-        self.tool_registry.register("git_list_repos", self.handle_git_list_repos)
-        self.tool_registry.register("git_list_branches", self.handle_git_list_branches)
-        self.tool_registry.register("git_status", self.handle_git_status)
-        self.tool_registry.register("git_fleet_status", self.handle_git_fleet_status)
-        self.tool_registry.register("sync_git_repos", self.handle_sync_git_repos)
         self.tool_registry.register("get_morning_briefing", self.handle_get_morning_briefing)
         self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
         self.tool_registry.register("control_os", self.handle_control_os)
-        self.tool_registry.register("play_music", self.handle_play_music)
-        self.tool_registry.register("control_music", self.handle_control_music)
         self.tool_registry.register("set_auto_merge_threshold", self.handle_set_auto_merge_threshold)
         self.tool_registry.register("add_architectural_memory", self.handle_add_architectural_memory)
         self.tool_registry.register("switch_video_source", self.handle_switch_video_source)
         self.tool_registry.register("apply_task_fix", self.handle_apply_task_fix)
         self.tool_registry.register("dismiss_jules_session", self.handle_dismiss_jules_session)
         self.tool_registry.register("stop_jules_session", self.handle_stop_jules_session)
-        self.tool_registry.register("merge_pull_request", self.handle_merge_pull_request)
         self.tool_registry.register("jules_get_diff", self.handle_jules_get_diff)
         self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
         self.tool_registry.register("change_voice", self.handle_change_voice)
         self.tool_registry.register("update_persona", self.handle_update_persona)
+
+        # File System Agent Tools
+        self.tool_registry.register("write_file", self.fs_agent.write_file)
+        self.tool_registry.register("read_directory", self.fs_agent.read_directory)
+        self.tool_registry.register("read_file", self.fs_agent.read_file)
+
+        # Git Agent Tools
+        self.tool_registry.register("git_merge_branch", self.git_agent.merge)
+        self.tool_registry.register("git_commit", self.git_agent.commit)
+        self.tool_registry.register("git_push", self.git_agent.push)
+        self.tool_registry.register("git_pull", self.git_agent.pull)
+        self.tool_registry.register("git_list_repos", self.git_agent.list_repos)
+        self.tool_registry.register("git_list_branches", self.git_agent.list_branches)
+        self.tool_registry.register("git_status", self.git_agent.status)
+        self.tool_registry.register("git_fleet_status", self.git_agent.fleet_status)
+        self.tool_registry.register("sync_git_repos", self.git_agent.sync_fleet)
+        self.tool_registry.register("merge_pull_request", self.git_agent.merge_pull_request)
+
+        # Music Agent Tools
+        self.tool_registry.register("play_music", self.music_agent.play)
+        self.tool_registry.register("control_music", self.music_agent.control)
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
     async def handle_cad_request_wrapper(self, prompt):
@@ -655,18 +665,6 @@ class AudioLoop:
              print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
         asyncio.create_task(self.handle_web_agent_request(prompt))
         return "Web Navigation started. Do not reply to this message."
-
-    async def handle_write_file_wrapper(self, path, content):
-        asyncio.create_task(self.handle_write_file(path, content))
-        return "Writing file..."
-
-    async def handle_read_directory_wrapper(self, path):
-        asyncio.create_task(self.handle_read_directory(path))
-        return "Reading directory..."
-
-    async def handle_read_file_wrapper(self, path):
-        asyncio.create_task(self.handle_read_file(path))
-        return "Reading file..."
 
     # --- New Handler Methods ---
 
@@ -687,101 +685,6 @@ class AudioLoop:
         elif action == "sleep":
             return self.os_agent.sleep()
         return "Unknown action."
-
-    async def handle_play_music(self, query):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'play_music' query='{query}'")
-        return await self.music_agent.play(query)
-
-    async def handle_control_music(self, action):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_music' action='{action}'")
-        return await self.music_agent.control(action)
-
-    def handle_git_commit(self, message, repo_name=None):
-        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-        success, msg = GitOps.commit_changes(repo_path, message)
-        return msg
-
-    def handle_git_push(self, repo_name=None):
-        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-        success, msg = GitOps.push_changes(repo_path)
-        return msg
-
-    def handle_git_pull(self, repo_name=None):
-        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-        success, msg = GitOps.pull_changes(repo_path)
-        return msg
-
-    def handle_git_list_repos(self):
-        repos = self.project_manager.list_git_projects()
-        return f"Available Git Repositories: {', '.join(repos)}" if repos else "No git repositories found."
-
-    def handle_git_list_branches(self, repo_name=None):
-        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-        branches = GitOps.list_branches(repo_path)
-        return f"Branches in '{repo_path.name}': {', '.join(branches)}" if branches else f"No branches found or failed to list branches for '{repo_path.name}'."
-
-    def handle_git_status(self, repo_name=None):
-        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-        current_branch = GitOps.get_current_branch(repo_path)
-        status = GitOps.get_status(repo_path)
-        last_commit = GitOps.get_last_commit_info(repo_path)
-
-        result_str = f"Status for '{repo_path.name}':\n"
-        result_str += f"Branch: {current_branch or 'Unknown'}\n"
-        result_str += f"State: {'Dirty' if status else 'Clean'}\n"
-        if status:
-            result_str += f"Changes:\n{status}\n"
-        if last_commit:
-            result_str += f"Last Commit: {last_commit['hash']} - {last_commit['message']} ({last_commit['author']}, {last_commit['date']})"
-        return result_str
-
-    def handle_git_fleet_status(self):
-        repos = self.project_manager.list_git_projects()
-        if not repos:
-            return "No git repositories found."
-
-        result_str = "Fleet Status Report:\n"
-        for repo in repos:
-            repo_path = self.project_manager.get_project_path(repo)
-            current_branch = GitOps.get_current_branch(repo_path)
-            status = GitOps.get_status(repo_path)
-            last_commit = GitOps.get_last_commit_info(repo_path)
-
-            result_str += f"--- {repo} ---\n"
-            result_str += f"Branch: {current_branch or 'Unknown'}\n"
-            result_str += f"Status: {'Dirty' if status else 'Clean'}\n"
-            if last_commit:
-                result_str += f"Commit: {last_commit['message'][:50]}... ({last_commit['date']})\n"
-            result_str += "\n"
-        return result_str
-
-    async def handle_sync_git_repos(self):
-        # Trigger the sync via a background task so we don't block
-        async def perform_sync_and_respond():
-            sources = await self.handle_list_jules_sources()
-            if not isinstance(sources, list):
-                # If error fetching sources
-                return f"Failed to fetch sources: {sources}"
-
-            # Use executor for blocking git operations
-            results, status = await asyncio.to_thread(self.project_manager.sync_jules_repos, sources)
-
-            if status == "AUTH_REQUIRED":
-                if self.on_display_content:
-                    self.on_display_content({
-                        "content_type": "notification",
-                        "data": {"text": "GitHub Authentication Required. Please provide your token in the dashboard settings or modal."},
-                        "duration": 10000
-                    })
-                return "I need a GitHub token to access some repositories. Please provide it in the dashboard."
-
-            summary = ", ".join(results) if results else "All up to date."
-            return f"Sync Complete: {summary}"
-
-        asyncio.create_task(perform_sync_and_respond())
-        return "Sync initiated. I will notify you if authentication is required."
 
     def handle_toggle_jules_slack_notifications(self, enabled):
         success, msg = self.project_manager.update_project_config({"jules_slack_notifications": enabled})
@@ -903,41 +806,6 @@ class AudioLoop:
 
         result = await self.handle_jules_request(full_prompt, source, role=role, on_session_created=_on_created)
         return result
-
-    async def handle_git_merge_branch(self, branch_name, repo_name=None):
-        repo_path = self.project_manager.get_project_path(repo_name) if repo_name else self.project_manager.get_current_project_path()
-
-        # Check if local repo exists
-        if repo_path.exists():
-            success, msg = GitOps.merge_branch(repo_path, branch_name)
-            return msg
-        else:
-            # Attempt Remote Merge
-            token = self.project_manager.get_github_token()
-            if token and repo_name:
-                # Assume repo_name is owner/name or name
-                # We need owner/name. If just name, we might struggle if it's not in fleet.json with full info.
-                # But `repo_path.name` is sanitized name.
-                # Let's search fleet for full name
-                fleet = self.project_manager.load_fleet()
-                target_repo = next((r for r in fleet if r['name'] == repo_name or f"{r['owner']}/{r['name']}" == repo_name), None)
-
-                if target_repo:
-                    from backend.github_client import GitHubClient
-                    client = GitHubClient(token)
-                    # Fetch default branch
-                    details = await client.get_repo_details(target_repo['owner'], target_repo['name'])
-                    target_branch = details.get('default_branch', 'main') if details else 'main'
-
-                    result = await client.merge_branch(target_repo['owner'], target_repo['name'], target_branch, branch_name)
-                    if result:
-                        return f"Merged {branch_name} into {target_branch} remotely."
-                    else:
-                        return "Remote merge failed."
-                else:
-                    return f"Repository '{repo_name}' not found locally or in fleet config."
-            else:
-                return "Repository path does not exist and no GitHub token available for remote merge."
 
     def handle_create_project(self, name):
         if INCLUDE_RAW_LOGS:
@@ -1252,122 +1120,6 @@ class AudioLoop:
                 await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
             except Exception:
                 pass
-
-    @staticmethod
-    def _perform_file_write(final_path, content):
-        """Helper to perform file I/O in a thread."""
-        os.makedirs(os.path.dirname(final_path), exist_ok=True)
-        with open(final_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-
-    async def handle_write_file(self, path, content):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Writing file: '{path}'")
-        
-        # Auto-create project if stuck in temp
-        if self.project_manager.current_project == "temp":
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            new_project_name = f"Project_{timestamp}"
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [FS] Auto-creating project: {new_project_name}")
-            
-            success, msg = self.project_manager.create_project(new_project_name)
-            if success:
-                self.project_manager.switch_project(new_project_name)
-                # Notify User
-                try:
-                    await self.session.send(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
-                    if self.on_project_update:
-                         self.on_project_update(new_project_name)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
-        
-        # Force path to be relative to current project
-        # If absolute path is provided, we try to strip it or just ignore it and use basename
-        filename = os.path.basename(path)
-        
-        # If path contained subdirectories (e.g. "backend/server.py"), preserving that structure might be desired IF it's within the project.
-        # But for safety, and per user request to "always create the file in the project", 
-        # we will root it in the current project path.
-        
-        current_project_path = self.project_manager.get_current_project_path()
-        final_path = current_project_path / filename # Simple flat structure for now, or allow relative?
-        
-        # If the user specifically wanted a subfolder, they might have provided "sub/file.txt".
-        # Let's support relative paths if they don't start with /
-        if not os.path.isabs(path):
-             final_path = current_project_path / path
-        
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Resolved path: '{final_path}'")
-
-        try:
-            # Ensure parent exists
-            await asyncio.to_thread(self._perform_file_write, final_path, content)
-            result = f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
-        except Exception as e:
-            result = f"Failed to write file '{path}': {str(e)}"
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Result: {result}")
-        try:
-             await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
-
-    async def handle_read_directory(self, path):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Reading directory: '{path}'")
-        
-        # Resolve path relative to current project
-        current_project_path = self.project_manager.get_current_project_path()
-        final_path = current_project_path / path if not os.path.isabs(path) else path
-        
-        try:
-            if not os.path.exists(final_path):
-                result = f"Directory '{final_path}' does not exist."
-            else:
-                items = os.listdir(final_path)
-                result = f"Contents of '{final_path}': {', '.join(items)}"
-        except Exception as e:
-            result = f"Failed to read directory '{path}': {str(e)}"
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Result: {result}")
-        try:
-             await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
-
-    async def handle_read_file(self, path):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Reading file: '{path}'")
-        
-        # Resolve path relative to current project
-        current_project_path = self.project_manager.get_current_project_path()
-        final_path = current_project_path / path if not os.path.isabs(path) else path
-
-        try:
-            if not os.path.exists(final_path):
-                result = f"File '{final_path}' does not exist."
-            else:
-                with open(final_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                result = f"Content of '{final_path}':\n{content}"
-        except Exception as e:
-            result = f"Failed to read file '{path}': {str(e)}"
-
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FS] Result: {result}")
-        try:
-             await self.session.send(input=f"System Notification: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send fs result: {e}")
 
     async def handle_get_weather(self, location, forecast_days=7, past_days=0, hourly=None, daily=None):
         if INCLUDE_RAW_LOGS:
@@ -1792,26 +1544,6 @@ class AudioLoop:
         # Dismiss from UI
         success, msg = self.project_manager.dismiss_jules_session(session_id)
         return f"Session stopped and dismissed: {msg}"
-
-    async def handle_merge_pull_request(self, owner, repo, pull_number, merge_method="merge"):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [GIT] Merging PR #{pull_number} on {owner}/{repo}")
-
-        token = self.project_manager.get_github_token()
-        if not token:
-            return "GitHub token not found. Please add it to your settings."
-
-        from backend.github_client import GitHubClient
-        client = GitHubClient(token)
-        result = await client.merge_pull_request(owner, repo, pull_number, merge_method)
-
-        if result and result.get("merged"):
-            return f"Successfully merged PR #{pull_number}."
-        elif result:
-             msg = result.get("message", "Unknown error")
-             return f"Failed to merge PR: {msg}"
-        else:
-            return "Failed to merge PR: Network or API error."
 
     async def handle_focused_session(self, session_id):
         """Notifies the model that the user is focusing on a specific session."""

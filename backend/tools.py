@@ -1330,4 +1330,4 @@ all_tools_list = [
 ]
 
 # Legacy support for existing imports
-tools_list = [{'google_search': {}}, {"function_declarations": all_tools_list}]
+tools_list = [{"function_declarations": all_tools_list}]

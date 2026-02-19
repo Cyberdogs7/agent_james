@@ -1699,8 +1699,8 @@ async def run_task(sid, data):
 async def dismiss_jules_session(sid, data):
     session_id = data.get('id')
     print(f"[SERVER] Dismiss Jules Session: {session_id}")
-    if audio_loop:
-        msg = await audio_loop.handle_dismiss_jules_session(session_id)
+    if audio_loop and audio_loop.project_manager:
+        success, msg = audio_loop.project_manager.dismiss_jules_session(session_id)
         await sio.emit('status', {'msg': msg})
         # Force dashboard update
         if dashboard_task:
