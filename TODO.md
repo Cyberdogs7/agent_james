@@ -21,14 +21,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
-  - **Technical Notes**: `ProactiveAgent` screen analysis active. Continuous recording loop and Vector store integration (`MemoryManager`) pending.
+  - **Technical Notes**: `ProactiveAgent` screen analysis active (`_analyze_screen`). Continuous recording loop and Vector store integration (`MemoryManager`) pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Sentry (Security Overwatch)**
   - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
   - **Wow Factor**: "Sir, I've detected an unauthorized outbound connection on port 8080."
   - **User Impact**: Passive security and peace of mind without manual auditing.
-  - **Technical Notes**: Git monitoring active (`AutomationEngine`). FS (watchdog) and Network (scapy) monitoring pending.
+  - **Technical Notes**: Git monitoring active (`AutomationEngine._monitor_git_loop`). FS (watchdog) and Network (scapy) monitoring pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Chameleon (Dynamic Theming)**
@@ -77,8 +77,22 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Analyzes codebase changes to predict future technical debt, security risks, or scalability bottlenecks *before* they are committed.
   - **Wow Factor**: A senior architect from the future guarding the codebase.
   - **User Impact**: Prevents long-term architectural decay.
-  - **Technical Notes**: Smart Merge Candidate detection active (`AutomationEngine`). Predictive architectural analysis pending.
+  - **Technical Notes**: Smart Merge Candidate detection active (`AutomationEngine._monitor_merge_candidates`). Predictive architectural analysis pending.
   - **Status**: Partially Implemented
+
+- [ ] **Vocal Chameleon (Dynamic Personality)**
+  - **Description**: The assistant dynamically adjusts its voice tone, speed, and vocabulary based on the context (e.g., whispering at night, authoritative during a crisis, casual during brainstorming).
+  - **Wow Factor**: "Why are you whispering?" -> "It is 2 AM, Sir."
+  - **User Impact**: Increases social presence and reduces friction in different environments.
+  - **Technical Notes**: Context detection -> Dynamic TTS parameter adjustment.
+  - **Status**: Idea
+
+- [ ] **Reality Distortion Field (AR Modifiers)**
+  - **Description**: Uses the HUD overlay to actively modify the user's perception of the screen, such as blurring distractions or enhancing contrast of specific code blocks.
+  - **Wow Factor**: The assistant actively filters reality to help you focus.
+  - **User Impact**: Deep work facilitation.
+  - **Technical Notes**: `SwarmVisualizer` / HUD overlay with shader effects.
+  - **Status**: Idea
 
 ---
 
@@ -103,21 +117,21 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Detects failures in real-time and uses LLMs to generate and apply fixes automatically.
   - **Wow Factor**: "The script failed, but I've already applied a fix and backed up the original."
   - **User Impact**: Drastically reduces downtime and context switching.
-  - **Technical Notes**: `AutomationEngine` supports script healing (`_generate_fix`). Full test suite wrapping pending.
+  - **Technical Notes**: `AutomationEngine` supports script healing (`_generate_fix`, `apply_fix`). Full test suite wrapping pending.
   - **Status**: Partially Implemented
 
 - [ ] **Temporal Echoes (Contextual Memory)**
   - **Description**: Automatically surfaces relevant past decisions, mistakes, or preferences when the user starts a similar task.
   - **Wow Factor**: "Sir, last time you touched the auth system, you broke the login page. Be careful with the token expiration."
   - **User Impact**: Prevents regression and reinforces learning.
-  - **Technical Notes**: `MemoryManager` vector search active. Hook active for Jules tasks. General chat integration pending.
+  - **Technical Notes**: `MemoryManager` vector search active. Hook active for Jules tasks (`handle_jules_request`). General chat integration pending.
   - **Status**: Partially Implemented
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
   - **Description**: Pre-defined multi-agent orchestration patterns (Red Team, Debate, Assembly Line).
   - **Wow Factor**: Watching agents take on distinct adversarial or cooperative roles.
   - **User Impact**: Higher quality code through dialectic verification.
-  - **Technical Notes**: Roles & Visualization active. Complex interaction patterns pending.
+  - **Technical Notes**: Roles & Visualization active (`spawn_swarm_agent`). Complex interaction patterns pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Librarian (Knowledge Graph)**
@@ -131,8 +145,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Analyzes git diffs and explains changes in plain English with narrative flair. Can answer "Why did we remove the cache layer?" by analyzing commit history.
   - **Wow Factor**: "James, what did we just break?" -> "It appears the frontend team inverted the auth logic in the login component."
   - **User Impact**: Rapid understanding of complex merges without reading diffs.
-  - **Technical Notes**: LLM summarization of `git diff` output.
-  - **Status**: Idea
+  - **Technical Notes**: `jules_get_diff` tool active. LLM summarization layer pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Deep OS Integration (Ghost in the Machine)**
   - **Description**: Advanced control over the operating system beyond simple app launching (window tiling, file indexing, workflow automation).
@@ -145,7 +159,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: The assistant anticipates the next likely question or need based on current context and pre-fetches documentation or resources.
   - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
   - **User Impact**: Removes latency from information retrieval.
-  - **Technical Notes**: `ProactiveAgent` suggestions active. Resource pre-fetching pending.
+  - **Technical Notes**: `ProactiveAgent` suggestions active (`_check_context_switch`). Resource pre-fetching pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Blueprint (Live Architecture)**
@@ -162,6 +176,27 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: LLM summarizer running nightly on `trace.txt` / chat logs -> `MemoryManager`.
   - **Status**: Idea
 
+- [ ] **Infinite Context (Full Repo RAG)**
+  - **Description**: Ability to load the entire repository context into the chat, allowing specific questions about any file without manually opening it.
+  - **Wow Factor**: "What does the utils module do?" (without opening it).
+  - **User Impact**: Instant answers to deep technical questions.
+  - **Technical Notes**: Vector DB indexing of all files + RAG pipeline.
+  - **Status**: Idea
+
+- [ ] **The Muse (Creative Partner)**
+  - **Description**: A dedicated persona for brainstorming, creative writing, and non-technical ideation.
+  - **Wow Factor**: Moving seamlessly from coding to creative writing.
+  - **User Impact**: Holistic support for the user's entire workflow.
+  - **Technical Notes**: Specialized system prompt/persona.
+  - **Status**: Idea
+
+- [ ] **Telepathy (Ghost Text)**
+  - **Description**: Predicts what the user is about to type next and displays it as ghost text (system-wide), allowing them to accept it with a tab.
+  - **Wow Factor**: "It knew what I was going to type before I did."
+  - **User Impact**: Massive productivity boost.
+  - **Technical Notes**: Local LLM inference on keystrokes + OS overlay.
+  - **Status**: Idea
+
 ---
 
 ## 🛠 Quality of Life & Polish
@@ -171,8 +206,8 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Visualizing the heartbeat of the automation engine (CPU/Memory/Tasks/Agents) in the UI.
   - **Wow Factor**: Seeing the system "breathe" and knowing it's alive.
   - **User Impact**: System confidence and situational awareness.
-  - **Technical Notes**: Extend `SwarmVisualizer` to pulse based on `get_dashboard_data`.
-  - **Status**: Idea
+  - **Technical Notes**: `get_dashboard_data` active. Visualizer pending.
+  - **Status**: Partially Implemented
 
 - [ ] **Neural Sync (Adaptive Soundscapes)**
   - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
