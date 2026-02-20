@@ -10,6 +10,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
+- [ ] **Dream State (Generative Idle Mode)**
+  - **Description**: While the user is away (AFK), the assistant automatically switches to a low-priority branch and runs optimization tasks: writing unit tests, refactoring legacy code, or generating documentation.
+  - **Wow Factor**: "Sir, while you were getting coffee, I took the liberty of writing test coverage for the new auth module."
+  - **User Impact**: Massive productivity gain; the system works while you sleep.
+  - **Technical Notes**: `ProactiveAgent` detects idle state -> Spawns `JulesAgent` on `optimization` branch.
+  - **Status**: Idea
+
 - [ ] **The Construct (Holo-Table 2.0)**
   - **Description**: An interactive 3D environment ("The Construct") where the user can manipulate code modules, server infrastructure, and database schemas as physical objects.
   - **Wow Factor**: "I need guns. Lots of guns." -> Summoning a fleet of testing agents instantly.
@@ -28,14 +35,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: A dedicated background agent that monitors file system changes, network ports, and suspicious API calls in real-time.
   - **Wow Factor**: "Sir, I've detected an unauthorized outbound connection on port 8080."
   - **User Impact**: Passive security and peace of mind without manual auditing.
-  - **Technical Notes**: Git monitoring active (`AutomationEngine._monitor_git_loop`). FS (watchdog) and Network (scapy) monitoring pending.
+  - **Technical Notes**: `AutomationEngine` active (Git monitoring, Stalled item checks). FS/Network monitoring pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Chameleon (Dynamic Theming)**
   - **Description**: The UI automatically adapts its theme and layout based on the current task context (e.g., Coding -> Dark/Terminal, Writing -> Calm/Paper, Crisis -> Red Alert).
   - **Wow Factor**: The interface feels like a living organism reacting to the situation.
   - **User Impact**: Reduces cognitive load by matching visual environment to mental state.
-  - **Technical Notes**: `ProactiveAgent` detects context -> `ThemeManager` updates CSS variables/Tailwind classes.
+  - **Technical Notes**: `ProactiveAgent` detects context -> `ThemeManager` updates CSS variables.
   - **Status**: Idea
 
 - [ ] **The Mirror (Digital Twin)**
