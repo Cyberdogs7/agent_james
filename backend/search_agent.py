@@ -1,7 +1,7 @@
 import asyncio
-from trello_agent import TrelloAgent
-from project_manager import ProjectManager
-from scraper_agent import ScraperAgent
+from backend.trello_agent import TrelloAgent
+from backend.project_manager import ProjectManager
+from backend.scraper_agent import ScraperAgent
 
 class SearchAgent:
     def __init__(self, trello_agent: TrelloAgent, project_manager: ProjectManager, scraper_agent: ScraperAgent):

@@ -1,32 +1,4 @@
-try:
-    from time_utils import set_time_format_tool, get_datetime_tool
-except ImportError:
-    try:
-        from backend.time_utils import set_time_format_tool, get_datetime_tool
-    except ImportError:
-        # Fallback definitions if import fails (e.g. during standalone testing)
-        set_time_format_tool = {
-            "name": "set_time_format",
-            "description": "Sets the preferred time format for displaying time.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {
-                    "format": {
-                        "type": "STRING",
-                        "description": "The desired time format, either '12h' or '24h'."
-                    }
-                },
-                "required": ["format"]
-            }
-        }
-        get_datetime_tool = {
-            "name": "get_datetime",
-            "description": "Gets the current date and time in the local timezone.",
-            "parameters": {
-                "type": "OBJECT",
-                "properties": {}
-            }
-        }
+from backend.time_utils import set_time_format_tool, get_datetime_tool
 
 generate_cad_tool = {
     "name": "generate_cad",

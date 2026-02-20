@@ -5,9 +5,12 @@ import json
 import os
 import math
 import struct
-import pyaudio
+try:
+    import pyaudio
+except ImportError:
+    pyaudio = None
 from tzlocal import get_localzone
-from time_utils import get_local_time
+from backend.time_utils import get_local_time
 
 class TimerAgent:
     def __init__(self, session=None, sio=None, storage_file="timers.json"):
@@ -16,7 +19,7 @@ class TimerAgent:
         self.storage_file = storage_file
         self.active_timers = {}
         self.active_reminders = {}
-        self._pyaudio_instance = pyaudio.PyAudio()
+        self._pyaudio_instance = pyaudio.PyAudio() if pyaudio else None
         self._active_tasks = {} # To track all running timer/reminder tasks
         self._load_from_disk()
         self._update_loop_task = None # Will be started on demand
@@ -73,6 +76,9 @@ class TimerAgent:
 
     def _play_notification_sound(self):
         # A simple notification sound using pyaudio
+        if not self._pyaudio_instance or not pyaudio:
+            return
+
         try:
             sample_rate = 44100
             duration = 0.5
