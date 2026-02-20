@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from giphy_client.apis.default_api import DefaultApi
 from giphy_client.api_client import ApiClient
 
-from time_utils import set_time_format_tool, get_datetime_tool, format_datetime, get_local_time
+from backend.time_utils import format_datetime, get_local_time
 from google import genai
 from google.genai import types
 
@@ -33,7 +33,7 @@ if sys.version_info < (3, 11, 0):
     asyncio.TaskGroup = taskgroup.TaskGroup
     asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
 
-from tools import tools_list, trello_tools
+from backend.tools import tools_list, trello_tools
 from backend.tool_registry import ToolRegistry
 
 if pyaudio:
@@ -64,27 +64,27 @@ if pyaudio:
 else:
     pya = None
 
-from cad_agent import CadAgent
-from web_agent import WebAgent
-from kasa_agent import KasaAgent
-from printer_agent import PrinterAgent
-from trello_agent import TrelloAgent
-from jules_agent import JulesAgent
-from timer_agent import TimerAgent
-from update_agent import UpdateAgent
-from search_agent import SearchAgent
-from scraper_agent import ScraperAgent
-from proactive_agent import ProactiveAgent
-from git_ops import GitOps
-from os_agent import OSAgent
-from music_agent import MusicAgent
-from ollama_agent import OllamaAgent
+from backend.cad_agent import CadAgent
+from backend.web_agent import WebAgent
+from backend.kasa_agent import KasaAgent
+from backend.printer_agent import PrinterAgent
+from backend.trello_agent import TrelloAgent
+from backend.jules_agent import JulesAgent
+from backend.timer_agent import TimerAgent
+from backend.update_agent import UpdateAgent
+from backend.search_agent import SearchAgent
+from backend.scraper_agent import ScraperAgent
+from backend.proactive_agent import ProactiveAgent
+from backend.git_ops import GitOps
+from backend.os_agent import OSAgent
+from backend.music_agent import MusicAgent
+from backend.ollama_agent import OllamaAgent
 from backend.fs_agent import FileSystemAgent
 from backend.git_agent import GitAgent
 try:
     from backend.task_manager import TaskManager
 except ImportError:
-    from task_manager import TaskManager
+    from backend.task_manager import TaskManager
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
@@ -153,11 +153,9 @@ class AudioLoop:
         # Instantiate JulesAgent for session management and monitoring
         self.jules_agent = JulesAgent()
 
-        self.send_text_task = None
         self.stop_event = asyncio.Event()
         self._reconnect_needed = asyncio.Event()
         
-        self.permissions = {} # Default Empty (Will treat unset as True)
         self._pending_confirmations = {}
 
         # Video buffering state
@@ -237,11 +235,6 @@ class AudioLoop:
         # Reset transcription tracking for new turn
         self._last_input_transcription = ""
         self._last_output_transcription = ""
-
-    def update_permissions(self, new_perms):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CONFIG] Updating tool permissions: {new_perms}")
-        self.permissions.update(new_perms)
 
     def set_paused(self, paused):
         self.paused = paused
@@ -579,9 +572,9 @@ class AudioLoop:
             self.tool_registry.register(tool_name, getattr(self.trello_agent, method_name))
 
         # Explicit Registrations
-        self.tool_registry.register("generate_cad", self.handle_cad_request_wrapper)
-        self.tool_registry.register("generate_cad_prototype", self.handle_cad_request_wrapper)
-        self.tool_registry.register("run_web_agent", self.handle_web_agent_request_wrapper)
+        self.tool_registry.register("generate_cad", self.handle_cad_request)
+        self.tool_registry.register("generate_cad_prototype", self.handle_cad_request)
+        self.tool_registry.register("run_web_agent", self.handle_web_agent_request)
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
         self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
@@ -654,16 +647,16 @@ class AudioLoop:
         self.tool_registry.register("control_music", self.music_agent.control)
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
-    async def handle_cad_request_wrapper(self, prompt):
+    async def handle_cad_request(self, prompt):
         if INCLUDE_RAW_LOGS:
              print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad', prompt='{prompt}'")
-        asyncio.create_task(self.handle_cad_request(prompt))
+        asyncio.create_task(self._run_cad_generation_task(prompt))
         return "CAD Generation started."
 
-    async def handle_web_agent_request_wrapper(self, prompt):
+    async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
              print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
-        asyncio.create_task(self.handle_web_agent_request(prompt))
+        asyncio.create_task(self._run_web_agent_task(prompt))
         return "Web Navigation started. Do not reply to this message."
 
     # --- New Handler Methods ---
@@ -1051,9 +1044,9 @@ class AudioLoop:
             result_str = f"Failed to iterate design with prompt: {prompt}"
         return result_str
 
-    async def handle_cad_request(self, prompt):
+    async def _run_cad_generation_task(self, prompt):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CAD] Background Task Started: handle_cad_request('{prompt}')")
+            print(f"[ADA DEBUG] [CAD] Background Task Started: _run_cad_generation_task('{prompt}')")
         if self.on_cad_status:
             self.on_cad_status("generating")
             
@@ -1309,9 +1302,9 @@ class AudioLoop:
         else:
             return "Cannot send restart signal: not connected to server."
 
-    async def handle_web_agent_request(self, prompt):
+    async def _run_web_agent_task(self, prompt):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Background Task Started: handle_web_agent_request('{prompt}')")
+            print(f"[ADA DEBUG] [WEB] Background Task Started: _run_web_agent_task('{prompt}')")
         
         async def update_frontend(image_b64, log_text):
             if self.on_web_data:
