@@ -10,6 +10,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
+- [ ] **The Forge (Generative Manufacturing)**
+  - **Description**: "I need a bracket for this camera." -> Generates a 3D model (STL) from a description, slices it, and sends it to the 3D printer automatically.
+  - **Wow Factor**: Turning a voice command into a physical object.
+  - **User Impact**: Rapid prototyping speed.
+  - **Technical Notes**: `CadAgent` (build123d) active. `PrinterAgent` active. Slicing integration pending.
+  - **Status**: Partially Implemented
+
 - [ ] **Dream State (Generative Idle Mode)**
   - **Description**: While the user is away (AFK), the assistant automatically switches to a low-priority branch and runs optimization tasks: writing unit tests, refactoring legacy code, or generating documentation.
   - **Wow Factor**: "Sir, while you were getting coffee, I took the liberty of writing test coverage for the new auth module."
@@ -21,14 +28,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: An interactive 3D environment ("The Construct") where the user can manipulate code modules, server infrastructure, and database schemas as physical objects.
   - **Wow Factor**: "I need guns. Lots of guns." -> Summoning a fleet of testing agents instantly.
   - **User Impact**: Spatial reasoning applied to abstract software architecture.
-  - **Technical Notes**: `SwarmVisualizer` active. VR/AR support (`@react-three/fiber`) pending.
+  - **Technical Notes**: `SwarmVisualizer` partially active. VR/AR support (`@react-three/fiber`) pending.
   - **Status**: Idea
 
 - [ ] **Project Recall (Photographic Memory)**
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
-  - **Technical Notes**: `ProactiveAgent` screen analysis active (`_analyze_screen`). Continuous recording loop and Vector store integration (`MemoryManager`) pending.
+  - **Technical Notes**: `ProactiveAgent._analyze_screen` active (Context detection). Vector storage of screen content pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Sentry (Security Overwatch)**
@@ -131,7 +138,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Automatically surfaces relevant past decisions, mistakes, or preferences when the user starts a similar task.
   - **Wow Factor**: "Sir, last time you touched the auth system, you broke the login page. Be careful with the token expiration."
   - **User Impact**: Prevents regression and reinforces learning.
-  - **Technical Notes**: `MemoryManager` vector search active. Hook active for Jules tasks (`handle_jules_request`). General chat integration pending.
+  - **Technical Notes**: `MemoryManager` vector search active. Architectural memory tool active (`add_architectural_memory`). General chat integration pending.
   - **Status**: Partially Implemented
 
 - [ ] **Swarm Tactics (Advanced Patterns)**
@@ -166,7 +173,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: The assistant anticipates the next likely question or need based on current context and pre-fetches documentation or resources.
   - **Wow Factor**: "I had a feeling you'd ask about the AWS S3 API, so I've already cached the docs."
   - **User Impact**: Removes latency from information retrieval.
-  - **Technical Notes**: `ProactiveAgent` suggestions active (`_check_context_switch`). Resource pre-fetching pending.
+  - **Technical Notes**: `ProactiveAgent` active (`_check_context_switch`, `_check_clipboard`). Resource pre-fetching pending.
   - **Status**: Partially Implemented
 
 - [ ] **The Blueprint (Live Architecture)**
@@ -213,14 +220,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Visualizing the heartbeat of the automation engine (CPU/Memory/Tasks/Agents) in the UI.
   - **Wow Factor**: Seeing the system "breathe" and knowing it's alive.
   - **User Impact**: System confidence and situational awareness.
-  - **Technical Notes**: `get_dashboard_data` active. Visualizer pending.
+  - **Technical Notes**: `get_dashboard_data` active (Agent Stats, Trello, Devices). Visualizer pending.
   - **Status**: Partially Implemented
 
 - [ ] **Neural Sync (Adaptive Soundscapes)**
   - **Description**: Generates or selects ambient music based on system load, coding intensity (keystroke velocity), or detected user sentiment.
   - **Wow Factor**: The soundtrack of your work adapts to your flow state.
   - **User Impact**: Increases immersion and focus.
-  - **Technical Notes**: `MusicAgent` active. Adaptive logic linking metrics to playlist selection pending.
+  - **Technical Notes**: `MusicAgent` active (Playback, Search). Adaptive logic linking metrics to playlist selection pending.
   - **Status**: Partially Implemented
 
 - [ ] **Sonic Debugging (Auditory Feedback)**
@@ -234,7 +241,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Identifies the current user via Voice ID and Face ID to tailor context and permissions. Unlock system by saying a passphrase.
   - **Wow Factor**: "Good evening, Mr. Stark" vs "Access Denied".
   - **User Impact**: Seamless multi-user support and security.
-  - **Technical Notes**: Face presence detection active (`_check_briefing_schedule`). Voiceprint authentication pending.
+  - **Technical Notes**: Face presence detection active (`ada._read_and_detect`). Voiceprint authentication pending.
   - **Status**: Partially Implemented
 
 - [ ] **Spatial Anchors (AR Sticky Notes)**
