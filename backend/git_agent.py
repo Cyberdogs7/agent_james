@@ -1,5 +1,7 @@
 import asyncio
-from backend.git_ops import GitOps
+import subprocess
+import os
+
 try:
     from backend.github_client import GitHubClient
 except ImportError:
@@ -14,53 +16,122 @@ class GitAgent:
             return self.project_manager.get_project_path(repo_name)
         return self.project_manager.get_current_project_path()
 
+    async def _run_git(self, args, cwd):
+        """Helper to run git commands asynchronously."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", *args,
+                cwd=cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+            return proc.returncode, stdout.decode().strip(), stderr.decode().strip()
+        except Exception as e:
+            return -1, "", str(e)
+
+    async def get_current_branch(self, repo_path):
+        code, out, err = await self._run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path)
+        if code == 0:
+            return out
+        return None
+
+    async def get_branches_list(self, repo_path):
+        code, out, err = await self._run_git(["branch", "--format=%(refname:short)"], cwd=repo_path)
+        if code == 0:
+            return out.split('\n') if out else []
+        return []
+
+    async def get_status_raw(self, repo_path):
+        code, out, err = await self._run_git(["status", "--short"], cwd=repo_path)
+        if code == 0:
+            return out
+        return "Failed to get status."
+
+    async def get_last_commit_info(self, repo_path):
+        # Format: hash|author|date|message
+        code, out, err = await self._run_git(["log", "-1", "--format=%h|%an|%ar|%s"], cwd=repo_path)
+        if code == 0 and out:
+            parts = out.split('|', 3)
+            if len(parts) == 4:
+                return {
+                    "hash": parts[0],
+                    "author": parts[1],
+                    "date": parts[2],
+                    "message": parts[3]
+                }
+        return None
+
+    async def commit_changes(self, repo_path, message):
+        # -a to stage modified/deleted files
+        code, out, err = await self._run_git(["commit", "-a", "-m", message], cwd=repo_path)
+        if code == 0:
+            return True, f"Committed changes: {out}"
+        return False, f"Commit failed:\n{err}"
+
+    async def push_changes(self, repo_path):
+        code, out, err = await self._run_git(["push"], cwd=repo_path)
+        if code == 0:
+            return True, f"Successfully pushed changes.\n{out}"
+        return False, f"Push failed:\n{err}"
+
+    async def pull_changes(self, repo_path):
+        code, out, err = await self._run_git(["pull"], cwd=repo_path)
+        if code == 0:
+            return True, f"Successfully pulled changes.\n{out}"
+        return False, f"Pull failed:\n{err}"
+
+    async def merge_branch_local(self, repo_path, branch_name):
+        # Check if source branch exists
+        branches = await self.get_branches_list(repo_path)
+        if branch_name not in branches:
+            return False, f"Branch '{branch_name}' does not exist."
+
+        code, out, err = await self._run_git(["merge", branch_name], cwd=repo_path)
+        if code == 0:
+            return True, f"Successfully merged '{branch_name}'.\n{out}"
+        return False, f"Merge failed:\n{err}"
+
+    # --- Tool Facing Methods ---
+
     async def commit(self, message, repo_name=None):
         path = self._get_repo_path(repo_name)
-        def _do_commit():
-            success, msg = GitOps.commit_changes(path, message)
-            return msg
-        return await asyncio.to_thread(_do_commit)
+        success, msg = await self.commit_changes(path, message)
+        return msg
 
     async def push(self, repo_name=None):
         path = self._get_repo_path(repo_name)
-        def _do_push():
-            success, msg = GitOps.push_changes(path)
-            return msg
-        return await asyncio.to_thread(_do_push)
+        success, msg = await self.push_changes(path)
+        return msg
 
     async def pull(self, repo_name=None):
         path = self._get_repo_path(repo_name)
-        def _do_pull():
-            success, msg = GitOps.pull_changes(path)
-            return msg
-        return await asyncio.to_thread(_do_pull)
+        success, msg = await self.pull_changes(path)
+        return msg
 
     async def status(self, repo_name=None):
         path = self._get_repo_path(repo_name)
-        def _do_status():
-            current_branch = GitOps.get_current_branch(path)
-            status = GitOps.get_status(path)
-            last_commit = GitOps.get_last_commit_info(path)
 
-            result_str = f"Status for '{path.name}':\n"
-            result_str += f"Branch: {current_branch or 'Unknown'}\n"
-            result_str += f"State: {'Dirty' if status else 'Clean'}\n"
-            if status:
-                result_str += f"Changes:\n{status}\n"
-            if last_commit:
-                result_str += f"Last Commit: {last_commit['hash']} - {last_commit['message']} ({last_commit['author']}, {last_commit['date']})"
-            return result_str
-        return await asyncio.to_thread(_do_status)
+        current_branch = await self.get_current_branch(path)
+        status = await self.get_status_raw(path)
+        last_commit = await self.get_last_commit_info(path)
+
+        result_str = f"Status for '{path.name}':\n"
+        result_str += f"Branch: {current_branch or 'Unknown'}\n"
+        result_str += f"State: {'Dirty' if status else 'Clean'}\n"
+        if status:
+            result_str += f"Changes:\n{status}\n"
+        if last_commit:
+            result_str += f"Last Commit: {last_commit['hash']} - {last_commit['message']} ({last_commit['author']}, {last_commit['date']})"
+        return result_str
 
     async def merge(self, branch_name, repo_name=None):
         path = self._get_repo_path(repo_name)
 
         # Check if local repo exists
         if path.exists():
-            def _do_local_merge():
-                success, msg = GitOps.merge_branch(path, branch_name)
-                return msg
-            return await asyncio.to_thread(_do_local_merge)
+            success, msg = await self.merge_branch_local(path, branch_name)
+            return msg
         else:
             # Attempt Remote Merge
             token = self.project_manager.get_github_token()
@@ -85,39 +156,34 @@ class GitAgent:
                 return "Repository path does not exist and no GitHub token available for remote merge."
 
     async def list_repos(self):
-        def _do_list():
-            repos = self.project_manager.list_git_projects()
-            return f"Available Git Repositories: {', '.join(repos)}" if repos else "No git repositories found."
-        return await asyncio.to_thread(_do_list)
+        repos = self.project_manager.list_git_projects()
+        return f"Available Git Repositories: {', '.join(repos)}" if repos else "No git repositories found."
 
     async def list_branches(self, repo_name=None):
+        """Tool-facing method that returns a formatted string."""
         path = self._get_repo_path(repo_name)
-        def _do_list():
-            branches = GitOps.list_branches(path)
-            return f"Branches in '{path.name}': {', '.join(branches)}" if branches else f"No branches found or failed to list branches for '{path.name}'."
-        return await asyncio.to_thread(_do_list)
+        branches = await self.get_branches_list(path)
+        return f"Branches in '{path.name}': {', '.join(branches)}" if branches else f"No branches found or failed to list branches for '{path.name}'."
 
     async def fleet_status(self):
-        def _do_fleet_status():
-            repos = self.project_manager.list_git_projects()
-            if not repos:
-                return "No git repositories found."
+        repos = self.project_manager.list_git_projects()
+        if not repos:
+            return "No git repositories found."
 
-            result_str = "Fleet Status Report:\n"
-            for repo in repos:
-                repo_path = self.project_manager.get_project_path(repo)
-                current_branch = GitOps.get_current_branch(repo_path)
-                status = GitOps.get_status(repo_path)
-                last_commit = GitOps.get_last_commit_info(repo_path)
+        result_str = "Fleet Status Report:\n"
+        for repo in repos:
+            repo_path = self.project_manager.get_project_path(repo)
+            current_branch = await self.get_current_branch(repo_path)
+            status = await self.get_status_raw(repo_path)
+            last_commit = await self.get_last_commit_info(repo_path)
 
-                result_str += f"--- {repo} ---\n"
-                result_str += f"Branch: {current_branch or 'Unknown'}\n"
-                result_str += f"Status: {'Dirty' if status else 'Clean'}\n"
-                if last_commit:
-                    result_str += f"Commit: {last_commit['message'][:50]}... ({last_commit['date']})\n"
-                result_str += "\n"
-            return result_str
-        return await asyncio.to_thread(_do_fleet_status)
+            result_str += f"--- {repo} ---\n"
+            result_str += f"Branch: {current_branch or 'Unknown'}\n"
+            result_str += f"Status: {'Dirty' if status else 'Clean'}\n"
+            if last_commit:
+                result_str += f"Commit: {last_commit['message'][:50]}... ({last_commit['date']})\n"
+            result_str += "\n"
+        return result_str
 
     async def sync_fleet(self, sources):
         def _do_sync():

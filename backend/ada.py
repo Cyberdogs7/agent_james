@@ -75,7 +75,6 @@ from backend.update_agent import UpdateAgent
 from backend.search_agent import SearchAgent
 from backend.scraper_agent import ScraperAgent
 from backend.proactive_agent import ProactiveAgent
-from backend.git_ops import GitOps
 from backend.os_agent import OSAgent
 from backend.music_agent import MusicAgent
 from backend.ollama_agent import OllamaAgent
@@ -1748,9 +1747,9 @@ class AudioLoop:
         # 8. Git Ops Data
         repo_path = self.project_manager.get_current_project_path()
         git_status = {
-            "branch": GitOps.get_current_branch(repo_path) or "unknown",
-            "branches": GitOps.list_branches(repo_path),
-            "status": GitOps.get_status(repo_path)
+            "branch": await self.git_agent.get_current_branch(repo_path) or "unknown",
+            "branches": await self.git_agent.get_branches_list(repo_path),
+            "status": await self.git_agent.get_status_raw(repo_path)
         }
 
         return {

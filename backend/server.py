@@ -37,11 +37,6 @@ except ImportError:
     from message_deduplicator import MessageDeduplicator
 
 try:
-    from backend.git_ops import GitOps
-except ImportError:
-    from git_ops import GitOps
-
-try:
     from backend.bug_hunter import BugHunter
 except ImportError:
     from bug_hunter import BugHunter

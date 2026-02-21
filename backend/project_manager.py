@@ -10,11 +10,6 @@ except ImportError:
     from writing_prompts import WRITING_MODE_SYSTEM_PROMPT
 
 try:
-    from backend.git_ops import GitOps
-except ImportError:
-    from git_ops import GitOps
-
-try:
     from backend.github_client import GitHubClient
 except ImportError:
     from github_client import GitHubClient
