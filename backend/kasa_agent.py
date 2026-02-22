@@ -66,6 +66,12 @@ class KasaAgent:
             await dev.update()
             self.devices[ip] = dev
             
+        device_list = self.get_devices_list()
+        self._log(f"Total Kasa devices (found + cached): {len(device_list)}")
+        return device_list
+
+    def get_devices_list(self):
+        """Returns a list of device dictionaries for the frontend."""
         device_list = []
         for ip, dev in self.devices.items():
             # Determine type and capabilities
@@ -91,9 +97,36 @@ class KasaAgent:
                 "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
             }
             device_list.append(device_info)
-            
-        self._log(f"Total Kasa devices (found + cached): {len(device_list)}")
         return device_list
+
+    async def control_device(self, target, action, brightness=None, color=None):
+        """Orchestrates control actions on a device."""
+        result_msg = f"Action '{action}' on '{target}' failed."
+        success = False
+
+        if action == "turn_on":
+            success = await self.turn_on(target)
+            if success:
+                result_msg = f"Turned ON '{target}'."
+        elif action == "turn_off":
+            success = await self.turn_off(target)
+            if success:
+                result_msg = f"Turned OFF '{target}'."
+        elif action == "set":
+            success = True
+            result_msg = f"Updated '{target}':"
+
+        if success or action == "set":
+            if brightness is not None:
+                sb = await self.set_brightness(target, brightness)
+                if sb:
+                    result_msg += f" Set brightness to {brightness}."
+            if color is not None:
+                sc = await self.set_color(target, color)
+                if sc:
+                    result_msg += f" Set color to {color}."
+
+        return result_msg
 
     def get_device_by_alias(self, alias):
         """Finds a device by its alias (case-insensitive)."""
