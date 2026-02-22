@@ -348,3 +348,65 @@ class JulesAgent:
                 self._log(f"[JULES_AGENT] [ERR] Error in monitoring loop: {e}")
 
             await asyncio.sleep(15)
+
+    async def list_sources_formatted(self):
+        """Returns a formatted list of Jules sources."""
+        try:
+            response = await self.list_sources()
+            if response and "sources" in response:
+                sources = [s["name"] for s in response["sources"]]
+                return "\n".join(sources) if sources else "No sources found."
+            return "Failed to list Jules sources."
+        except Exception as e:
+            return f"Error listing sources: {str(e)}"
+
+    async def list_sessions_formatted(self):
+        """Returns a formatted list of Jules sessions."""
+        try:
+            sessions = await self.list_sessions()
+            if sessions:
+                 # Format for readability
+                 lines = []
+                 for s in sessions:
+                     name = s.get('name', 'Unknown')
+                     state = s.get('state', 'Unknown')
+                     title = s.get('title', name)
+                     lines.append(f"- {title} ({name}) [State: {state}]")
+                 return "\n".join(lines)
+            return "No Jules sessions found."
+        except Exception as e:
+            return f"Error listing sessions: {str(e)}"
+
+    async def list_activities_formatted(self, session_id):
+        """Returns a formatted list of activities for a session."""
+        try:
+            response = await self.list_activities(session_id)
+            if response and "activities" in response:
+                activities = response["activities"]
+                if not activities:
+                    return "No activities found."
+
+                # Simple summary
+                lines = []
+                for act in activities[-10:]: # Last 10
+                    if 'agentMessage' in act:
+                        lines.append(f"Jules: {act['agentMessage']['content'][:100]}...")
+                    elif 'userMessage' in act:
+                        lines.append(f"User: {act['userMessage']['content'][:100]}...")
+                    elif 'changeSet' in act:
+                        lines.append(f"Code Change: {act.get('description', 'No description')}")
+
+                return "\n".join(lines)
+            return "Failed to list Jules activities."
+        except Exception as e:
+            return f"Error listing activities: {str(e)}"
+
+    async def get_diff_formatted(self, session_id, activity_id=None):
+        """Returns the diff for a session or activity."""
+        try:
+            diff = await self.get_diff(session_id, activity_id)
+            if diff:
+                return diff
+            return "No code changes found."
+        except Exception as e:
+            return f"Error getting diff: {str(e)}"

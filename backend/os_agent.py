@@ -164,3 +164,19 @@ class OSAgent:
                 return "System sleeping"
         except Exception as e:
             return f"Error sleeping: {str(e)}"
+
+    def control(self, action, value=None):
+        """Dispatches control actions to the appropriate method."""
+        if action == "launch":
+            return self.launch_app(value)
+        elif action == "set_volume":
+            return self.set_volume(value)
+        elif action == "mute":
+            return self.mute()
+        elif action == "unmute":
+            return self.unmute()
+        elif action == "lock_screen":
+            return self.lock_screen()
+        elif action == "sleep":
+            return self.sleep()
+        return "Unknown action."

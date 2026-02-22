@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import io
 import json
 import os
 import sys
@@ -12,7 +11,6 @@ try:
     import pyaudio
 except ImportError:
     pyaudio = None
-import PIL.Image
 import mss
 import argparse
 import math
@@ -577,9 +575,9 @@ class AudioLoop:
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
         self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
-        self.tool_registry.register("list_jules_sources", self.handle_list_jules_sources)
-        self.tool_registry.register("list_jules_sessions", self.handle_list_jules_sessions)
-        self.tool_registry.register("list_jules_activities", self.handle_list_jules_activities)
+        self.tool_registry.register("list_jules_sources", self.jules_agent.list_sources_formatted)
+        self.tool_registry.register("list_jules_sessions", self.jules_agent.list_sessions_formatted)
+        self.tool_registry.register("list_jules_activities", self.jules_agent.list_activities_formatted)
         self.tool_registry.register("create_project", self.handle_create_project)
         self.tool_registry.register("switch_project", self.handle_switch_project)
         self.tool_registry.register("list_projects", self.handle_list_projects)
@@ -612,14 +610,14 @@ class AudioLoop:
         self.tool_registry.register("get_morning_briefing", self.handle_get_morning_briefing)
         self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
-        self.tool_registry.register("control_os", self.handle_control_os)
+        self.tool_registry.register("control_os", self.os_agent.control)
         self.tool_registry.register("set_auto_merge_threshold", self.handle_set_auto_merge_threshold)
         self.tool_registry.register("add_architectural_memory", self.handle_add_architectural_memory)
         self.tool_registry.register("switch_video_source", self.handle_switch_video_source)
         self.tool_registry.register("apply_task_fix", self.handle_apply_task_fix)
         self.tool_registry.register("dismiss_jules_session", self.handle_dismiss_jules_session)
         self.tool_registry.register("stop_jules_session", self.handle_stop_jules_session)
-        self.tool_registry.register("jules_get_diff", self.handle_jules_get_diff)
+        self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
         self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
         self.tool_registry.register("change_voice", self.handle_change_voice)
         self.tool_registry.register("update_persona", self.handle_update_persona)
@@ -659,24 +657,6 @@ class AudioLoop:
         return "Web Navigation started. Do not reply to this message."
 
     # --- New Handler Methods ---
-
-    def handle_control_os(self, action, value=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_os' action='{action}' value='{value}'")
-
-        if action == "launch":
-            return self.os_agent.launch_app(value)
-        elif action == "set_volume":
-            return self.os_agent.set_volume(value)
-        elif action == "mute":
-            return self.os_agent.mute()
-        elif action == "unmute":
-            return self.os_agent.unmute()
-        elif action == "lock_screen":
-            return self.os_agent.lock_screen()
-        elif action == "sleep":
-            return self.os_agent.sleep()
-        return "Unknown action."
 
     def handle_toggle_jules_slack_notifications(self, enabled):
         success, msg = self.project_manager.update_project_config({"jules_slack_notifications": enabled})
@@ -833,41 +813,17 @@ class AudioLoop:
     def handle_list_smart_devices(self):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
-        # Use cached devices directly for speed
-        # devices_dict is {ip: SmartDevice}
-        # Use cached devices directly for speed
-        # devices_dict is {ip: SmartDevice}
+
+        frontend_list = self.kasa_agent.get_devices_list()
 
         dev_summaries = []
-        frontend_list = []
-
-        for ip, d in self.kasa_agent.devices.items():
-            dev_type = "unknown"
-            if d.is_bulb: dev_type = "bulb"
-            elif d.is_plug: dev_type = "plug"
-            elif d.is_strip: dev_type = "strip"
-            elif d.is_dimmer: dev_type = "dimmer"
-
-            # Format for Model
-            info = f"{d.alias} (IP: {ip}, Type: {dev_type})"
-            if d.is_on:
+        for d in frontend_list:
+            info = f"{d['alias']} (IP: {d['ip']}, Type: {d['type']})"
+            if d['is_on']:
                 info += " [ON]"
             else:
                 info += " [OFF]"
             dev_summaries.append(info)
-
-            # Format for Frontend
-            frontend_list.append({
-                "ip": ip,
-                    "alias": d.alias,
-                    "model": d.model,
-                "type": dev_type,
-                    "is_on": d.is_on,
-                    "brightness": d.brightness if d.is_bulb or d.is_dimmer else None,
-                    "hsv": d.hsv if d.is_bulb and d.is_color else None,
-                    "has_color": d.is_color if d.is_bulb else False,
-                    "has_brightness": d.is_dimmable if d.is_bulb or d.is_dimmer else False
-            })
 
         result_str = "No devices found in cache."
         if dev_summaries:
@@ -882,71 +838,14 @@ class AudioLoop:
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
 
-        result_msg = f"Action '{action}' on '{target}' failed."
-        success = False
-
-        if action == "turn_on":
-            success = await self.kasa_agent.turn_on(target)
-            if success:
-                result_msg = f"Turned ON '{target}'."
-        elif action == "turn_off":
-            success = await self.kasa_agent.turn_off(target)
-            if success:
-                result_msg = f"Turned OFF '{target}'."
-        elif action == "set":
-            success = True
-            result_msg = f"Updated '{target}':"
-
-        # Apply extra attributes if 'set' or if we just turned it on and want to set them too
-        if success or action == "set":
-            if brightness is not None:
-                sb = await self.kasa_agent.set_brightness(target, brightness)
-                if sb:
-                    result_msg += f" Set brightness to {brightness}."
-            if color is not None:
-                sc = await self.kasa_agent.set_color(target, color)
-                if sc:
-                    result_msg += f" Set color to {color}."
+        result_msg = await self.kasa_agent.control_device(target, action, brightness, color)
 
         # Notify Frontend of State Change
-        if success:
-            # We don't need full discovery, just refresh known state or push update
-            # But for simplicity, let's get the standard list representation
-            # KasaAgent updates its internal state on control, so we can rebuild the list
+        updated_list = self.kasa_agent.get_devices_list()
 
-            # Quick rebuild of list from internal dict
-            updated_list = []
-            for ip, dev in self.kasa_agent.devices.items():
-                # We need to ensure we have the correct dict structure expected by frontend
-                # We duplicate logic from KasaAgent.discover_devices a bit, but that's okay for now or we can add a helper
-                # Ideally KasaAgent has a 'get_devices_list()' method.
-                # Use the cached objects in self.kasa_agent.devices
+        if self.on_device_update:
+            self.on_device_update(updated_list)
 
-                dev_type = "unknown"
-                if dev.is_bulb: dev_type = "bulb"
-                elif dev.is_plug: dev_type = "plug"
-                elif dev.is_strip: dev_type = "strip"
-                elif dev.is_dimmer: dev_type = "dimmer"
-
-                d_info = {
-                    "ip": ip,
-                    "alias": dev.alias,
-                    "model": dev.model,
-                    "type": dev_type,
-                    "is_on": dev.is_on,
-                    "brightness": dev.brightness if dev.is_bulb or dev.is_dimmer else None,
-                    "hsv": dev.hsv if dev.is_bulb and dev.is_color else None,
-                    "has_color": dev.is_color if dev.is_bulb else False,
-                    "has_brightness": dev.is_dimmable if dev.is_bulb or dev.is_dimmer else False
-                }
-                updated_list.append(d_info)
-
-            if self.on_device_update:
-                self.on_device_update(updated_list)
-        else:
-            # Report Error
-            if self.on_error:
-                self.on_error(result_msg)
         return result_msg
 
     async def handle_discover_printers(self):
@@ -1464,54 +1363,6 @@ class AudioLoop:
             return "Feedback sent successfully."
         else:
             return "Failed to send feedback."
-
-    async def handle_list_jules_sources(self):
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [JULES] Listing all sources")
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(api_key=api_key)
-        response = await jules_agent.list_sources()
-        if response and "sources" in response:
-            return response["sources"]
-        else:
-            return "Failed to list Jules sources."
-
-    async def handle_list_jules_sessions(self):
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [JULES] Listing sessions from API")
-        sessions = await self.jules_agent.list_sessions()
-        if sessions:
-            return sessions
-        else:
-            return "No Jules sessions found."
-
-    async def handle_list_jules_activities(self, session_id):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Listing activities for session: {session_id}")
-
-        # Check Ollama
-        if session_id in self.ollama_agent.sessions:
-            return await self.ollama_agent.list_activities(session_id)
-
-        project_config = self.project_manager.get_project_config()
-        api_key = project_config.get("jules_api_key")
-        jules_agent = JulesAgent(api_key=api_key)
-        response = await jules_agent.list_activities(session_id)
-        if response and "activities" in response:
-            return response["activities"]
-        else:
-            return "Failed to list Jules activities."
-
-    async def handle_jules_get_diff(self, session_id, activity_id=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Getting diff for session: {session_id} (Activity: {activity_id})")
-
-        diff = await self.jules_agent.get_diff(session_id, activity_id)
-        if diff:
-            return diff
-        else:
-            return "No code changes found."
 
     async def handle_add_architectural_memory(self, content, tags=None):
         if INCLUDE_RAW_LOGS:
