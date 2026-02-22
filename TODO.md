@@ -14,7 +14,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: "I need a bracket for this camera." -> Generates a 3D model (STL) from a description, slices it, and sends it to the 3D printer automatically.
   - **Wow Factor**: Turning a voice command into a physical object.
   - **User Impact**: Rapid prototyping speed.
-  - **Technical Notes**: `CadAgent` (build123d) active. `PrinterAgent` active. Slicing integration pending.
+  - **Technical Notes**: `CadAgent` (generation), `PrinterAgent` (discovery/slicing/printing) active. Unified voice workflow pending.
   - **Status**: Partially Implemented
 
 - [ ] **Dream State (Generative Idle Mode)**
@@ -35,7 +35,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
-  - **Technical Notes**: `ProactiveAgent._analyze_screen` active (Context detection). Vector storage of screen content pending.
+  - **Technical Notes**: `ProactiveAgent._analyze_screen` active (Context detection). `MemoryManager` vector storage active.
   - **Status**: Partially Implemented
 
 - [ ] **The Sentry (Security Overwatch)**
@@ -59,7 +59,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: `profile_manager.py` to analyze git history -> Fine-tuned LoRA or few-shot prompting.
   - **Status**: Idea
 
-- [ ] **Cinematic Mode (Work Mode)**
+- [ ] **Protocol: FOCUS (Cinematic Mode)**
   - **Description**: A single voice command ("James, let's work") that dims the smart lights (Kasa), puts the dashboard in full screen, and plays a "boot up" sound.
   - **Wow Factor**: The room physically changes to match the user's intent.
   - **User Impact**: Instant flow state induction.
@@ -108,6 +108,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: `SwarmVisualizer` / HUD overlay with shader effects.
   - **Status**: Idea
 
+- [ ] **The Eye of Agamotto (Visual Time Travel)**
+  - **Description**: Allows rewinding the *visual state* of the screen/dashboard, not just data. "Show me what the dashboard looked like 10 minutes ago."
+  - **Wow Factor**: Scrubbing through the visual history of your work session.
+  - **User Impact**: Visual context recovery for debugging UI glitches or recalling fleeting notifications.
+  - **Technical Notes**: Snapshotting visual state in `MemoryManager`.
+  - **Status**: Idea
+
 ---
 
 ## 🧩 Smart Enhancements
@@ -124,7 +131,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Description**: Automatically spawns specialized sub-agents based on the current problem context without explicit instruction.
   - **Wow Factor**: "I noticed a database deadlock, so I've deployed a DBA agent to analyze the query plan."
   - **User Impact**: The system scales its intelligence to the complexity of the problem.
-  - **Technical Notes**: Manual spawning active via `spawn_swarm_agent`. Auto-trigger from log analysis pending.
+  - **Technical Notes**: `spawn_swarm_agent` tool active. Auto-trigger from log analysis pending.
   - **Status**: Partially Implemented
 
 - [ ] **Pre-Crime (Proactive Healing)**
@@ -211,6 +218,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: Local LLM inference on keystrokes + OS overlay.
   - **Status**: Idea
 
+- [ ] **Babel Fish (Real-time Meeting Assistant)**
+  - **Description**: Live transcription and sentiment analysis of Zoom/Meet calls with real-time "cue cards" for the user.
+  - **Wow Factor**: "Sir, the client seems hesitant about the budget. I suggest focusing on ROI."
+  - **User Impact**: Superhuman social awareness and meeting effectiveness.
+  - **Technical Notes**: Audio loop -> Whisper -> LLM Analysis -> HUD Overlay.
+  - **Status**: Idea
+
 ---
 
 ## 🛠 Quality of Life & Polish
@@ -270,4 +284,11 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Vanquished the null pointer demon in the auth tower."
   - **User Impact**: Adds delight to the mundane task of committing code.
   - **Technical Notes**: `git_ops.py` enhancement with style prompts.
+  - **Status**: Idea
+
+- [ ] **The Holodeck (VR Code Review)**
+  - **Description**: A VR interface for code review where changes are visualized as spatial structures.
+  - **Wow Factor**: "Walking" through the code changes.
+  - **User Impact**: Immersive understanding of complex refactors.
+  - **Technical Notes**: `Three.js` / WebXR integration with the War Room.
   - **Status**: Idea
