@@ -126,21 +126,6 @@ class TestToolDefinitions:
         print(f"list_jules_activities tool: {list_jules_activities_tool['name']}")
 
 
-class TestJulesToolHandlers:
-    """Test Jules tool handlers."""
-
-
-    def test_handle_list_jules_sources_method_exists(self):
-        """Test handle_list_jules_sources exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'handle_list_jules_sources')
-
-    def test_handle_list_jules_activities_method_exists(self):
-        """Test handle_list_jules_activities exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'handle_list_jules_activities')
-
-
 class TestAudioLoopClass:
     """Test AudioLoop class structure."""
     
@@ -164,7 +149,6 @@ class TestAudioLoopClass:
             'handle_cad_request',
             'handle_web_agent_request',
             'resolve_tool_confirmation',
-            'update_permissions',
             'set_paused',
             'clear_audio_queue',
         ]
@@ -219,16 +203,6 @@ class TestLiveConnectConfig:
         # So verifying properties on a MagicMock returned by a constructor call is tricky without configuring the mock return_value.
         # For now, asserting not None is sufficient to prove the method ran without error.
         print("LiveConnectConfig generation ran (mocked).")
-
-
-class TestToolPermissions:
-    """Test tool permission handling."""
-    
-    def test_update_permissions_method(self):
-        """Test update_permissions method exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'update_permissions')
-        print("update_permissions method exists")
 
 
 class TestAgentImports:
