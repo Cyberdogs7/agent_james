@@ -113,6 +113,7 @@ class PrinterAgent:
     def __init__(self, profiles_dir: str = "printer_profiles"):
         self.printers: Dict[str, Printer] = {}  # host -> Printer
         self.profiles_dir = profiles_dir
+        self.root_path = None
         self._zeroconf: Optional[Zeroconf] = None
         self._error_tracker = set() # Track hosts with errors to prevent log spam
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
@@ -123,6 +124,10 @@ class PrinterAgent:
         
         # Ensure profiles directory exists
         os.makedirs(profiles_dir, exist_ok=True)
+
+    def set_root_path(self, path: str):
+        """Sets the root path for project file resolution."""
+        self.root_path = str(path)
     
     def _log(self, *args, **kwargs):
         if self.include_raw:
@@ -992,39 +997,80 @@ class PrinterAgent:
         h, m = divmod(m, 60)
         return f"{h:02d}:{m:02d}:{s:02d}"
 
+    async def get_formatted_discovery(self) -> str:
+        """Discovers printers and returns a formatted string."""
+        printers = await self.discover_printers()
+        if printers:
+            printer_list = []
+            for p in printers:
+                printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
+            result_str = "Found Printers:\n" + "\n".join(printer_list)
+        else:
+            result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
+        return result_str
 
-    async def print_stl(self, stl_path: str, printer_name: str, 
-                        profile_path: Optional[str] = None, 
-                        root_path: Optional[str] = None) -> Dict[str, str]:
+    async def get_formatted_status(self, printer: str) -> str:
+        """Gets printer status and returns a formatted string."""
+        status = await self.get_print_status(printer)
+        if status:
+            result_str = f"Printer: {status.printer}\n"
+            result_str += f"State: {status.state}\n"
+            result_str += f"Progress: {status.progress_percent:.1f}%\n"
+            if status.time_remaining:
+                result_str += f"Time Remaining: {status.time_remaining}\n"
+            if status.time_elapsed:
+                result_str += f"Time Elapsed: {status.time_elapsed}\n"
+            if status.filename:
+                result_str += f"File: {status.filename}\n"
+            if status.temperatures:
+                temps = status.temperatures
+                if "hotend" in temps:
+                    result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
+                if "bed" in temps:
+                    result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
+        else:
+            result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
+        return result_str
+
+    async def print_stl(self, stl_path: str, printer: str,
+                        profile: Optional[str] = None) -> str:
         """
         Orchestrate the full printing workflow: Slice -> Upload -> Print.
+        Returns a descriptive status message.
         """
+        printer_name = printer # Rename for internal consistency
+
+        # Resolve 'current' keyword
+        if stl_path.lower() == "current":
+            stl_path = "output.stl"
+
         self._log(f"[PRINTER] Starting print job for {stl_path} on {printer_name}")
         
         # 1. Resolve Printer
-        printer = self._resolve_printer(printer_name)
-        if not printer:
-            return {"status": "error", "message": f"Printer '{printer_name}' not found."}
+        printer_obj = self._resolve_printer(printer_name)
+        if not printer_obj:
+            return f"Printer '{printer_name}' not found."
 
         # 2. Slice STL
         # Use printer name to auto-detect profiles if not provided
         gcode_path = await self.slice_stl(
             stl_path, 
-            profile_path=profile_path,
-            root_path=root_path,
-            printer_name=printer.name 
+            profile_path=profile,
+            root_path=self.root_path,
+            printer_name=printer_obj.name
         )
         
         if not gcode_path:
-            return {"status": "error", "message": "Slicing failed check logs."}
+            return "Slicing failed check logs."
 
         # 3. Upload & Start Print
-        success = await self.upload_gcode(printer_name, gcode_path, start_print=True)
+        # Use resolved printer object name to ensure consistency
+        success = await self.upload_gcode(printer_obj.name, gcode_path, start_print=True)
         
         if success:
-            return {"status": "success", "message": f"Printing {os.path.basename(stl_path)} on {printer.name}"}
+            return f"Printing {os.path.basename(stl_path)} on {printer_obj.name}"
         else:
-            return {"status": "error", "message": "Failed to upload/start print job."}
+            return "Failed to upload/start print job."
 
 
 # Standalone test

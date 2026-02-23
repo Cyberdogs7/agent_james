@@ -3,10 +3,15 @@ import os
 from kasa import Discover, SmartDevice, SmartBulb, SmartPlug
 
 class KasaAgent:
-    def __init__(self, known_devices=None):
+    def __init__(self, known_devices=None, on_update=None):
         self.devices = {}
         self.known_devices_config = known_devices or []
+        self.on_update = on_update
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
+
+    def set_on_update(self, callback):
+        """Sets the callback function for device updates."""
+        self.on_update = callback
 
     def _log(self, *args, **kwargs):
         if self.include_raw:
@@ -99,6 +104,29 @@ class KasaAgent:
             device_list.append(device_info)
         return device_list
 
+    def get_formatted_list(self):
+        """Returns a formatted string of devices for the LLM."""
+        frontend_list = self.get_devices_list()
+
+        dev_summaries = []
+        for d in frontend_list:
+            info = f"{d['alias']} (IP: {d['ip']}, Type: {d['type']})"
+            if d['is_on']:
+                info += " [ON]"
+            else:
+                info += " [OFF]"
+            dev_summaries.append(info)
+
+        result_str = "No devices found in cache."
+        if dev_summaries:
+            result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
+
+        # Trigger frontend update as well since we are fetching
+        if self.on_update:
+             self.on_update(frontend_list)
+
+        return result_str
+
     async def control_device(self, target, action, brightness=None, color=None):
         """Orchestrates control actions on a device."""
         result_msg = f"Action '{action}' on '{target}' failed."
@@ -125,6 +153,11 @@ class KasaAgent:
                 sc = await self.set_color(target, color)
                 if sc:
                     result_msg += f" Set color to {color}."
+
+        # Notify Frontend of State Change
+        updated_list = self.get_devices_list()
+        if self.on_update:
+            self.on_update(updated_list)
 
         return result_msg
 

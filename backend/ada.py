@@ -106,6 +106,15 @@ class AudioLoop:
         self.output_device_index = output_device_index
         self.last_input_source = 'ui'  # Default to 'ui'
 
+        # Initialize ProjectManager
+        if project_manager:
+            self.project_manager = project_manager
+        else:
+            from project_manager import ProjectManager
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            self.project_manager = ProjectManager(project_root)
+
         self.audio_in_queue = None
         self.out_queue = None
         self.paused = False
@@ -135,7 +144,9 @@ class AudioLoop:
         self.cad_agent = CadAgent(on_thought=handle_cad_thought, on_status=handle_cad_status)
         self.web_agent = WebAgent()
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
+        self.kasa_agent.set_on_update(self.on_device_update)
         self.printer_agent = PrinterAgent()
+        self.printer_agent.set_root_path(self.project_manager.get_current_project_path())
         self.trello_agent = TrelloAgent()
         self.timer_agent = TimerAgent(sio=self.sio)
         self.giphy_client = DefaultApi(ApiClient())
@@ -160,15 +171,6 @@ class AudioLoop:
         # VAD State
         self._is_speaking = False
         self._silence_start_time = None
-        
-        # Initialize ProjectManager
-        if project_manager:
-            self.project_manager = project_manager
-        else:
-            from project_manager import ProjectManager
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(current_dir)
-            self.project_manager = ProjectManager(project_root)
         
         self.task_manager = TaskManager(self.project_manager.get_current_project_path())
         self.search_agent = SearchAgent(self.trello_agent, self.project_manager, self.scraper_agent)
@@ -581,11 +583,11 @@ class AudioLoop:
         self.tool_registry.register("create_project", self.handle_create_project)
         self.tool_registry.register("switch_project", self.handle_switch_project)
         self.tool_registry.register("list_projects", self.handle_list_projects)
-        self.tool_registry.register("list_smart_devices", self.handle_list_smart_devices)
-        self.tool_registry.register("control_light", self.handle_control_light)
-        self.tool_registry.register("discover_printers", self.handle_discover_printers)
-        self.tool_registry.register("print_stl", self.handle_print_stl)
-        self.tool_registry.register("get_print_status", self.handle_get_print_status)
+        self.tool_registry.register("list_smart_devices", self.kasa_agent.get_formatted_list)
+        self.tool_registry.register("control_light", self.kasa_agent.control_device)
+        self.tool_registry.register("discover_printers", self.printer_agent.get_formatted_discovery)
+        self.tool_registry.register("print_stl", self.printer_agent.print_stl)
+        self.tool_registry.register("get_print_status", self.printer_agent.get_formatted_status)
         self.tool_registry.register("iterate_cad", self.handle_iterate_cad)
         self.tool_registry.register("set_timer", self.timer_agent.set_timer)
         self.tool_registry.register("set_reminder", self.timer_agent.set_reminder)
@@ -786,6 +788,7 @@ class AudioLoop:
         if success:
             # Auto-switch to the newly created project
             self.project_manager.switch_project(name)
+            self.printer_agent.set_root_path(self.project_manager.get_current_project_path())
             msg += f" Switched to '{name}'."
             if self.on_project_update:
                 self.on_project_update(name)
@@ -797,6 +800,7 @@ class AudioLoop:
             print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
         success, msg = self.project_manager.switch_project(name)
         if success:
+            self.printer_agent.set_root_path(self.project_manager.get_current_project_path())
             if self.on_project_update:
                 self.on_project_update(name)
 
@@ -810,101 +814,6 @@ class AudioLoop:
         projects = self.project_manager.list_projects()
         return f"Available projects: {', '.join(projects)}"
 
-    def handle_list_smart_devices(self):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_smart_devices'", flush=True)
-
-        frontend_list = self.kasa_agent.get_devices_list()
-
-        dev_summaries = []
-        for d in frontend_list:
-            info = f"{d['alias']} (IP: {d['ip']}, Type: {d['type']})"
-            if d['is_on']:
-                info += " [ON]"
-            else:
-                info += " [OFF]"
-            dev_summaries.append(info)
-
-        result_str = "No devices found in cache."
-        if dev_summaries:
-            result_str = "Found Devices (Cached):\n" + "\n".join(dev_summaries)
-
-        # Trigger frontend update
-        if self.on_device_update:
-            self.on_device_update(frontend_list)
-        return result_str
-
-    async def handle_control_light(self, target, action, brightness=None, color=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'control_light' Target='{target}' Action='{action}'")
-
-        result_msg = await self.kasa_agent.control_device(target, action, brightness, color)
-
-        # Notify Frontend of State Change
-        updated_list = self.kasa_agent.get_devices_list()
-
-        if self.on_device_update:
-            self.on_device_update(updated_list)
-
-        return result_msg
-
-    async def handle_discover_printers(self):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'discover_printers'")
-        printers = await self.printer_agent.discover_printers()
-        # Format for model
-        if printers:
-            printer_list = []
-            for p in printers:
-                printer_list.append(f"{p['name']} ({p['host']}:{p['port']}, type: {p['printer_type']})")
-            result_str = "Found Printers:\n" + "\n".join(printer_list)
-        else:
-            result_str = "No printers found on network. Ensure printers are on and running OctoPrint/Moonraker."
-        return result_str
-
-    async def handle_print_stl(self, stl_path, printer, profile=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'print_stl' STL='{stl_path}' Printer='{printer}'")
-
-        # Resolve 'current' to project STL
-        if stl_path.lower() == "current":
-            stl_path = "output.stl" # Let printer agent resolve it in root_path
-
-        # Get current project path
-        project_path = str(self.project_manager.get_current_project_path())
-
-        result = await self.printer_agent.print_stl(
-            stl_path,
-            printer,
-            profile,
-            root_path=project_path
-        )
-        return result.get("message", "Unknown result")
-
-    async def handle_get_print_status(self, printer):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'get_print_status' Printer='{printer}'")
-
-        status = await self.printer_agent.get_print_status(printer)
-        if status:
-            result_str = f"Printer: {status.printer}\n"
-            result_str += f"State: {status.state}\n"
-            result_str += f"Progress: {status.progress_percent:.1f}%\n"
-            if status.time_remaining:
-                result_str += f"Time Remaining: {status.time_remaining}\n"
-            if status.time_elapsed:
-                result_str += f"Time Elapsed: {status.time_elapsed}\n"
-            if status.filename:
-                result_str += f"File: {status.filename}\n"
-            if status.temperatures:
-                temps = status.temperatures
-                if "hotend" in temps:
-                    result_str += f"Hotend: {temps['hotend']['current']:.0f}°C / {temps['hotend']['target']:.0f}°C\n"
-                if "bed" in temps:
-                    result_str += f"Bed: {temps['bed']['current']:.0f}°C / {temps['bed']['target']:.0f}°C"
-        else:
-            result_str = f"Could not get status for printer '{printer}'. Ensure it is discovered first."
-        return result_str
 
     async def handle_iterate_cad(self, prompt):
         if INCLUDE_RAW_LOGS:
