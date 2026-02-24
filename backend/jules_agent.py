@@ -8,12 +8,13 @@ from datetime import datetime, timedelta
 load_dotenv()
 
 class JulesAgent:
-    def __init__(self, session=None, api_key=None):
+    def __init__(self, session=None, api_key=None, project_manager=None):
         self.api_key = api_key or os.getenv("JULES_API_KEY") or ""
         self.base_url = "https://jules.googleapis.com/v1alpha"
         self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key})
         self.session_id = None
         self.session = session # Optional: Main Gemini Session (Legacy support, prefer callbacks)
+        self.project_manager = project_manager
         self.sessions_lock = asyncio.Lock()
 
         # Centralized Swarm Management
@@ -135,6 +136,23 @@ class JulesAgent:
             self.start_polling(session_id, callback)
             return session
         return None
+
+    async def spawn_agent_with_context(self, prompt, source, role=None, callback=None):
+        """
+        Enhances the prompt with architectural memory context (RAG) before spawning.
+        """
+        final_prompt = prompt
+        if self.project_manager:
+            try:
+                memories = self.project_manager.search_architectural_memory(prompt)
+                if memories:
+                    memory_context = "\n".join([f"- {m}" for m in memories])
+                    final_prompt = f"Context from previous architectural decisions & constraints:\n{memory_context}\n\nTask:\n{prompt}"
+                    self._log(f"[JULES_AGENT] [MEMORY] Injected context into prompt. Length: {len(memory_context)}")
+            except Exception as e:
+                self._log(f"[JULES_AGENT] [ERR] Memory search failed: {e}")
+
+        return await self.spawn_agent(final_prompt, source, role, callback)
 
     def start_polling(self, session_id, callback=None):
         """Starts a background task to poll a specific session for updates."""
