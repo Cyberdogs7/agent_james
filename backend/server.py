@@ -22,10 +22,13 @@ from pathlib import Path
 
 
 
-# Ensure we can import ada
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Ensure we can import ada and backend modules
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+sys.path.append(project_root)
+sys.path.append(current_dir)
 
-import ada
+from backend import ada
 from authenticator import FaceAuthenticator
 from kasa_agent import KasaAgent
 from project_manager import ProjectManager
@@ -1708,11 +1711,11 @@ async def dismiss_jules_session(sid, data):
 async def get_jules_activities(sid, data):
     session_id = data.get('id')
     if audio_loop:
-        activities = await audio_loop.handle_list_jules_activities(session_id)
-        if isinstance(activities, list):
-            await sio.emit('jules_activities', {'id': session_id, 'activities': activities})
+        response = await audio_loop.jules_agent.list_activities(session_id)
+        if response and isinstance(response, dict) and "activities" in response:
+            await sio.emit('jules_activities', {'id': session_id, 'activities': response["activities"]})
         else:
-            await sio.emit('error', {'msg': str(activities)})
+            await sio.emit('error', {'msg': str(response)})
     else:
         await sio.emit('error', {'msg': "System not ready"})
 
@@ -1752,12 +1755,14 @@ async def get_jules_sources(sid):
     """Fetches available Jules sources and emits them back to the client."""
     print("[SERVER] Fetching Jules sources...")
     if audio_loop:
-        sources = await audio_loop.handle_list_jules_sources()
-        # handle_list_jules_sources returns either a list of dicts/strings OR a string error message
-        if isinstance(sources, list):
-            await sio.emit('jules_sources', sources)
+        response = await audio_loop.jules_agent.list_sources()
+        if response and isinstance(response, dict) and "sources" in response:
+             await sio.emit('jules_sources', response["sources"])
+        elif isinstance(response, list):
+             # Fallback if list returned directly (unlikely but safe)
+             await sio.emit('jules_sources', response)
         else:
-            await sio.emit('error', {'msg': f"Failed to fetch sources: {sources}"})
+            await sio.emit('error', {'msg': f"Failed to fetch sources: {response}"})
     else:
         await sio.emit('error', {'msg': "System not ready"})
 
@@ -1817,9 +1822,14 @@ async def sync_fleet(sid):
         return
 
     # 1. Fetch sources from Jules
-    sources = await audio_loop.handle_list_jules_sources()
-    if not isinstance(sources, list):
-        await sio.emit('error', {'msg': f"Failed to fetch sources: {sources}"})
+    response = await audio_loop.jules_agent.list_sources()
+    sources = []
+    if response and isinstance(response, dict) and "sources" in response:
+        sources = response["sources"]
+    elif isinstance(response, list):
+        sources = response
+    else:
+        await sio.emit('error', {'msg': f"Failed to fetch sources: {response}"})
         return
 
     await sio.emit('status', {'msg': f"Found {len(sources)} sources. Syncing..."})
