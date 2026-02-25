@@ -15,14 +15,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: Watching a team of AI agents collaborate in real-time in the terminal/UI.
   - **User Impact**: Solves problems that require multiple skill sets.
   - **Technical Notes**: `JulesAgent` orchestration + `Agency` framework.
-  - **Status**: Idea
+  - **Status**: Partially Implemented (Basic agent spawning active)
 
 - [ ] **Project Recall (Photographic Memory)**
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
   - **Technical Notes**: Connect `ProactiveAgent` (Vision) -> `MemoryManager` (Vector DB).
-  - **Status**: Partially Implemented (Vision active, Storage pending)
+  - **Status**: Partially Implemented (Vision & DB active, Link pending)
 
 - [ ] **The Construct (Holo-Table 2.0)**
   - **Description**: An interactive 3D environment where code modules, server infrastructure, and database schemas are manipulated as physical objects.
@@ -57,6 +57,13 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🧩 Smart Enhancements
 *High-impact improvements that make the assistant feel sharper and more capable.*
 
+- [ ] **The Architect (Self-Evolution)**
+  - **Description**: The system proactively identifies technical debt or messy code in `backend/` and proposes refactors via Pull Requests without user intervention.
+  - **Wow Factor**: "Sir, I noticed `ada.py` was getting messy, so I refactored it into three sub-modules. The PR is waiting."
+  - **User Impact**: Codebase stays clean automatically.
+  - **Technical Notes**: Static analysis -> LLM Refactor Loop -> Git PR.
+  - **Status**: Idea
+
 - [ ] **The Oracle 2.0 (Predictive Security)**
   - **Description**: Expand `AutomationEngine` to predict security risks (e.g. exposed secrets, vulnerable dependencies) before they are committed.
   - **Wow Factor**: A guardian angel for your code.
@@ -76,14 +83,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: The system fixes its own physical mistakes.
   - **User Impact**: Saves filament and time.
   - **Technical Notes**: `PrinterAgent` camera stream -> `ProactiveAgent` vision analysis.
-  - **Status**: Partially Implemented (Printing active, Vision pending)
+  - **Status**: Partially Implemented (Printing/Slicing active, Vision pending)
 
 - [ ] **Temporal Echoes (Proactive Context)**
   - **Description**: Automatically surface relevant past decisions/memories in the chat interface *before* the user asks.
   - **Wow Factor**: "Sir, remember you struggled with this API last time. Here's the fix."
   - **User Impact**: Proactive error prevention.
   - **Technical Notes**: Trigger `MemoryManager.search` on task start.
-  - **Status**: Partially Implemented (Vector search active)
+  - **Status**: Partially Implemented (Retrieval active in JulesAgent)
 
 - [ ] **Protocol: FOCUS (Cinematic Mode)**
   - **Description**: A single voice command ("James, let's work") that dims lights, sets DND, and launches the IDE.
