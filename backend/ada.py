@@ -582,7 +582,7 @@ class AudioLoop:
         self.tool_registry.register("list_jules_activities", self.jules_agent.list_activities_formatted)
         self.tool_registry.register("create_project", self.handle_create_project)
         self.tool_registry.register("switch_project", self.handle_switch_project)
-        self.tool_registry.register("list_projects", self.handle_list_projects)
+        self.tool_registry.register("list_projects", lambda: f"Available projects: {', '.join(self.project_manager.list_projects())}")
         self.tool_registry.register("list_smart_devices", self.kasa_agent.get_formatted_list)
         self.tool_registry.register("control_light", self.kasa_agent.control_device)
         self.tool_registry.register("discover_printers", self.printer_agent.get_formatted_discovery)
@@ -599,30 +599,62 @@ class AudioLoop:
         self.tool_registry.register("search_gifs", self.giphy_agent.search_gifs)
         self.tool_registry.register("display_content", self.handle_display_content)
         self.tool_registry.register("get_weather", self.weather_agent.get_weather)
-        self.tool_registry.register("set_time_format", self.handle_set_time_format)
-        self.tool_registry.register("get_datetime", self.handle_get_datetime)
+        self.tool_registry.register("set_time_format", lambda format: self.project_manager.set_time_format(format)[1])
+        self.tool_registry.register("get_datetime", lambda: f"The current date and time is {format_datetime(get_local_time(), self.project_manager.get_project_config().get('time_format', '12h'))}.")
         self.tool_registry.register("restart_application", self.handle_restart_application)
         self.tool_registry.register("search", self.search_agent.search)
         self.tool_registry.register("proactive_suggestion", self.handle_proactive_suggestion)
-        self.tool_registry.register("send_slack_message", self.handle_send_slack_message)
-        self.tool_registry.register("append_system_prompt", self.handle_append_system_prompt)
-        self.tool_registry.register("delete_custom_system_prompt", self.handle_delete_custom_system_prompt)
-        self.tool_registry.register("get_system_prompt", self.handle_get_system_prompt)
-        self.tool_registry.register("toggle_jules_slack_notifications", self.handle_toggle_jules_slack_notifications)
+
+        def send_slack_wrapper(message):
+            if self.slack_agent:
+                asyncio.create_task(self.slack_agent.send_message(message))
+                return "Message sent to Slack."
+            return "Slack agent not available."
+        self.tool_registry.register("send_slack_message", send_slack_wrapper)
+
+        def append_system_prompt_wrapper(text):
+            success, msg = self.project_manager.append_system_prompt(text)
+            if success: self.reconnect()
+            return msg
+        self.tool_registry.register("append_system_prompt", append_system_prompt_wrapper)
+
+        def delete_custom_system_prompt_wrapper():
+            success, msg = self.project_manager.reset_system_prompt()
+            if success: self.reconnect()
+            return msg
+        self.tool_registry.register("delete_custom_system_prompt", delete_custom_system_prompt_wrapper)
+
+        self.tool_registry.register("get_system_prompt", lambda: self.project_manager.get_system_prompt())
+        self.tool_registry.register("toggle_jules_slack_notifications", lambda enabled: f"Slack notifications {'enabled' if enabled else 'disabled'}." if self.project_manager.update_project_config({"jules_slack_notifications": enabled})[0] else "Failed.")
         self.tool_registry.register("get_morning_briefing", self.handle_get_morning_briefing)
         self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
         self.tool_registry.register("control_os", self.os_agent.control)
-        self.tool_registry.register("set_auto_merge_threshold", self.handle_set_auto_merge_threshold)
-        self.tool_registry.register("add_architectural_memory", self.handle_add_architectural_memory)
+        self.tool_registry.register("set_auto_merge_threshold", lambda hours: f"Auto-merge threshold set to {hours} hours." if self.project_manager.update_project_config({"auto_merge_threshold": int(hours * 3600)})[0] else "Failed.")
+        self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
         self.tool_registry.register("switch_video_source", self.handle_switch_video_source)
         self.tool_registry.register("apply_task_fix", self.handle_apply_task_fix)
-        self.tool_registry.register("dismiss_jules_session", self.handle_dismiss_jules_session)
-        self.tool_registry.register("stop_jules_session", self.handle_stop_jules_session)
+        self.tool_registry.register("dismiss_jules_session", lambda session_id: self.project_manager.dismiss_jules_session(session_id)[1])
+
+        def stop_jules_session_wrapper(session_id):
+            self.jules_agent.stop_polling(session_id)
+            return f"Session stopped and dismissed: {self.project_manager.dismiss_jules_session(session_id)[1]}"
+        self.tool_registry.register("stop_jules_session", stop_jules_session_wrapper)
+
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
         self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
-        self.tool_registry.register("change_voice", self.handle_change_voice)
-        self.tool_registry.register("update_persona", self.handle_update_persona)
+
+        def change_voice_wrapper(voice_name):
+            success, msg = self.project_manager.set_voice(voice_name)
+            if success: self.reconnect()
+            return msg
+        self.tool_registry.register("change_voice", change_voice_wrapper)
+
+        def update_persona_wrapper(persona):
+            success, msg = self.project_manager.update_persona(persona)
+            if success: self.reconnect()
+            return msg
+        self.tool_registry.register("update_persona", update_persona_wrapper)
 
         # File System Agent Tools
         self.tool_registry.register("write_file", self.fs_agent.write_file)
@@ -660,37 +692,6 @@ class AudioLoop:
 
     # --- New Handler Methods ---
 
-    def handle_toggle_jules_slack_notifications(self, enabled):
-        success, msg = self.project_manager.update_project_config({"jules_slack_notifications": enabled})
-        return f"Slack notifications for Jules status updates have been {'enabled' if enabled else 'disabled'}."
-
-    def handle_set_auto_merge_threshold(self, hours):
-        seconds = int(hours * 3600)
-        success, msg = self.project_manager.update_project_config({"auto_merge_threshold": seconds})
-        return f"Auto-merge threshold set to {hours} hours ({seconds} seconds)."
-
-    def handle_append_system_prompt(self, text):
-        success, msg = self.project_manager.append_system_prompt(text)
-        if success:
-            self.reconnect()
-        return msg
-
-    def handle_delete_custom_system_prompt(self):
-        success, msg = self.project_manager.reset_system_prompt()
-        if success:
-            self.reconnect()
-        return msg
-
-    def handle_get_system_prompt(self):
-        return self.project_manager.get_system_prompt()
-
-    def handle_send_slack_message(self, message):
-        if self.slack_agent:
-            asyncio.create_task(self.slack_agent.send_message(message))
-            return "Message sent to Slack."
-        else:
-            return "Slack agent not available."
-
     def handle_proactive_suggestion(self, suggestion):
         if self.on_display_content:
             self.on_display_content({
@@ -698,32 +699,6 @@ class AudioLoop:
                 "suggestion": suggestion,
             })
         return "Suggestion displayed."
-
-    def handle_set_time_format(self, format):
-        success, msg = self.project_manager.set_time_format(format)
-        return msg
-
-    def handle_get_datetime(self):
-        time_format = self.project_manager.get_project_config().get("time_format", "12h")
-        current_time = get_local_time()
-        formatted_time = format_datetime(current_time, time_format)
-        return f"The current date and time is {formatted_time}."
-
-    def handle_change_voice(self, voice_name):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'change_voice' voice_name='{voice_name}'", flush=True)
-        success, msg = self.project_manager.set_voice(voice_name)
-        if success:
-            self.reconnect()
-        return msg
-
-    def handle_update_persona(self, persona):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'update_persona' len(persona)='{len(persona)}'", flush=True)
-        success, msg = self.project_manager.update_persona(persona)
-        if success:
-            self.reconnect()
-        return msg
 
     def handle_apply_task_fix(self, task_id):
         if self.automation_engine:
@@ -808,11 +783,6 @@ class AudioLoop:
             self.reconnect()
         return msg
 
-    def handle_list_projects(self):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'list_projects'", flush=True)
-        projects = self.project_manager.list_projects()
-        return f"Available projects: {', '.join(projects)}"
 
 
     async def handle_iterate_cad(self, prompt):
@@ -1119,29 +1089,6 @@ class AudioLoop:
         else:
             return "Failed to send feedback."
 
-    async def handle_add_architectural_memory(self, content, tags=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [MEMORY] Adding architectural memory: '{content}'")
-
-        success, msg = self.project_manager.add_architectural_memory(content, tags)
-        return msg
-
-    async def handle_dismiss_jules_session(self, session_id):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Dismissing session: {session_id}")
-        success, msg = self.project_manager.dismiss_jules_session(session_id)
-        return msg
-
-    async def handle_stop_jules_session(self, session_id):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Stopping session: {session_id}")
-
-        # Stop polling in the agent
-        self.jules_agent.stop_polling(session_id)
-
-        # Dismiss from UI
-        success, msg = self.project_manager.dismiss_jules_session(session_id)
-        return f"Session stopped and dismissed: {msg}"
 
     async def handle_focused_session(self, session_id):
         """Notifies the model that the user is focusing on a specific session."""
@@ -1149,11 +1096,21 @@ class AudioLoop:
             print(f"[ADA DEBUG] [FOCUS] User focused session: {session_id}")
 
         # Fetch summary context
-        activities = await self.handle_list_jules_activities(session_id)
+        activities = await self.jules_agent.list_activities(session_id)
         summary = "No recent activity."
-        if isinstance(activities, list) and activities:
+        # activities is a dict {"activities": [...]}, but list_activities_formatted returns string.
+        # Ideally we want raw list here to summarize.
+        # list_activities returns dict.
+
+        acts_list = []
+        if isinstance(activities, dict) and "activities" in activities:
+            acts_list = activities["activities"]
+        elif isinstance(activities, list):
+            acts_list = activities
+
+        if acts_list:
             # Get last 3 activities
-            recent = activities[-3:]
+            recent = acts_list[-3:]
             summary_lines = []
             for act in recent:
                 if 'agentMessage' in act:
@@ -1401,43 +1358,8 @@ class AudioLoop:
         if not report:
             return "Failed to generate briefing."
 
-        # Check for errors in report
-        if report.get('error'):
-            return f"Morning Briefing Error: {report['error']} Please check your configuration."
-
-        # Format for speech (Conversational)
-        prs = report.get('prs', [])
-        total_repos = report.get('total_repos', 0)
-
-        if total_repos == 0:
-            return "System Instruction: Speak this exactly: 'Your fleet is currently empty, Sir. You can add repositories in the settings or ask me to sync the fleet.'"
-
-        # Group PRs by repo for better flow
-        pr_counts = {}
-        for pr in prs:
-            repo = pr.get('repo', 'unknown')
-            pr_counts[repo] = pr_counts.get(repo, 0) + 1
-
-        summary = f"Good morning, Sir. I am monitoring {total_repos} repositories. "
-
-        if not prs:
-            summary += "All systems are green. There are no pending Pull Requests to review."
-        else:
-            summary += f"You have {len(prs)} pending Pull Requests waiting for your attention. "
-            # Mention top 3 repos
-            details = []
-            for repo, count in list(pr_counts.items())[:3]:
-                details.append(f"{count} in {repo.split('/')[-1]}")
-
-            summary += "Including " + ", ".join(details)
-            if len(pr_counts) > 3:
-                summary += f", and others."
-            else:
-                summary += "."
-
-        # Give the model the data as context, but explicitly script the response to force audio
-        script = f"System Notification: Here is the latest data. You MUST act as a news anchor and read this briefing aloud to the user right now:\n\n{summary}"
-        return script
+        # Delegate formatting to ProjectManager
+        return self.project_manager.format_morning_briefing(report)
 
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()
