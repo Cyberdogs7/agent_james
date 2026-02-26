@@ -30,7 +30,7 @@ if sys.version_info < (3, 11, 0):
     asyncio.TaskGroup = taskgroup.TaskGroup
     asyncio.ExceptionGroup = exceptiongroup.ExceptionGroup
 
-from backend.tools import tools_list, trello_tools
+from backend.tools import tools_schema, trello_tools
 from backend.tool_registry import ToolRegistry
 
 if pyaudio:
@@ -50,7 +50,7 @@ INCLUDE_RAW_LOGS = os.getenv("INCLUDE_RAW_LOGS", "True").lower() == "true"
 os.environ["INCLUDE_RAW_LOGS"] = str(INCLUDE_RAW_LOGS)
 client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
 
-tools = tools_list
+tools = tools_schema
 
 if pyaudio:
     try:
@@ -681,14 +681,124 @@ class AudioLoop:
     async def handle_cad_request(self, prompt):
         if INCLUDE_RAW_LOGS:
              print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad', prompt='{prompt}'")
-        asyncio.create_task(self._run_cad_generation_task(prompt))
+        asyncio.create_task(self.run_cad_workflow(prompt, iterate=False, notify_model=True))
         return "CAD Generation started."
+
+    async def handle_iterate_cad(self, prompt):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
+        asyncio.create_task(self.run_cad_workflow(prompt, iterate=True, notify_model=True))
+        return "CAD Iteration started."
 
     async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
              print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
-        asyncio.create_task(self._run_web_agent_task(prompt))
+        asyncio.create_task(self.run_web_workflow(prompt, notify_model=True))
         return "Web Navigation started. Do not reply to this message."
+
+    # --- Unified Workflows ---
+
+    async def run_cad_workflow(self, prompt, iterate=False, notify_model=True):
+        """Unified CAD generation/iteration workflow."""
+        action_name = "Iteration" if iterate else "Generation"
+
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [CAD] Workflow Started: {action_name} ('{prompt}')")
+
+        # Notify Status
+        if self.on_cad_status:
+            self.on_cad_status("generating")
+
+        # Auto-create project logic (only for generation)
+        if not iterate and self.project_manager.current_project == "temp":
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            new_project_name = f"Project_{timestamp}"
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [CAD] Auto-creating project: {new_project_name}")
+
+            success, msg = self.project_manager.create_project(new_project_name)
+            if success:
+                self.project_manager.switch_project(new_project_name)
+                # Notify User
+                try:
+                    await self.session.send(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
+                    if self.on_project_update:
+                         self.on_project_update(new_project_name)
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
+
+        # Get project cad folder path
+        cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
+
+        # Call Agent
+        if iterate:
+            cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
+        else:
+            cad_data = await self.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
+
+        result_msg = ""
+        if cad_data:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OK] CadAgent returned data successfully.")
+
+            # Emit Data
+            if self.on_cad_data:
+                self.on_cad_data(cad_data)
+
+            # Save Artifact
+            if 'file_path' in cad_data:
+                self.project_manager.save_cad_artifact(cad_data['file_path'], prompt)
+            else:
+                 self.project_manager.save_cad_artifact("output.stl", prompt)
+
+            result_msg = f"Successfully completed CAD {action_name.lower()}."
+
+            # Notify Model if requested
+            if notify_model and self.session:
+                completion_msg = f"System Notification: CAD {action_name.lower()} is complete! The 3D model is now displayed for the user. Let them know it's ready."
+                try:
+                    await self.session.send(input=completion_msg, end_of_turn=True)
+                except Exception as e:
+                     if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send completion notification: {e}")
+        else:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] CadAgent returned None.")
+            result_msg = f"CAD {action_name} failed."
+
+            if notify_model and self.session:
+                try:
+                    await self.session.send(input=f"System Notification: CAD {action_name.lower()} failed.", end_of_turn=True)
+                except Exception:
+                    pass
+
+        return result_msg
+
+    async def run_web_workflow(self, prompt, notify_model=True):
+        """Unified Web Agent workflow."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [WEB] Workflow Started: '{prompt}'")
+
+        async def update_frontend(image_b64, log_text):
+            if self.on_web_data:
+                 self.on_web_data({"image": image_b64, "log": log_text})
+
+        # Run Agent
+        result = await self.web_agent.run_task(prompt, update_callback=update_frontend)
+
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [WEB] Web Agent Task Returned: {result}")
+
+        if notify_model and self.session:
+            try:
+                 await self.session.send(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
+            except Exception as e:
+                 if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
+
+        return result
 
     # --- New Handler Methods ---
 
@@ -783,115 +893,6 @@ class AudioLoop:
             self.reconnect()
         return msg
 
-
-
-    async def handle_iterate_cad(self, prompt):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
-
-        # Emit status
-        if self.on_cad_status:
-            self.on_cad_status("generating")
-
-        # Get project cad folder path
-        cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
-
-        # Call CadAgent to iterate on the design
-        cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
-
-        if cad_data:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
-
-            # Dispatch to frontend
-            if self.on_cad_data:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
-                self.on_cad_data(cad_data)
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
-
-            # Save to Project
-            self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
-
-            result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
-        else:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
-            result_str = f"Failed to iterate design with prompt: {prompt}"
-        return result_str
-
-    async def _run_cad_generation_task(self, prompt):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CAD] Background Task Started: _run_cad_generation_task('{prompt}')")
-        if self.on_cad_status:
-            self.on_cad_status("generating")
-            
-        # Auto-create project if stuck in temp
-        if self.project_manager.current_project == "temp":
-            import datetime
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            new_project_name = f"Project_{timestamp}"
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [CAD] Auto-creating project: {new_project_name}")
-            
-            success, msg = self.project_manager.create_project(new_project_name)
-            if success:
-                self.project_manager.switch_project(new_project_name)
-                # Notify User (Optional, or rely on update)
-                try:
-                    await self.session.send(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
-                    if self.on_project_update:
-                         self.on_project_update(new_project_name)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
-        
-        # Get project cad folder path
-        cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
-        
-        # Call the secondary agent with project path
-        cad_data = await self.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
-        
-        if cad_data:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OK] CadAgent returned data successfully.")
-                print(f"[ADA DEBUG] [INFO] Data Check: {len(cad_data.get('vertices', []))} vertices, {len(cad_data.get('edges', []))} edges.")
-            
-            if self.on_cad_data:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SEND] Dispatching data to frontend callback...")
-                self.on_cad_data(cad_data)
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
-            
-            # Save to Project
-            if 'file_path' in cad_data:
-                self.project_manager.save_cad_artifact(cad_data['file_path'], prompt)
-            else:
-                 # Fallback (legacy support)
-                 self.project_manager.save_cad_artifact("output.stl", prompt)
-
-            # Notify the model that the task is done - this triggers speech about completion
-            completion_msg = "System Notification: CAD generation is complete! The 3D model is now displayed for the user. Let them know it's ready."
-            try:
-                await self.session.send(input=completion_msg, end_of_turn=True)
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [NOTE] Sent completion notification to model.")
-            except Exception as e:
-                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to send completion notification: {e}")
-
-        else:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] CadAgent returned None.")
-            # Optionally notify failure
-            try:
-                await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
-            except Exception:
-                pass
-
-
     async def handle_display_content(self, content_type, url=None, widget_type=None, data=None, duration=None):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [DISPLAY] Displaying content: {content_type}")
@@ -937,26 +938,6 @@ class AudioLoop:
             return "Restart signal sent to frontend."
         else:
             return "Cannot send restart signal: not connected to server."
-
-    async def _run_web_agent_task(self, prompt):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Background Task Started: _run_web_agent_task('{prompt}')")
-        
-        async def update_frontend(image_b64, log_text):
-            if self.on_web_data:
-                 self.on_web_data({"image": image_b64, "log": log_text})
-                 
-        # Run the web agent and wait for it to return
-        result = await self.web_agent.run_task(prompt, update_callback=update_frontend)
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Web Agent Task Returned: {result}")
-        
-        # Send the final result back to the main model
-        try:
-             await self.session.send(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
-        except Exception as e:
-             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
     async def handle_create_swarm_mission(self, title):
         if INCLUDE_RAW_LOGS:

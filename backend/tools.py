@@ -963,7 +963,7 @@ run_ollama_agent_tool = {
     }
 }
 
-all_tools_list = [
+tools_schema = [
     generate_cad_tool,
     generate_cad_prototype_tool,
     run_web_agent_tool,
@@ -1300,6 +1300,3 @@ all_tools_list = [
         }
     }
 ]
-
-# Legacy support for existing imports
-tools_list = [{"function_declarations": all_tools_list}]

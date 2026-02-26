@@ -882,25 +882,15 @@ async def iterate_cad(sid, data):
     try:
         # Notify user work has started
         await sio.emit('status', {'msg': 'Iterating design...'})
-        await sio.emit('cad_status', {'status': 'generating'})
         
-        # Call the agent with project path
-        cad_output_dir = str(audio_loop.project_manager.get_current_project_path() / "cad")
-        result = await audio_loop.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
+        # Use unified workflow
+        # notify_model=False because this is triggered by UI
+        msg = await audio_loop.run_cad_workflow(prompt, iterate=True, notify_model=False)
         
-        if result:
-            info = f"{len(result.get('data', ''))} bytes (STL)"
-            print(f"Sending updated CAD data: {info}")
-            await sio.emit('cad_data', result)
-            # Save to Project
-            if 'file_path' in result:
-                saved_path = audio_loop.project_manager.save_cad_artifact(result['file_path'], prompt)
-                if saved_path:
-                    print(f"[SERVER] Saved iterated CAD to {saved_path}")
-
+        if "complete" in msg.lower():
             await sio.emit('status', {'msg': 'Design updated'})
         else:
-            await sio.emit('error', {'msg': 'Failed to update design'})
+            await sio.emit('error', {'msg': msg})
             
     except Exception as e:
         print(f"Error iterating CAD: {e}")
@@ -918,27 +908,14 @@ async def generate_cad(sid, data):
 
     try:
         await sio.emit('status', {'msg': 'Generating new design...'})
-        await sio.emit('cad_status', {'status': 'generating'})
         
-        # Use generate_prototype based on prompt with project path
-        cad_output_dir = str(audio_loop.project_manager.get_current_project_path() / "cad")
-        result = await audio_loop.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
+        # Use unified workflow
+        msg = await audio_loop.run_cad_workflow(prompt, iterate=False, notify_model=False)
         
-        if result:
-            info = f"{len(result.get('data', ''))} bytes (STL)"
-            print(f"Sending newly generated CAD data: {info}")
-            await sio.emit('cad_data', result)
-
-
-            # Save to Project
-            if 'file_path' in result:
-                saved_path = audio_loop.project_manager.save_cad_artifact(result['file_path'], prompt)
-                if saved_path:
-                    print(f"[SERVER] Saved generated CAD to {saved_path}")
-
+        if "complete" in msg.lower():
             await sio.emit('status', {'msg': 'Design generated'})
         else:
-            await sio.emit('error', {'msg': 'Failed to generate design'})
+            await sio.emit('error', {'msg': msg})
             
     except Exception as e:
         print(f"Error generating CAD: {e}")
@@ -957,17 +934,8 @@ async def prompt_web_agent(sid, data):
     try:
         await sio.emit('status', {'msg': 'Web Agent running...'})
         
-        # We assume web_agent has a run method or similar.
-        # This might block the loop if not strictly async or offloaded.
-        # Ideally web_agent.run is async.
-        # And it should emit 'browser_snap' and logs automatically via hooks if setup.
-        
-        # We might need to launch this as a task if it's long running?
-        # asyncio.create_task(audio_loop.web_agent.run(prompt))
-        # But we want to catch errors here.
-        
-        # Based on typical agent design, run() is the entry point.
-        await audio_loop.web_agent.run(prompt)
+        # Use unified workflow
+        await audio_loop.run_web_workflow(prompt, notify_model=False)
         
         await sio.emit('status', {'msg': 'Web Agent finished'})
         
