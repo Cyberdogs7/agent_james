@@ -15,14 +15,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: Watching a team of AI agents collaborate in real-time in the terminal/UI.
   - **User Impact**: Solves problems that require multiple skill sets.
   - **Technical Notes**: `JulesAgent` orchestration + `Agency` framework.
-  - **Status**: Partially Implemented (Basic agent spawning active)
+  - **Status**: Partially Implemented (Basic agent spawning & polling active; Swarm logic pending)
 
 - [ ] **Project Recall (Photographic Memory)**
   - **Description**: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
   - **Wow Factor**: "James, show me that article about quantum computing I was reading last Tuesday."
   - **User Impact**: Infinite recall of context without bookmarking.
-  - **Technical Notes**: Connect `ProactiveAgent` (Vision) -> `MemoryManager` (Vector DB).
-  - **Status**: Partially Implemented (Vision & DB active, Link pending)
+  - **Technical Notes**: `ProactiveAgent` (Vision) -> `MemoryManager` (Vector DB).
+  - **Status**: Partially Implemented (Vision Analysis & Vector DB active; Link pending)
 
 - [ ] **The Construct (Holo-Table 2.0)**
   - **Description**: An interactive 3D environment where code modules, server infrastructure, and database schemas are manipulated as physical objects.
@@ -36,6 +36,20 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: The assistant "sees" what you see and augments reality.
   - **User Impact**: Contextual information exactly where you look.
   - **Technical Notes**: Electron overlay window + CV analysis.
+  - **Status**: Idea
+
+- [ ] **The Eye of Agamotto (Time Travel Debugger)**
+  - **Description**: A visual scrubber that lets you replay the state of the codebase and project visually.
+  - **Wow Factor**: "Rewind to before the bug appeared." -> Watch code un-break in real-time.
+  - **User Impact**: Visual debugging of history.
+  - **Technical Notes**: Git history + `ProactiveAgent` screenshots.
+  - **Status**: Idea
+
+- [ ] **Reality Anchor (Spatial Notes)**
+  - **Description**: Stick digital notes to physical objects in the room using the camera. "James, remind me to water this plant." -> Digital label floats over plant.
+  - **Wow Factor**: Digital information persistence in physical space.
+  - **User Impact**: Seamless bridging of physical and digital tasks.
+  - **Technical Notes**: CV + SLAM (Simultaneous Localization and Mapping).
   - **Status**: Idea
 
 - [ ] **Telepathy (Ghost Text)**
@@ -69,21 +83,21 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: A guardian angel for your code.
   - **User Impact**: Prevents security incidents.
   - **Technical Notes**: Integrate `trivy` or `bandit` into the pre-commit check loop.
-  - **Status**: Partially Implemented (Merge checks active)
+  - **Status**: Partially Implemented (Smart Merge active; Security pending)
 
 - [ ] **The Sentry (Network Overwatch)**
   - **Description**: Monitor network traffic for suspicious outbound connections from the dev environment.
   - **Wow Factor**: "Sir, why is `node` connecting to an unknown IP in Russia?"
   - **User Impact**: Real-time security awareness.
   - **Technical Notes**: `psutil` network monitoring in background loop.
-  - **Status**: Partially Implemented (Stalled item checks active)
+  - **Status**: Partially Implemented (Stall checks active; Network scan pending)
 
 - [ ] **The Forge 2.0 (Vision Feedback Loop)**
   - **Description**: Use the printer's camera to monitor prints in real-time and auto-cancel if spaghettification is detected.
   - **Wow Factor**: The system fixes its own physical mistakes.
   - **User Impact**: Saves filament and time.
   - **Technical Notes**: `PrinterAgent` camera stream -> `ProactiveAgent` vision analysis.
-  - **Status**: Partially Implemented (Printing/Slicing active, Vision pending)
+  - **Status**: Partially Implemented (Printing/Slicing active; Vision pending)
 
 - [ ] **Temporal Echoes (Proactive Context)**
   - **Description**: Automatically surface relevant past decisions/memories in the chat interface *before* the user asks.
@@ -106,6 +120,27 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Technical Notes**: `ProactiveAgent` context -> CSS variables.
   - **Status**: Idea
 
+- [ ] **The Muse (Creative Injection)**
+  - **Description**: If the user is idle (stuck) for too long, the assistant gently injects a creative prompt or reference ("Sir, have you considered the Factory Pattern here?").
+  - **Wow Factor**: An AI that unblocks your writer's block.
+  - **User Impact**: Maintained momentum.
+  - **Technical Notes**: Idle detection + LLM creativity prompt.
+  - **Status**: Idea
+
+- [ ] **Protocol: OMEGA (Security Wipe)**
+  - **Description**: A "House Party Protocol" style command to securely wipe sensitive data or lock down the system in an emergency.
+  - **Wow Factor**: Cinematic security control.
+  - **User Impact**: Peace of mind.
+  - **Technical Notes**: `shred` command + OS lock.
+  - **Status**: Idea
+
+- [ ] **Holodeck (Safe Sandbox)**
+  - **Description**: Spin up an isolated Docker container to execute untrusted code or test risky changes without affecting the host.
+  - **Wow Factor**: "Running simulation in the Holodeck..."
+  - **User Impact**: Safe experimentation.
+  - **Technical Notes**: Docker API + `OSAgent`.
+  - **Status**: Idea
+
 ---
 
 ## 🛠 Quality of Life & Polish
@@ -116,14 +151,14 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: Seeing the "brain" work.
   - **User Impact**: System confidence.
   - **Technical Notes**: Frontend visualization for `ada.get_dashboard_data`.
-  - **Status**: Partially Implemented (Backend active)
+  - **Status**: Partially Implemented (Backend active; Frontend partial)
 
 - [ ] **Neural Sync (Adaptive Logic)**
   - **Description**: Make the music selection actually adaptive to keystroke velocity or system load.
   - **Wow Factor**: Music swells when you code fast.
   - **User Impact**: Flow state reinforcement.
   - **Technical Notes**: Connect `MusicAgent` to global input hook.
-  - **Status**: Partially Implemented (Playback active)
+  - **Status**: Partially Implemented (Playback active; Adaptive logic pending)
 
 - [ ] **Latency "Magic Tricks"**
   - **Description**: UX hacks to mask latency (filler sounds, optimistic UI updates).
