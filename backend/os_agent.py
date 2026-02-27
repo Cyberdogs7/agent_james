@@ -17,11 +17,6 @@ class OSAgent:
         try:
             if self.platform == "win32":
                 # Use os.startfile for better safety than shell=True, if possible.
-                # However, os.startfile generally expects a file path.
-                # If app_name is just "Notepad", startfile might fail if not in path or mapped.
-                # But 'start' in cmd handles 'Notepad' by looking up registry/path.
-                # Let's try os.startfile(app_name) first, catch error, fallback to shell?
-                # Actually, the requirement was to avoid shell=True if possible.
                 try:
                     os.startfile(app_name)
                     return f"Launched {app_name}"
@@ -88,43 +83,29 @@ class OSAgent:
         except Exception as e:
             return f"Error setting volume: {str(e)}"
 
-    def mute(self):
-        """Mutes the system volume."""
+    def _set_mute_state(self, muted: bool):
+        """Sets the system mute state."""
+        state_str = "Muted" if muted else "Unmuted"
         try:
             if self.platform == "win32":
-                # VK_VOLUME_MUTE = 0xAD
+                # VK_VOLUME_MUTE = 0xAD (Toggle) - Windows doesn't easily support absolute mute/unmute via keys
+                # Best effort: Send toggle. Ideally we would check state first but that requires COM.
                 self._windows_send_key(0xAD)
-                return "Muted/Unmuted"
+                return "Muted/Unmuted (Toggle)"
             elif self.platform == "darwin":
-                subprocess.run(["osascript", "-e", "set volume output muted true"])
-                return "Muted"
+                val = "true" if muted else "false"
+                subprocess.run(["osascript", "-e", f"set volume output muted {val}"])
+                return state_str
             elif self.platform == "linux":
+                val = "1" if muted else "0"
+                amixer_val = "mute" if muted else "unmute"
                 if shutil.which("pactl"):
-                    subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "1"])
+                    subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", val])
                 elif shutil.which("amixer"):
-                    subprocess.run(["amixer", "sset", "Master", "mute"])
-                return "Muted"
+                    subprocess.run(["amixer", "sset", "Master", amixer_val])
+                return state_str
         except Exception as e:
-             return f"Error muting: {str(e)}"
-
-    def unmute(self):
-        """Unmutes the system volume."""
-        try:
-            if self.platform == "win32":
-                # VK_VOLUME_MUTE = 0xAD (Toggle)
-                self._windows_send_key(0xAD)
-                return "Muted/Unmuted"
-            elif self.platform == "darwin":
-                subprocess.run(["osascript", "-e", "set volume output muted false"])
-                return "Unmuted"
-            elif self.platform == "linux":
-                if shutil.which("pactl"):
-                    subprocess.run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"])
-                elif shutil.which("amixer"):
-                    subprocess.run(["amixer", "sset", "Master", "unmute"])
-                return "Unmuted"
-        except Exception as e:
-             return f"Error unmuting: {str(e)}"
+             return f"Error setting mute state: {str(e)}"
 
     def lock_screen(self):
         """Locks the screen."""
@@ -172,9 +153,9 @@ class OSAgent:
         elif action == "set_volume":
             return self.set_volume(value)
         elif action == "mute":
-            return self.mute()
+            return self._set_mute_state(True)
         elif action == "unmute":
-            return self.unmute()
+            return self._set_mute_state(False)
         elif action == "lock_screen":
             return self.lock_screen()
         elif action == "sleep":

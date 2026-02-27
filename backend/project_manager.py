@@ -57,6 +57,10 @@ class ProjectManager:
         # Initialize Memory Manager
         self.memory_manager = MemoryManager(self.get_current_project_path())
 
+    def _sanitize_name(self, name: str) -> str:
+        """Sanitizes a project name to be filesystem safe."""
+        return "".join([c for c in name if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
+
     def load_fleet(self):
         project_fleet_file = self.get_current_project_path() / "fleet.json"
 
@@ -85,9 +89,7 @@ class ProjectManager:
 
     def create_project(self, name: str):
         """Creates a new project directory with subfolders."""
-        # Sanitize name to be safe for filesystem
-        # Allow dots for repo names like node.js
-        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
+        safe_name = self._sanitize_name(name)
         project_path = self.projects_dir / safe_name
         
         if not project_path.exists():
@@ -211,7 +213,7 @@ class ProjectManager:
 
     def switch_project(self, name: str):
         """Switches the active project context."""
-        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_')]).strip()
+        safe_name = self._sanitize_name(name)
         project_path = self.projects_dir / safe_name
         
         if project_path.exists():
@@ -230,7 +232,7 @@ class ProjectManager:
 
     def get_project_path(self, name: str):
         """Returns the path for a specific project."""
-        safe_name = "".join([c for c in name if c.isalnum() or c in (' ', '-', '_', '.')]).strip()
+        safe_name = self._sanitize_name(name)
         return self.projects_dir / safe_name
 
     def list_git_projects(self):
@@ -261,7 +263,7 @@ class ProjectManager:
         # Create a filename based on timestamp and prompt
         timestamp = int(time.time())
         # Brief sanitization of prompt for filename
-        safe_prompt = "".join([c for c in prompt if c.isalnum() or c in (' ', '-', '_')])[:30].strip().replace(" ", "_")
+        safe_prompt = self._sanitize_name(prompt)[:30].replace(" ", "_")
         filename = f"{timestamp}_{safe_prompt}.stl"
         
         dest_path = self.get_current_project_path() / "cad" / filename

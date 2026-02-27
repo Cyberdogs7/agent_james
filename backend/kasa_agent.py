@@ -168,17 +168,27 @@ class KasaAgent:
                 return dev
         return None
 
-    def _resolve_device(self, target):
-        """Resolves a target string (IP or Alias) to a device object."""
-        # check if it is an IP 
+    async def _resolve_device(self, target):
+        """Resolves a target string (IP or Alias) to a device object, attempting discovery if missing."""
+        # 1. Check IP in cache
         if target in self.devices:
             return self.devices[target]
         
-        # Check alias
+        # 2. Check Alias in cache
         dev = self.get_device_by_alias(target)
         if dev:
             return dev
             
+        # 3. Fallback: Discovery if it looks like an IP
+        if target.count(".") == 3:
+             try:
+                dev = await Discover.discover_single(target)
+                if dev:
+                    self.devices[target] = dev
+                    return dev
+             except Exception:
+                 pass
+
         return None
 
     def name_to_hsv(self, color_name):
@@ -204,7 +214,7 @@ class KasaAgent:
 
     async def turn_on(self, target):
         """Turns on the device (Target: IP or Alias)."""
-        dev = self._resolve_device(target)
+        dev = await self._resolve_device(target)
         if dev:
             try:
                 await dev.turn_on()
@@ -213,23 +223,11 @@ class KasaAgent:
             except Exception as e:
                 print(f"Error turning on {target}: {e}")
                 return False
-        
-        # Fallback: Try to discover single if it looks like an IP
-        if target.count(".") == 3:
-             try:
-                dev = await Discover.discover_single(target)
-                if dev:
-                    self.devices[target] = dev
-                    await dev.turn_on()
-                    await dev.update()
-                    return True
-             except Exception:
-                 pass
         return False
 
     async def turn_off(self, target):
         """Turns off the device (Target: IP or Alias)."""
-        dev = self._resolve_device(target)
+        dev = await self._resolve_device(target)
         if dev:
             try:
                 await dev.turn_off()
@@ -238,22 +236,11 @@ class KasaAgent:
             except Exception as e:
                 print(f"Error turning off {target}: {e}")
                 return False
-        
-        if target.count(".") == 3:
-             try:
-                dev = await Discover.discover_single(target)
-                if dev:
-                    self.devices[target] = dev
-                    await dev.turn_off()
-                    await dev.update()
-                    return True
-             except Exception:
-                 pass
         return False
 
     async def set_brightness(self, target, brightness):
         """Sets brightness (0-100)."""
-        dev = self._resolve_device(target)
+        dev = await self._resolve_device(target)
         if dev and (dev.is_dimmable or dev.is_bulb):
             try:
                 await dev.set_brightness(int(brightness))
@@ -265,7 +252,7 @@ class KasaAgent:
 
     async def set_color(self, target, color_input):
         """Sets color by name or direct HSV tuple."""
-        dev = self._resolve_device(target)
+        dev = await self._resolve_device(target)
         if not dev or not dev.is_color:
             return False
 
