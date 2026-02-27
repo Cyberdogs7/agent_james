@@ -104,7 +104,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - **Wow Factor**: "Sir, remember you struggled with this API last time. Here's the fix."
   - **User Impact**: Proactive error prevention.
   - **Technical Notes**: Trigger `MemoryManager.search` on task start.
-  - **Status**: Partially Implemented (Retrieval active in JulesAgent)
+  - **Status**: Partially Implemented (Context retrieval active in JulesAgent)
 
 - [ ] **Protocol: FOCUS (Cinematic Mode)**
   - **Description**: A single voice command ("James, let's work") that dims lights, sets DND, and launches the IDE.
