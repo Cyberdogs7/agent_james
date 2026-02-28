@@ -72,177 +72,8 @@ export_stl(result_part, 'output.stl')
             prompt: User's description of the model to generate.
             output_dir: Directory to save the script and STL. If None, uses temp dir.
         """
-        self._log(f"[CadAgent DEBUG] [START] Generation started for: '{prompt}'")
-        
-        try:
-            # Use provided output_dir or fall back to temp
-            if output_dir:
-                os.makedirs(output_dir, exist_ok=True)
-                work_dir = output_dir
-            else:
-                import tempfile
-                work_dir = tempfile.gettempdir()
-            
-            # Generate timestamped filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_stl = os.path.join(work_dir, f"output_{timestamp}.stl")
-            script_path = os.path.join(work_dir, "current_design.py")
-
-            max_retries = 3
-            current_prompt = f"You are a build123d expert. Write a generic python script to create a 3D model of: {prompt}. Ensure you export to 'output.stl'. Unscaled."
-            
-            for attempt in range(max_retries):
-                self._log(f"[CadAgent DEBUG] Attempt {attempt + 1}/{max_retries}")
-                
-                # Emit status update
-                if self.on_status:
-                    status_info = {
-                        "status": "generating" if attempt == 0 else "retrying",
-                        "attempt": attempt + 1,
-                        "max_attempts": max_retries,
-                        "error": None
-                    }
-                    self.on_status(status_info)
-                
-                # 1. Ask Gemini for the code with streaming and thinking
-                raw_content = ""
-                stream = await self.client.aio.models.generate_content_stream(
-                    model=self.model,
-                    contents=current_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=self.system_instruction,
-                        temperature=1.0,
-                        thinking_config=types.ThinkingConfig(include_thoughts=True)
-                    )
-                )
-                async for chunk in stream:
-                    if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                        for part in chunk.candidates[0].content.parts:
-                            if not part.text:
-                                continue
-                            elif part.thought:
-                                # Stream thought to callback
-                                if self.on_thought:
-                                    self.on_thought(part.text)
-                            else:
-                                # Accumulate answer text
-                                raw_content += part.text
-                
-                if not raw_content:
-                    self._log("[CadAgent DEBUG] [ERR] Empty response from model.")
-                    return None
-
-                # 2. Extract Code Block
-                import re
-                code_match = re.search(r'```python(.*?)```', raw_content, re.DOTALL)
-                if code_match:
-                    code = code_match.group(1).strip()
-                else:
-                    # Fallback: assume entire text is code if no blocks, or fail
-                    self._log("[CadAgent DEBUG] [WARN] No ```python block found. Trying heuristic...")
-                    if "import build123d" in raw_content:
-                        code = raw_content
-                    else:
-                        self._log("[CadAgent DEBUG] [ERR] Could not extract python code.")
-                        return None
-                
-                # 3. Save to Local File in cad_outputs folder
-                # Fix for Windows paths in python strings: escape backslashes
-                safe_output_path = output_stl.replace("\\", "\\\\")
-                
-                with open(script_path, "w") as f:
-                    # Inject output path into the script
-                    code_with_path = code.replace("output.stl", safe_output_path)
-                    f.write(code_with_path)
-                    
-                self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
-                
-                # 4. Execute Locally
-                import subprocess
-                import sys
-                
-                # Use the current Python interpreter (unified environment with build123d + mediapipe)
-                try:
-                    proc = await asyncio.to_thread(
-                        subprocess.run,
-                        [sys.executable, script_path],
-                        capture_output=True,
-                        text=True
-                    )
-                    stdout, stderr = proc.stdout, proc.stderr
-                except Exception as e:
-                     self._log(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
-                     proc = type('obj', (object,), {'returncode': 1})
-                     stdout = ""
-                     stderr = str(e)
-                
-                if proc.returncode != 0:
-                    error_msg = stderr
-                    # Extract a concise error message for display
-                    error_lines = error_msg.strip().split('\n')
-                    short_error = error_lines[-1][:100] if error_lines else "Unknown error"
-                    self._log(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
-                    
-                    # Emit retry status with error
-                    if self.on_status:
-                        self.on_status({
-                            "status": "retrying",
-                            "attempt": attempt + 1,
-                            "max_attempts": max_retries,
-                            "error": short_error
-                        })
-                    
-                    # Preparing feedback for next attempt
-                    current_prompt = f"""
-The Python script you generated failed to execute with the following error:
-{error_msg}
-
-Please fix the code to resolve this error. Return the full corrected script. 
-Ensure you still export to 'output.stl'.
-Original request: {prompt}
-"""
-                    continue # Retry loop
-                
-                self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
-                
-                # 5. Read Output
-                if os.path.exists(output_stl):
-                    self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
-                    with open(output_stl, "rb") as f:
-                        stl_data = f.read()
-                        
-                    import base64
-                    b64_stl = base64.b64encode(stl_data).decode('utf-8')
-                    
-                    return {
-                        "format": "stl",
-                        "data": b64_stl,
-                        "file_path": output_stl
-                    }
-                else:
-                     self._log(f"[CadAgent DEBUG] [ERR] '{output_stl}' was not generated.")
-                     # If script ran but no output, treat as failure and retry?
-                     # Ideally yes.
-                     current_prompt = f"The script executed successfully but 'output.stl' was not found. Ensure you call `export_stl(result_part, 'output.stl')` at the end."
-                     continue
-
-            # If loop finishes without success
-            self._log("[CadAgent DEBUG] [ERR] All attempts failed.")
-            if self.on_status:
-                self.on_status({
-                    "status": "failed",
-                    "attempt": max_retries,
-                    "max_attempts": max_retries,
-                    "error": "All generation attempts failed"
-                })
-            return None
-
-        except Exception as e:
-            if include_raw:
-                print(f"CadAgent Error: {e}")
-                import traceback
-                traceback.print_exc()
-            return None
+        initial_prompt = f"You are a build123d expert. Write a generic python script to create a 3D model of: {prompt}. Ensure you export to 'output.stl'. Unscaled."
+        return await self._run_cad_generation(prompt, initial_prompt, output_dir=output_dir)
 
     async def iterate_prototype(self, prompt: str, output_dir: Optional[str] = None):
         """
@@ -261,11 +92,7 @@ Original request: {prompt}
             import tempfile
             work_dir = tempfile.gettempdir()
         
-        # Generate timestamped filename for the output
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         script_path = os.path.join(work_dir, "current_design.py")
-        output_stl = os.path.join(work_dir, f"output_{timestamp}.stl")
-        
         existing_code = ""
         
         if os.path.exists(script_path):
@@ -273,15 +100,12 @@ Original request: {prompt}
                 existing_code = f.read()
             
             # Sanitize existing code: replace any absolute paths with 'output.stl'
-            # This prevents the LLM from seeing/reproducing Windows paths that cause Unicode escape errors
             import re
-            # Match both escaped (\\) and unescaped (\) Windows paths to output.stl
             existing_code = re.sub(
                 r"['\"]C:\\\\?Users\\\\?[^'\"]+\\\\?output[^'\"]*\.stl['\"]",
                 "'output.stl'",
                 existing_code
             )
-            # Also handle forward-slash variants
             existing_code = re.sub(
                 r"['\"]C:/Users/[^'\"]+/output[^'\"]*\.stl['\"]",
                 "'output.stl'",
@@ -289,12 +113,9 @@ Original request: {prompt}
             )
         else:
              self._log("[CadAgent DEBUG] [WARN] No existing script found. Falling back to fresh generation.")
-             return await self.generate_prototype(prompt)
+             return await self.generate_prototype(prompt, output_dir=output_dir)
 
-        try:
-
-            max_retries = 3
-            current_prompt = f"""
+        initial_prompt = f"""
 You are iterating on an existing 3D model script.
 
 Current Python Code:
@@ -307,11 +128,30 @@ User Request: {prompt}
 Task: Rewrite the code to satisfy the user's request while maintaining the rest of the model structure.
 Ensure you still export to 'output.stl'.
 """
+        return await self._run_cad_generation(prompt, initial_prompt, output_dir=output_dir, is_iteration=True)
+
+    async def _run_cad_generation(self, original_prompt: str, current_prompt: str, output_dir: Optional[str] = None, is_iteration: bool = False):
+        mode_str = "Iteration" if is_iteration else "Generation"
+        if not is_iteration:
+            self._log(f"[CadAgent DEBUG] [START] {mode_str} started for: '{original_prompt}'")
+
+        try:
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+                work_dir = output_dir
+            else:
+                import tempfile
+                work_dir = tempfile.gettempdir()
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_stl = os.path.join(work_dir, f"output_{timestamp}.stl")
+            script_path = os.path.join(work_dir, "current_design.py")
+
+            max_retries = 3
             
             for attempt in range(max_retries):
-                self._log(f"[CadAgent DEBUG] Iteration Attempt {attempt + 1}/{max_retries}")
+                self._log(f"[CadAgent DEBUG] {mode_str} Attempt {attempt + 1}/{max_retries}")
                 
-                # Emit status update
                 if self.on_status:
                     status_info = {
                         "status": "generating" if attempt == 0 else "retrying",
@@ -321,7 +161,6 @@ Ensure you still export to 'output.stl'.
                     }
                     self.on_status(status_info)
                 
-                # 1. Ask Gemini for the code with streaming and thinking
                 raw_content = ""
                 stream = await self.client.aio.models.generate_content_stream(
                     model=self.model,
@@ -338,24 +177,20 @@ Ensure you still export to 'output.stl'.
                             if not part.text:
                                 continue
                             elif part.thought:
-                                # Stream thought to callback
                                 if self.on_thought:
                                     self.on_thought(part.text)
                             else:
-                                # Accumulate answer text
                                 raw_content += part.text
                 
                 if not raw_content:
                     self._log("[CadAgent DEBUG] [ERR] Empty response from model.")
                     return None
 
-                # 2. Extract Code Block
                 import re
                 code_match = re.search(r'```python(.*?)```', raw_content, re.DOTALL)
                 if code_match:
                     code = code_match.group(1).strip()
                 else:
-                    # Fallback: assume entire text is code if no blocks, or fail
                     self._log("[CadAgent DEBUG] [WARN] No ```python block found. Trying heuristic...")
                     if "import build123d" in raw_content:
                         code = raw_content
@@ -363,25 +198,17 @@ Ensure you still export to 'output.stl'.
                         self._log("[CadAgent DEBUG] [ERR] Could not extract python code.")
                         return None
                 
-                # 3. Save to Local File in cad_outputs folder
-                # Overwrite the script so the next iteration builds on this one
-                
-                # Fix for Windows paths in python strings: escape backslashes
                 safe_output_path = output_stl.replace("\\", "\\\\")
                 
                 with open(script_path, "w") as f:
-                    # Inject output path into the script
                     code_with_path = code.replace("output.stl", safe_output_path)
                     f.write(code_with_path)
                     
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
-                # 4. Execute Locally
                 import subprocess
                 import sys
                 
-                # Use asyncio.to_thread for Windows compatibility (asyncio.create_subprocess_exec
-                # throws NotImplementedError on Windows with certain event loop policies)
                 try:
                     proc = await asyncio.to_thread(
                         subprocess.run,
@@ -391,28 +218,46 @@ Ensure you still export to 'output.stl'.
                     )
                     stdout, stderr = proc.stdout, proc.stderr
                 except Exception as e:
-                    self._log(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
-                    proc = type('obj', (object,), {'returncode': 1})()
-                    stdout = ""
-                    stderr = str(e)
+                     self._log(f"[CadAgent DEBUG] [ERR] Subprocess run failed: {e}")
+                     proc = type('obj', (object,), {'returncode': 1})()
+                     stdout = ""
+                     stderr = str(e)
                 
                 if proc.returncode != 0:
                     error_msg = stderr
+                    error_lines = error_msg.strip().split('\n')
+                    short_error = error_lines[-1][:100] if error_lines else "Unknown error"
                     self._log(f"[CadAgent DEBUG] [ERR] Script Execution Failed:\n{error_msg}")
                     
-                    # Preparing feedback for next attempt
-                    current_prompt = f"""
+                    if self.on_status:
+                        self.on_status({
+                            "status": "retrying",
+                            "attempt": attempt + 1,
+                            "max_attempts": max_retries,
+                            "error": short_error
+                        })
+
+                    if is_iteration:
+                        current_prompt = f"""
 The updated Python script you generated failed to execute with the following error:
 {error_msg}
 
 Please fix the code to resolve this error. Return the full corrected script. 
 Ensure you still export to 'output.stl'.
 """
-                    continue # Retry loop
+                    else:
+                        current_prompt = f"""
+The Python script you generated failed to execute with the following error:
+{error_msg}
+
+Please fix the code to resolve this error. Return the full corrected script.
+Ensure you still export to 'output.stl'.
+Original request: {original_prompt}
+"""
+                    continue
                 
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
-                # 5. Read Output
                 if os.path.exists(output_stl):
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     with open(output_stl, "rb") as f:
@@ -431,19 +276,18 @@ Ensure you still export to 'output.stl'.
                      current_prompt = f"The script executed successfully but '{output_stl}' was not found. Ensure you call `export_stl(result_part, 'output.stl')` at the end."
                      continue
 
-            # If loop finishes without success
             self._log("[CadAgent DEBUG] [ERR] All attempts failed.")
             if self.on_status:
                 self.on_status({
                     "status": "failed",
                     "attempt": max_retries,
                     "max_attempts": max_retries,
-                    "error": "All iteration attempts failed"
+                    "error": f"All {mode_str.lower()} attempts failed"
                 })
             return None
 
         except Exception as e:
-            if include_raw:
+            if self.include_raw:
                 print(f"CadAgent Error: {e}")
                 import traceback
                 traceback.print_exc()

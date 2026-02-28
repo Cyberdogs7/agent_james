@@ -594,8 +594,8 @@ class AudioLoop:
         self.tool_registry.register("list_timers", self.timer_agent.list_timers)
         self.tool_registry.register("delete_entry", self.timer_agent.delete_entry)
         self.tool_registry.register("modify_timer", self.timer_agent.modify_timer)
-        self.tool_registry.register("check_for_updates", self.handle_check_for_updates)
-        self.tool_registry.register("apply_update", self.handle_apply_update)
+        self.tool_registry.register("check_for_updates", self.update_agent.check_for_updates)
+        self.tool_registry.register("apply_update", self.update_agent.apply_update)
         self.tool_registry.register("search_gifs", self.giphy_agent.search_gifs)
         self.tool_registry.register("display_content", self.handle_display_content)
         self.tool_registry.register("get_weather", self.weather_agent.get_weather)
@@ -706,25 +706,6 @@ class AudioLoop:
         else:
             msg = "Automation Engine not available."
         return msg
-
-    async def handle_check_for_updates(self):
-        try:
-            print(f"[ADA DEBUG] [TOOL] check_for_updates was called.", flush=True)
-            result = await self.update_agent.check_for_updates()
-            return result
-        except Exception as update_err:
-            print(f"[ADA DEBUG] [ERR] Error in check_for_updates tool: {update_err}")
-            traceback.print_exc()
-            return f"Error checking for updates: {str(update_err)}"
-
-    async def handle_apply_update(self):
-        try:
-            result = await self.update_agent.apply_update()
-            return result
-        except Exception as update_err:
-            print(f"[ADA DEBUG] [ERR] Error in apply_update tool: {update_err}")
-            traceback.print_exc()
-            return f"Error applying update: {str(update_err)}"
 
     def handle_switch_video_source(self, source):
         if INCLUDE_RAW_LOGS:
