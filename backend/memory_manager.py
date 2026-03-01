@@ -104,7 +104,7 @@ class MemoryManager:
             else:
                 # Fallback: Keyword matching
                 q_tokens = set(query.lower().split())
-                c_tokens = set(mem["content"].lower().split())
+                c_tokens = set(mem.get("content", "").lower().split())
                 if not q_tokens:
                     score = 0.0
                 else:
@@ -122,6 +122,6 @@ class MemoryManager:
             # Filter out very low scores?
             # Let's say if score > 0.
             if score > 0.0:
-                 results.append(mem["content"])
+                 results.append(mem.get("content", ""))
 
         return results

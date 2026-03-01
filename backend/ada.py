@@ -254,42 +254,8 @@ class AudioLoop:
 
     async def _handle_jules_status_change(self, title, new_state):
         """Handles UI and voice notifications for Jules session status changes."""
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES_NOTIFY] Received status change: '{title}' -> {new_state}")
-
         notification_text = f"Jules task '{title}' has moved to {new_state}."
-
-        # 1. Send UI Notification
-        if self.on_display_content:
-            self.on_display_content({
-                "content_type": "notification",
-                "data": {"text": notification_text},
-                "duration": 20000  # 20 seconds
-            })
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [JULES_NOTIFY] Sent UI notification.")
-
-        # 2. Send Voice Notification
-        if self.session:
-            try:
-                # Use a system notification prefix to frame the message for the model
-                await asyncio.wait_for(
-                    self.session.send(input=f"System Notification: {notification_text}", end_of_turn=False),
-                    timeout=10.0
-                )
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [JULES_NOTIFY] Sent voice notification message to model.")
-            except asyncio.TimeoutError:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] [JULES_NOTIFY] Timeout sending voice notification.")
-            except Exception as e:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] [JULES_NOTIFY] Failed to send voice notification: {e}")
-
-        # 3. Send Slack Notification
-        if self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):
-            asyncio.create_task(self.slack_agent.send_message(notification_text))
-        
+        self.notify_user(notification_text, duration=20000)
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
@@ -601,9 +567,9 @@ class AudioLoop:
         self.tool_registry.register("get_weather", self.weather_agent.get_weather)
         self.tool_registry.register("set_time_format", lambda format: self.project_manager.set_time_format(format)[1])
         self.tool_registry.register("get_datetime", lambda: f"The current date and time is {format_datetime(get_local_time(), self.project_manager.get_project_config().get('time_format', '12h'))}.")
-        self.tool_registry.register("restart_application", self.handle_restart_application)
+        self.tool_registry.register("restart_application", lambda: asyncio.create_task(self.sio.emit("initiate_restart")) and "Restart signal sent to frontend." if self.sio else "Cannot send restart signal: not connected to server.")
         self.tool_registry.register("search", self.search_agent.search)
-        self.tool_registry.register("proactive_suggestion", self.handle_proactive_suggestion)
+        self.tool_registry.register("proactive_suggestion", lambda suggestion: self.on_display_content({"content_type": "suggestion", "suggestion": suggestion}) and "Suggestion displayed." if self.on_display_content else "No display content handler registered.")
 
         def send_slack_wrapper(message):
             if self.slack_agent:
@@ -632,8 +598,8 @@ class AudioLoop:
         self.tool_registry.register("control_os", self.os_agent.control)
         self.tool_registry.register("set_auto_merge_threshold", lambda hours: f"Auto-merge threshold set to {hours} hours." if self.project_manager.update_project_config({"auto_merge_threshold": int(hours * 3600)})[0] else "Failed.")
         self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
-        self.tool_registry.register("switch_video_source", self.handle_switch_video_source)
-        self.tool_registry.register("apply_task_fix", self.handle_apply_task_fix)
+        self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
+        self.tool_registry.register("apply_task_fix", lambda task_id: self.automation_engine.apply_fix(task_id)[1] if self.automation_engine else "Automation Engine not available.")
         self.tool_registry.register("dismiss_jules_session", lambda session_id: self.project_manager.dismiss_jules_session(session_id)[1])
 
         def stop_jules_session_wrapper(session_id):
@@ -692,30 +658,8 @@ class AudioLoop:
 
     # --- New Handler Methods ---
 
-    def handle_proactive_suggestion(self, suggestion):
-        if self.on_display_content:
-            self.on_display_content({
-                "content_type": "suggestion",
-                "suggestion": suggestion,
-            })
-        return "Suggestion displayed."
 
-    def handle_apply_task_fix(self, task_id):
-        if self.automation_engine:
-            success, msg = self.automation_engine.apply_fix(task_id)
-        else:
-            msg = "Automation Engine not available."
-        return msg
 
-    def handle_switch_video_source(self, source):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_video_source' source='{source}'")
-
-        if source in ["camera", "screen"]:
-            self.video_mode = source
-            return f"Switched video source to {source}."
-        else:
-            return f"Invalid source '{source}'. Use 'camera' or 'screen'."
 
     async def handle_spawn_swarm_agent(self, role, prompt, source=None, swarm_id=None):
         if INCLUDE_RAW_LOGS:
@@ -910,14 +854,6 @@ class AudioLoop:
         else:
             return "No display content handler registered."
 
-    async def handle_restart_application(self):
-        if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [RESTART] Emitting restart signal to frontend...")
-        if self.sio:
-            await self.sio.emit('initiate_restart')
-            return "Restart signal sent to frontend."
-        else:
-            return "Cannot send restart signal: not connected to server."
 
     async def _run_web_agent_task(self, prompt):
         if INCLUDE_RAW_LOGS:
@@ -1797,48 +1733,36 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                     print(f"[ADA DEBUG] [ERR] Failed to close MSS: {e}")
             self.sct = None
 
+
+    def notify_user(self, text, duration=10000, send_voice=True, send_slack=True):
+        """Consolidated method to dispatch system notifications across UI, Voice, and Slack."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [NOTIFY] {text}")
+
+        # UI
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "notification",
+                "data": {"text": text},
+                "duration": duration
+            })
+
+        # Voice
+        if send_voice and self.session:
+            asyncio.create_task(self.session.send(input=f"System Notification: {text}", end_of_turn=False))
+
+        # Slack
+        if send_slack and self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):
+            asyncio.create_task(self.slack_agent.send_message(text))
+
     async def handle_external_event(self, event):
         """Handles external events (like Git commits) triggered by AutomationEngine."""
         if event['type'] == 'git_commit':
             msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [GIT] External Event: {msg}")
-
-            # Notify Frontend
-            if self.on_display_content:
-                self.on_display_content({
-                    "content_type": "notification",
-                    "data": {"text": msg},
-                    "duration": 10000
-                })
-
-            # Voice Announcement
-            if self.session:
-                try:
-                    await self.session.send(input=f"System Notification: {msg}", end_of_turn=False)
-                except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to announce git event: {e}")
-
+            self.notify_user(msg)
         elif event['type'] == 'notification':
             msg = event.get('message', 'No message provided.')
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [NOTIFY] External Event: {msg}")
-
-            # Notify Frontend
-            if self.on_display_content:
-                self.on_display_content({
-                    "content_type": "notification",
-                    "data": {"text": msg},
-                    "duration": 10000
-                })
-
-            # Voice Announcement
-            if self.session:
-                try:
-                    await self.session.send(input=f"System Notification: {msg}", end_of_turn=False)
-                except Exception as e:
-                    print(f"[ADA DEBUG] [ERR] Failed to announce notification: {e}")
-
+            self.notify_user(msg)
     def _get_frame(self, cap):
         ret, frame = cap.read()
         if not ret:
