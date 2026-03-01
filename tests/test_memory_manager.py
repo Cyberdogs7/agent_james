@@ -34,6 +34,7 @@ class TestMemoryManager(unittest.TestCase):
             self.assertIsNone(data["embedding"])
 
     def test_search_memory_fallback(self):
+        self.manager.client = None
         # Add memories manually
         self.manager.add_memory("Use httpx for requests", ["net"])
         self.manager.add_memory("Always assume linux", ["os"])
