@@ -38,40 +38,19 @@ This document serves as the single source of truth for the evolution of the A.D.
   - Technical Notes: Electron overlay window combined with computer vision analysis.
   - Status: Idea
 
-- [ ] Retro-Causality Debugger
-  - Description: A visual scrubber that lets you replay state changes and project history to debug issues visually.
-  - Wow Factor: Rewinding to before a bug appeared and watching the system state un-break in real-time.
-  - User Impact: Instant visual debugging of historical changes without diving into logs.
-  - Technical Notes: Git history tracking synchronized with `ProactiveAgent` screenshots.
+- [ ] Protocol: OMEGA
+  - Description: A cinematic security wipe command to securely scrub sensitive data, self-destruct artifacts, or lock down the system in an emergency.
+  - Wow Factor: Complete, dramatic security control and absolute data privacy at a single voice command.
+  - User Impact: Absolute peace of mind for highly sensitive projects with an immediate failsafe.
+  - Technical Notes: Secure file deletion and OS-level lockdown sequences.
   - Status: Idea
 
-- [ ] Reality Anchor
-  - Description: Stick digital notes to physical objects in the room using the camera, bridging physical and digital spaces.
-  - Wow Factor: Digital information persistence in physical space (e.g., a digital floating label over a real-world object).
-  - User Impact: Seamless transition and management of physical and digital tasks.
-  - Technical Notes: Computer vision combined with SLAM (Simultaneous Localization and Mapping).
+- [ ] Ghost Ops
+  - Description: The assistant autonomously operates the UI and executes tasks across applications at superhuman speed via visual learning.
+  - Wow Factor: Seeing the mouse move and windows arrange themselves as the assistant visually navigates the OS like a hyper-efficient human.
+  - User Impact: Complete automation of tedious multi-app workflows without relying on fragile APIs.
+  - Technical Notes: Vision-language models controlling PyAutoGUI or OS-level accessibility APIs.
   - Status: Idea
-
-- [ ] Telepathy
-  - Description: Predicts what the user is about to type next and displays it as ghost text system-wide, allowing them to accept it with a tab.
-  - Wow Factor: The assistant knows what you are going to type before you do, reacting faster than thought.
-  - User Impact: Massive productivity and typing speed boost.
-  - Technical Notes: Local LLM inference on keystrokes with an OS-level overlay.
-  - Status: Idea
-
-- [ ] Vocal Chameleon
-  - Description: The assistant dynamically adjusts its voice tone, speed, and vocabulary based on the context (e.g., whispering at night, authoritative during a crisis).
-  - Wow Factor: The assistant responds organically, altering its acoustic presence based on the environment.
-  - User Impact: Increases social presence, reduces friction, and feels more alive.
-  - Technical Notes: Context detection feeding into dynamic TTS parameter adjustment.
-  - Status: Idea
-
-- [ ] Sentinel Mode
-  - Description: Actively monitors the system for rogue processes, unauthorized connections, or stalled items, and autonomously intervenes or alerts the user.
-  - Wow Factor: Unprecedented ambient security and peace of mind with real-time intervention.
-  - User Impact: A guardian angel for the dev environment and network traffic.
-  - Technical Notes: Network scanning and `_monitor_stalled_items` via `AutomationEngine`.
-  - Status: Partially Implemented (Stall checks active; Network scan pending)
 
 ---
 
@@ -84,6 +63,13 @@ This document serves as the single source of truth for the evolution of the A.D.
   - User Impact: Drastically reduces merge conflicts and integration headaches.
   - Technical Notes: 'Smart Merge' logic integrated into `AutomationEngine`.
   - Status: Partially Implemented (Smart Merge active; Security pending)
+
+- [ ] The Sentry
+  - Description: Actively monitors the system for rogue processes, unauthorized connections, or stalled items, and autonomously intervenes or alerts the user.
+  - Wow Factor: Unprecedented ambient security and peace of mind with real-time intervention.
+  - User Impact: A guardian angel for the dev environment and network traffic.
+  - Technical Notes: Network scanning and `_monitor_stalled_items` via `AutomationEngine`.
+  - Status: Partially Implemented (Stall checks active; Network scan pending)
 
 - [ ] The Forge
   - Description: Vision feedback loop utilizing the printer's camera to monitor 3D prints in real-time and auto-cancel if spaghettification is detected.
@@ -99,39 +85,18 @@ This document serves as the single source of truth for the evolution of the A.D.
   - Technical Notes: Trigger `MemoryManager` vector search during task start via `JulesAgent`.
   - Status: Partially Implemented (Context retrieval active in JulesAgent)
 
-- [ ] The Historian
-  - Description: Seamlessly tracks, documents, and organizes the history of codebase changes and user interactions.
-  - Wow Factor: Perfectly curated history of all your coding sessions, decisions, and outcomes available on demand.
-  - User Impact: Never lose track of why a decision was made.
-  - Technical Notes: Leverage `git_agent.py` and `jules_agent.py` for comprehensive tracking.
-  - Status: Partially Implemented (Partially implemented via git_agent.py and jules_agent.py)
+- [ ] Retro-Causality Debugger
+  - Description: A visual scrubber that tracks codebase changes and user interactions, letting you replay state changes to debug issues visually.
+  - Wow Factor: Rewinding to before a bug appeared and watching the system state un-break in real-time.
+  - User Impact: Instant visual debugging and perfect historical recall of why decisions were made.
+  - Technical Notes: Merges 'The Historian' history tracking via `git_agent.py` and `jules_agent.py` with `ProactiveAgent` screenshots.
+  - Status: Partially Implemented (Tracking via git_agent and jules_agent active; Visual scrubber pending)
 
 - [ ] Dream State
   - Description: An idle-time optimizer that runs low-priority tasks, refactoring, and research in a separate branch while the user is away.
   - Wow Factor: Coming back to a clean codebase, updated dependencies, and pre-researched solutions after a break.
   - User Impact: Maximizes hardware utilization and keeps technical debt at zero.
   - Technical Notes: Idle detection triggering background worker branches.
-  - Status: Idea
-
-- [ ] Protocol: FOCUS
-  - Description: A system state that minimizes distractions and optimizes UI/UX for deep work through physical and digital adjustments.
-  - Wow Factor: A single command dims the room, silences notifications, and perfectly arranges the IDE.
-  - User Impact: Instant, frictionless entry into flow state.
-  - Technical Notes: Orchestrate `KasaAgent` and `OSAgent` state changes.
-  - Status: Idea
-
-- [ ] The Muse
-  - Description: A creative writing assistant that injects creative prompts, enforcing project structures for plots, characters, and worlds when the user is stuck.
-  - Wow Factor: An AI that breaks writer's block by gently proposing narrative or structural shifts.
-  - User Impact: Maintains creative momentum and organizes complex narrative structures.
-  - Technical Notes: `WRITING_MODE_SYSTEM_PROMPT` utilizing dedicated directory structures.
-  - Status: Idea
-
-- [ ] Protocol: OMEGA
-  - Description: A security wipe command to securely scrub sensitive data, self-destruct artifacts, or lock down the system in an emergency.
-  - Wow Factor: Cinematic security control and absolute data privacy.
-  - User Impact: Complete peace of mind for highly sensitive projects.
-  - Technical Notes: Secure file deletion and OS-level lockdown sequences.
   - Status: Idea
 
 - [ ] The Architect
@@ -141,11 +106,32 @@ This document serves as the single source of truth for the evolution of the A.D.
   - Technical Notes: Static analysis feeding an LLM Refactor Loop that outputs a Git PR.
   - Status: Idea
 
-- [ ] The Chameleon
-  - Description: The UI adapts its theme and layout based on the current task, such as dark mode for coding and light mode for writing.
-  - Wow Factor: The interface feels alive and emotionally resonant with the work.
-  - User Impact: Reduced cognitive load and improved aesthetic engagement.
-  - Technical Notes: `ProactiveAgent` context linked to dynamic CSS variables.
+- [ ] Adaptive Immersion
+  - Description: Unifies 'Protocol: FOCUS' and 'The Chameleon'. Dynamically adjusts physical environment (lights), UI theme, and silences notifications based on current task.
+  - Wow Factor: A single command perfectly arranges your digital and physical workspace for deep flow state.
+  - User Impact: Instant, frictionless entry into flow state with zero cognitive load.
+  - Technical Notes: Orchestrate `KasaAgent`, `OSAgent`, and dynamic CSS variables via `ProactiveAgent` context.
+  - Status: Idea
+
+- [ ] Reality Anchor
+  - Description: Stick digital notes to physical objects in the room using the camera, bridging physical and digital spaces.
+  - Wow Factor: Digital information persistence in physical space.
+  - User Impact: Seamless transition and management of physical and digital tasks.
+  - Technical Notes: Computer vision combined with SLAM.
+  - Status: Idea
+
+- [ ] Telepathy
+  - Description: Predicts what the user is about to type next and displays it as ghost text system-wide, allowing them to accept it with a tab.
+  - Wow Factor: The assistant knows what you are going to type before you do.
+  - User Impact: Massive productivity and typing speed boost.
+  - Technical Notes: Local LLM inference on keystrokes with an OS-level overlay.
+  - Status: Idea
+
+- [ ] Vocal Chameleon
+  - Description: The assistant dynamically adjusts its voice tone, speed, and vocabulary based on context (e.g., whispering at night).
+  - Wow Factor: The assistant responds organically, altering its acoustic presence based on the environment.
+  - User Impact: Increases social presence, reduces friction, and feels more alive.
+  - Technical Notes: Context detection feeding into dynamic TTS parameter adjustment.
   - Status: Idea
 
 ---
@@ -157,7 +143,7 @@ This document serves as the single source of truth for the evolution of the A.D.
   - Description: A real-time visualizer showing CPU, RAM, and "Agent Thought Load" within the UI.
   - Wow Factor: Seeing the assistant's "brain" and system resources functioning in real-time.
   - User Impact: Immediate system confidence and transparent performance tracking.
-  - Technical Notes: Frontend visualization for `get_dashboard_data` via `System Pulse` feature.
+  - Technical Notes: Frontend visualization for `get_dashboard_data`.
   - Status: Partially Implemented (Backend active; Frontend partial)
 
 - [ ] Neural Sync
@@ -169,7 +155,7 @@ This document serves as the single source of truth for the evolution of the A.D.
 
 - [ ] Universal Translator
   - Description: Middleware to intercept errors, negotiate API contracts, and assist in real-time meetings by providing on-the-fly translations or technical summaries.
-  - Wow Factor: The assistant silently fixes API mismatches and translates technical jargon instantly during interactions.
+  - Wow Factor: The assistant silently fixes API mismatches and translates technical jargon instantly.
   - User Impact: Eliminates integration friction and smooths out communication.
   - Technical Notes: Transparent proxy implementation with real-time LLM analysis.
   - Status: Idea
