@@ -30,15 +30,17 @@ class SlackAgent:
     async def send_message(self, text):
         if not self.bot_token or not self.channel_id:
             logger.warning("[SLACK] Missing SLACK_BOT_TOKEN or SLACK_CHANNEL_ID. Cannot send message.")
-            return
+            return "Slack agent not configured."
         try:
             await self.client.chat_postMessage(
                 channel=self.channel_id,
                 text=text
             )
             logger.info(f"[SLACK] Sent message to channel {self.channel_id}")
+            return "Message sent to Slack."
         except Exception as e:
             logger.error(f"[SLACK] Error sending message: {e}")
+            return f"Error sending message: {e}"
 
     async def _handle_message(self, client, req):
         logger.debug(f"[SLACK] Received event of type: {req.type}")

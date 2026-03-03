@@ -122,6 +122,26 @@ class AutomationEngine:
         self.stop_event.set()
         self.running = False
 
+    async def deliver_morning_briefing(self, force_refresh=False):
+        """Retrieves and formats the morning briefing for Jules."""
+        report = None
+        if not force_refresh and self.current_briefing_report:
+            report = self.current_briefing_report
+            self.briefing_status = "DELIVERED"
+        else:
+            if self.project_manager:
+                report = await self.project_manager.generate_fleet_report()
+                if report:
+                    self.current_briefing_report = report
+                    self.briefing_status = "DELIVERED"
+            else:
+                return "Project Manager not available."
+
+        if not report:
+            return "Failed to generate briefing."
+
+        return self.project_manager.format_morning_briefing(report)
+
     async def _check_briefing_schedule(self):
         """Checks if it's time to generate the morning briefing."""
         now_dt = datetime.now()
