@@ -546,8 +546,8 @@ class AudioLoop:
         self.tool_registry.register("list_jules_sources", self.jules_agent.list_sources_formatted)
         self.tool_registry.register("list_jules_sessions", self.jules_agent.list_sessions_formatted)
         self.tool_registry.register("list_jules_activities", self.jules_agent.list_activities_formatted)
-        self.tool_registry.register("create_project", self.handle_create_project)
-        self.tool_registry.register("switch_project", self.handle_switch_project)
+        self.tool_registry.register("create_project", lambda name: self._execute_project_switch(self.project_manager.create_project, name))
+        self.tool_registry.register("switch_project", lambda name: self._execute_project_switch(self.project_manager.switch_project, name))
         self.tool_registry.register("list_projects", lambda: f"Available projects: {', '.join(self.project_manager.list_projects())}")
         self.tool_registry.register("list_smart_devices", self.kasa_agent.get_formatted_list)
         self.tool_registry.register("control_light", self.kasa_agent.control_device)
@@ -571,28 +571,18 @@ class AudioLoop:
         self.tool_registry.register("search", self.search_agent.search)
         self.tool_registry.register("proactive_suggestion", lambda suggestion: self.on_display_content({"content_type": "suggestion", "suggestion": suggestion}) and "Suggestion displayed." if self.on_display_content else "No display content handler registered.")
 
-        def send_slack_wrapper(message):
-            if self.slack_agent:
-                asyncio.create_task(self.slack_agent.send_message(message))
-                return "Message sent to Slack."
-            return "Slack agent not available."
-        self.tool_registry.register("send_slack_message", send_slack_wrapper)
+        if self.slack_agent:
+            self.tool_registry.register("send_slack_message", self.slack_agent.send_message)
 
-        def append_system_prompt_wrapper(text):
-            success, msg = self.project_manager.append_system_prompt(text)
-            if success: self.reconnect()
-            return msg
-        self.tool_registry.register("append_system_prompt", append_system_prompt_wrapper)
-
-        def delete_custom_system_prompt_wrapper():
-            success, msg = self.project_manager.reset_system_prompt()
-            if success: self.reconnect()
-            return msg
-        self.tool_registry.register("delete_custom_system_prompt", delete_custom_system_prompt_wrapper)
-
+        self.tool_registry.register("append_system_prompt", lambda text: self._execute_project_action(self.project_manager.append_system_prompt, False, text))
+        self.tool_registry.register("delete_custom_system_prompt", lambda: self._execute_project_action(self.project_manager.reset_system_prompt, False))
         self.tool_registry.register("get_system_prompt", lambda: self.project_manager.get_system_prompt())
         self.tool_registry.register("toggle_jules_slack_notifications", lambda enabled: f"Slack notifications {'enabled' if enabled else 'disabled'}." if self.project_manager.update_project_config({"jules_slack_notifications": enabled})[0] else "Failed.")
-        self.tool_registry.register("get_morning_briefing", self.handle_get_morning_briefing)
+        async def deliver_briefing_wrapper(force_refresh=False):
+            if self.automation_engine:
+                return await self.automation_engine.deliver_morning_briefing(force_refresh)
+            return "Automation engine not running."
+        self.tool_registry.register("get_morning_briefing", deliver_briefing_wrapper)
         self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
         self.tool_registry.register("control_os", self.os_agent.control)
@@ -600,27 +590,14 @@ class AudioLoop:
         self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
         self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
         self.tool_registry.register("apply_task_fix", lambda task_id: self.automation_engine.apply_fix(task_id)[1] if self.automation_engine else "Automation Engine not available.")
-        self.tool_registry.register("dismiss_jules_session", lambda session_id: self.project_manager.dismiss_jules_session(session_id)[1])
-
-        def stop_jules_session_wrapper(session_id):
-            self.jules_agent.stop_polling(session_id)
-            return f"Session stopped and dismissed: {self.project_manager.dismiss_jules_session(session_id)[1]}"
-        self.tool_registry.register("stop_jules_session", stop_jules_session_wrapper)
+        self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
+        self.tool_registry.register("stop_jules_session", self.jules_agent.dismiss_session)
 
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
         self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
 
-        def change_voice_wrapper(voice_name):
-            success, msg = self.project_manager.set_voice(voice_name)
-            if success: self.reconnect()
-            return msg
-        self.tool_registry.register("change_voice", change_voice_wrapper)
-
-        def update_persona_wrapper(persona):
-            success, msg = self.project_manager.update_persona(persona)
-            if success: self.reconnect()
-            return msg
-        self.tool_registry.register("update_persona", update_persona_wrapper)
+        self.tool_registry.register("change_voice", lambda voice_name: self._execute_project_action(self.project_manager.set_voice, False, voice_name))
+        self.tool_registry.register("update_persona", lambda persona: self._execute_project_action(self.project_manager.update_persona, False, persona))
 
         # File System Agent Tools
         self.tool_registry.register("write_file", self.fs_agent.write_file)
@@ -681,30 +658,25 @@ class AudioLoop:
         result = await self.handle_jules_request(full_prompt, source, role=role, on_session_created=_on_created)
         return result
 
-    def handle_create_project(self, name):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'create_project' name='{name}'", flush=True)
-        success, msg = self.project_manager.create_project(name)
+    def _execute_project_action(self, action_func, notify_name=False, *args):
+        """Consolidates wrapper logic for project settings that require a reconnect."""
+        success, msg = action_func(*args)
         if success:
-            # Auto-switch to the newly created project
-            self.project_manager.switch_project(name)
-            self.printer_agent.set_root_path(self.project_manager.get_current_project_path())
-            msg += f" Switched to '{name}'."
-            if self.on_project_update:
-                self.on_project_update(name)
+            if notify_name and self.on_project_update and args:
+                self.on_project_update(args[0])
             self.reconnect()
         return msg
 
-    def handle_switch_project(self, name):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'switch_project' name='{name}'", flush=True)
-        success, msg = self.project_manager.switch_project(name)
+    def _execute_project_switch(self, action_func, name):
+        success, msg = action_func(name)
         if success:
+            if action_func.__name__ == 'create_project':
+                self.project_manager.switch_project(name)
+                msg += f" Switched to '{name}'."
+
             self.printer_agent.set_root_path(self.project_manager.get_current_project_path())
             if self.on_project_update:
                 self.on_project_update(name)
-
-            # Trigger a reconnect to load the new project's system prompt
             self.reconnect()
         return msg
 
@@ -1246,37 +1218,7 @@ class AudioLoop:
 
     async def handle_display_dashboard(self):
         dashboard_data = await self.get_dashboard_data()
-
-        if self.on_display_content:
-            self.on_display_content({
-                "content_type": "widget",
-                "widget_type": "dashboard",
-                "data": dashboard_data
-            })
-            return "War Room Dashboard displayed."
-        return "Failed to display dashboard."
-
-    async def handle_get_morning_briefing(self, force_refresh=False):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Generating/Retrieving Morning Briefing (Force: {force_refresh})")
-
-        report = None
-        if not force_refresh and self.automation_engine and self.automation_engine.current_briefing_report:
-            report = self.automation_engine.current_briefing_report
-            # Mark as delivered
-            self.automation_engine.briefing_status = "DELIVERED"
-        else:
-            # Generate on fly
-            if self.project_manager:
-                report = await self.project_manager.generate_fleet_report()
-            else:
-                return "Project Manager not available."
-
-        if not report:
-            return "Failed to generate briefing."
-
-        # Delegate formatting to ProjectManager
-        return self.project_manager.format_morning_briefing(report)
+        return await self.handle_display_content("widget", widget_type="dashboard", data=dashboard_data)
 
     def _get_live_connect_config(self):
         project_config = self.project_manager.get_project_config()

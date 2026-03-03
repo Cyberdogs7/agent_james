@@ -176,6 +176,13 @@ class JulesAgent:
             info["stop_event"].set()
             # We don't await the task here to avoid blocking, but it will exit soon.
 
+    def dismiss_session(self, session_id):
+        """Stops polling and dismisses the session from the project manager."""
+        self.stop_polling(session_id)
+        if self.project_manager:
+            return f"Session stopped and dismissed: {self.project_manager.dismiss_jules_session(session_id)[1]}"
+        return "Session stopped."
+
     async def _poll_loop(self, session_id, stop_event, callback):
         """Internal loop to poll for updates on a session."""
         last_activity_count = 0

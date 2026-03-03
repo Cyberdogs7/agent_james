@@ -12,7 +12,7 @@ class UpdateAgent:
 
     def _log(self, *args, **kwargs):
         # Always print critical agent logs for debugging
-        message = " ".join(map(str, args))
+        message = " ".join([str(arg) for arg in args])
         print(message, flush=True)
         if self.on_log:
             try:

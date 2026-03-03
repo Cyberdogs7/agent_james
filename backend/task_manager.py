@@ -1,5 +1,4 @@
 import json
-import os
 import uuid
 import time
 from pathlib import Path
@@ -55,7 +54,7 @@ class TaskManager:
             if not re.match(r"^\d{2}:\d{2}$", trigger_value["time"]):
                 raise ValueError("Time must be in HH:MM format (24h)")
 
-            hours, minutes = map(int, trigger_value["time"].split(':'))
+            hours, minutes = [int(x) for x in trigger_value["time"].split(':')]
             if not (0 <= hours <= 23) or not (0 <= minutes <= 59):
                 raise ValueError("Invalid time (HH: 00-23, MM: 00-59)")
 
