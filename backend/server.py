@@ -1766,28 +1766,6 @@ async def get_jules_sources(sid):
     else:
         await sio.emit('error', {'msg': "System not ready"})
 
-@sio.event
-async def toggle_writing_mode(sid, data):
-    """Toggles Writing Mode on/off."""
-    enable = data.get('enable', True)
-    print(f"[SERVER] Toggle Writing Mode: {enable}")
-
-    if enable:
-        success, msg = project_manager.enable_writing_mode()
-    else:
-        success, msg = project_manager.disable_writing_mode()
-
-    if success:
-        await sio.emit('status', {'msg': msg})
-        # Reconnect to apply system prompt changes
-        if audio_loop:
-            audio_loop.reconnect()
-        # Broadcast config update so frontend knows mode changed
-        config = project_manager.get_project_config()
-        await sio.emit('project_config', config)
-    else:
-        await sio.emit('error', {'msg': msg})
-
 # Deprecated/Mapped for compatibility if frontend still uses specific events
 @sio.event
 async def get_tool_permissions(sid):

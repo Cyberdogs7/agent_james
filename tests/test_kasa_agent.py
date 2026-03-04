@@ -111,11 +111,11 @@ class TestKasaDeviceControl:
             pytest.skip("No Kasa devices configured")
         
         ip = next(iter(kasa_devices.keys()))
-        result = await agent.turn_on(ip)
+        result = await agent.control_device(ip, "turn_on")
         
         agent.mock_device.turn_on.assert_called_once()
         print(f"Turn on result for {ip}: {result}")
-        assert result is True
+        assert "Turned ON" in result
     
     @pytest.mark.asyncio
     async def test_turn_off_device(self, agent_with_devices, kasa_devices):
@@ -126,11 +126,11 @@ class TestKasaDeviceControl:
             pytest.skip("No Kasa devices configured")
         
         ip = next(iter(kasa_devices.keys()))
-        result = await agent.turn_off(ip)
+        result = await agent.control_device(ip, "turn_off")
         
         agent.mock_device.turn_off.assert_called_once()
         print(f"Turn off result for {ip}: {result}")
-        assert result is True
+        assert "Turned OFF" in result
     
     @pytest.mark.asyncio
     async def test_set_brightness(self, agent_with_devices, kasa_devices):
@@ -141,11 +141,11 @@ class TestKasaDeviceControl:
             pytest.skip("No Kasa devices configured")
 
         ip = next(iter(kasa_devices.keys()))
-        result = await agent.set_brightness(ip, 50)
+        result = await agent.control_device(ip, "set", brightness=50)
 
         agent.mock_device.set_brightness.assert_called_once_with(50)
         print(f"Set brightness result for {ip}: {result}")
-        assert result is True
+        assert "Set brightness" in result
     
     @pytest.mark.asyncio
     async def test_set_color(self, agent_with_devices, kasa_devices):
@@ -156,12 +156,12 @@ class TestKasaDeviceControl:
             pytest.skip("No Kasa devices configured")
         
         ip = next(iter(kasa_devices.keys()))
-        result = await agent.set_color(ip, "blue")
+        result = await agent.control_device(ip, "set", color="blue")
         
         # hsv for blue is (240, 100, 100)
         agent.mock_device.set_hsv.assert_called_once_with(240, 100, 100)
         print(f"Set color result for {ip}: {result}")
-        assert result is True
+        assert "Set color" in result
 
 
 class TestKasaColorConversion:

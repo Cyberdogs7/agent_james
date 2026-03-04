@@ -105,6 +105,11 @@ class TestVisionPipeline(unittest.TestCase):
             # Start video_loop (renamed from get_frames in previous versions likely)
             task = asyncio.create_task(loop.video_loop())
 
+            # Mock the read function of the returned VideoCapture to return a tuple
+            mock_cap = mock_cv2.VideoCapture.return_value
+            mock_cap.read.return_value = (True, MagicMock(shape=(100, 100, 3)))
+            mock_cap.isOpened.return_value = True
+
             # Allow loop to run for > 1 second
             await asyncio.sleep(1.5)
 
