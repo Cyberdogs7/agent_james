@@ -130,34 +130,44 @@ class KasaAgent:
     async def control_device(self, target, action, brightness=None, color=None):
         """Orchestrates control actions on a device."""
         result_msg = f"Action '{action}' on '{target}' failed."
+        dev = await self._resolve_device(target)
+        if not dev:
+            return result_msg
+
         success = False
-
-        if action == "turn_on":
-            success = await self.turn_on(target)
-            if success:
+        try:
+            if action == "turn_on":
+                await dev.turn_on()
+                success = True
                 result_msg = f"Turned ON '{target}'."
-        elif action == "turn_off":
-            success = await self.turn_off(target)
-            if success:
+            elif action == "turn_off":
+                await dev.turn_off()
+                success = True
                 result_msg = f"Turned OFF '{target}'."
-        elif action == "set":
-            success = True
-            result_msg = f"Updated '{target}':"
+            elif action == "set":
+                success = True
+                result_msg = f"Updated '{target}':"
 
-        if success or action == "set":
-            if brightness is not None:
-                sb = await self.set_brightness(target, brightness)
-                if sb:
+            if success or action == "set":
+                if brightness is not None and (dev.is_dimmable or dev.is_bulb):
+                    await dev.set_brightness(int(brightness))
                     result_msg += f" Set brightness to {brightness}."
-            if color is not None:
-                sc = await self.set_color(target, color)
-                if sc:
-                    result_msg += f" Set color to {color}."
+                if color is not None and dev.is_color:
+                    hsv = self.name_to_hsv(color) if isinstance(color, str) else (color if isinstance(color, (tuple, list)) and len(color) == 3 else None)
+                    if hsv:
+                        await dev.set_hsv(int(hsv[0]), int(hsv[1]), int(hsv[2]))
+                        result_msg += f" Set color to {color}."
+
+            if success or brightness is not None or color is not None:
+                await dev.update()
+
+        except Exception as e:
+            print(f"Error controlling {target}: {e}")
+            return result_msg
 
         # Notify Frontend of State Change
-        updated_list = self.get_devices_list()
         if self.on_update:
-            self.on_update(updated_list)
+            self.on_update(self.get_devices_list())
 
         return result_msg
 
@@ -211,66 +221,6 @@ class KasaAgent:
             "daylight": (0, 0, 100),
         }
         return colors.get(color_name, None)
-
-    async def turn_on(self, target):
-        """Turns on the device (Target: IP or Alias)."""
-        dev = await self._resolve_device(target)
-        if dev:
-            try:
-                await dev.turn_on()
-                await dev.update()
-                return True
-            except Exception as e:
-                print(f"Error turning on {target}: {e}")
-                return False
-        return False
-
-    async def turn_off(self, target):
-        """Turns off the device (Target: IP or Alias)."""
-        dev = await self._resolve_device(target)
-        if dev:
-            try:
-                await dev.turn_off()
-                await dev.update()
-                return True
-            except Exception as e:
-                print(f"Error turning off {target}: {e}")
-                return False
-        return False
-
-    async def set_brightness(self, target, brightness):
-        """Sets brightness (0-100)."""
-        dev = await self._resolve_device(target)
-        if dev and (dev.is_dimmable or dev.is_bulb):
-            try:
-                await dev.set_brightness(int(brightness))
-                await dev.update()
-                return True
-            except Exception as e:
-                 print(f"Error setting brightness for {target}: {e}")
-        return False
-
-    async def set_color(self, target, color_input):
-        """Sets color by name or direct HSV tuple."""
-        dev = await self._resolve_device(target)
-        if not dev or not dev.is_color:
-            return False
-
-        hsv = None
-        if isinstance(color_input, str):
-            hsv = self.name_to_hsv(color_input)
-        elif isinstance(color_input, (tuple, list)) and len(color_input) == 3:
-            hsv = color_input
-        
-        if hsv:
-            try:
-                # Kasa expects Hue (0-360), Sat (0-100), Val (0-100)
-                await dev.set_hsv(int(hsv[0]), int(hsv[1]), int(hsv[2]))
-                await dev.update()
-                return True
-            except Exception as e:
-                 print(f"Error setting color for {target}: {e}")
-        return False
 
 # Standalone test
 if __name__ == "__main__":

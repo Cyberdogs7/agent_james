@@ -32,4 +32,3 @@ psutil
 pytest-asyncio
 watchdog
 pyperclip
-PyAudio
