@@ -17,7 +17,7 @@ import math
 import struct
 import time
 import random
-from datetime import datetime, timezone
+from datetime import datetime
 
 from backend.time_utils import format_datetime, get_local_time
 from backend.weather_agent import WeatherAgent
@@ -1644,28 +1644,6 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
 
         return self._process_frame(frame_bgr)
 
-    def _read_and_detect(self, cap):
-        """Reads frame, runs detection if needed, and processes for sending."""
-        ret, raw_frame = cap.read()
-        if not ret:
-            return None, False
-
-        detected = False
-        if self.face_cascade:
-            now = time.time()
-            if now - self._last_face_check_time > 1.0:
-                self._last_face_check_time = now
-                try:
-                    gray = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2GRAY)
-                    faces = self.face_cascade.detectMultiScale(gray, 1.1, 4)
-                    if len(faces) > 0:
-                        detected = True
-                except Exception:
-                    pass
-
-        frame_payload = self._process_frame(raw_frame)
-        return frame_payload, detected
-
     def close(self):
         if self.sct:
             try:
@@ -1705,11 +1683,6 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
         elif event['type'] == 'notification':
             msg = event.get('message', 'No message provided.')
             self.notify_user(msg)
-    def _get_frame(self, cap):
-        ret, frame = cap.read()
-        if not ret:
-            return None
-        return self._process_frame(frame)
 
     def _process_frame(self, frame_bgr):
         """Resizes and encodes a BGR frame to JPEG."""
@@ -1822,7 +1795,7 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                     reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
 
                     wait_tasks = tasks + [stop_task, reconnect_task]
-                    done, pending = await asyncio.wait(
+                    done, _ = await asyncio.wait(
                         wait_tasks,
                         return_when=asyncio.FIRST_COMPLETED
                     )
