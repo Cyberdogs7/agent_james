@@ -2,7 +2,7 @@ from backend.time_utils import set_time_format_tool, get_datetime_tool
 
 generate_cad_tool = {
     "name": "generate_cad",
-    "description": "Generates a 3D CAD model based on a prompt.",
+    "description": "Generates a 3D CAD model based on a prompt. Use this when the user asks to 'visualize', 'prototype', 'create a wireframe', or 'design' something in 3D.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
@@ -11,21 +11,6 @@ generate_cad_tool = {
         "required": ["prompt"]
     },
     "behavior": "NON_BLOCKING"
-}
-
-generate_cad_prototype_tool = {
-    "name": "generate_cad_prototype",
-    "description": "Generates a 3D wireframe prototype based on a user's description. Use this when the user asks to 'visualize', 'prototype', 'create a wireframe', or 'design' something in 3D.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "prompt": {
-                "type": "STRING",
-                "description": "The user's description of the object to prototype."
-            }
-        },
-        "required": ["prompt"]
-    }
 }
 
 run_web_agent_tool = {
@@ -81,23 +66,11 @@ switch_project_tool = {
 
 dismiss_jules_session_tool = {
     "name": "dismiss_jules_session",
-    "description": "Dismisses (hides) a Jules session from the dashboard.",
+    "description": "Dismisses (hides) or stops a running Jules session from the active dashboard.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
-            "session_id": {"type": "STRING", "description": "The ID of the session to dismiss."}
-        },
-        "required": ["session_id"]
-    }
-}
-
-stop_jules_session_tool = {
-    "name": "stop_jules_session",
-    "description": "Stops a running Jules session (stops polling) and dismisses it from the active view.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "session_id": {"type": "STRING", "description": "The ID of the session to stop."}
+            "session_id": {"type": "STRING", "description": "The ID of the session to dismiss or stop."}
         },
         "required": ["session_id"]
     }
@@ -965,7 +938,6 @@ run_ollama_agent_tool = {
 
 all_tools_list = [
     generate_cad_tool,
-    generate_cad_prototype_tool,
     run_web_agent_tool,
     create_project_tool,
     switch_project_tool,
@@ -1008,7 +980,6 @@ all_tools_list = [
     switch_video_source_tool,
     apply_task_fix_tool,
     dismiss_jules_session_tool,
-    stop_jules_session_tool,
     merge_pull_request_tool,
     set_time_format_tool,
     get_datetime_tool

@@ -30,10 +30,3 @@ class MessageDeduplicator:
         self.processed_set.add(message_id)
         return True
 
-    def generate_hash(self, content):
-        """Generates a hash for content-based deduplication (when IDs are missing)."""
-        # Mix in a rough timestamp (e.g. minute precision) if needed, but simple content hash
-        # is risky if user says "hello" twice intentionally.
-        # For UI inputs without IDs, we might rely on the fact that unintended duplicates
-        # usually happen within milliseconds.
-        return hashlib.sha256(str(content).encode('utf-8')).hexdigest()

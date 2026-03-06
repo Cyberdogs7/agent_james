@@ -2,7 +2,6 @@ import asyncio
 import logging
 import random
 import subprocess
-import shlex
 import threading
 import time
 from ytmusicapi import YTMusic
