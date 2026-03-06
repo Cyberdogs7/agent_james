@@ -1,6 +1,6 @@
 import asyncio
 import os
-from kasa import Discover, SmartDevice, SmartBulb, SmartPlug
+from kasa import Discover
 
 class KasaAgent:
     def __init__(self, known_devices=None, on_update=None):
@@ -221,16 +221,3 @@ class KasaAgent:
             "daylight": (0, 0, 100),
         }
         return colors.get(color_name, None)
-
-# Standalone test
-if __name__ == "__main__":
-    async def main():
-        agent = KasaAgent()
-        await agent.discover_devices()
-        print("Devices:", agent.devices)
-        
-        # Example Test
-        # await agent.turn_on("Bedroom Light")
-        # await agent.set_color("Bedroom Light", "Red")
-    
-    asyncio.run(main())

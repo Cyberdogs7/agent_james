@@ -5,7 +5,6 @@ from datetime import datetime
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
 from typing import List, Optional
 
 load_dotenv()

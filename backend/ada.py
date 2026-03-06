@@ -538,7 +538,6 @@ class AudioLoop:
 
         # Explicit Registrations
         self.tool_registry.register("generate_cad", self.handle_cad_request)
-        self.tool_registry.register("generate_cad_prototype", self.handle_cad_request)
         self.tool_registry.register("run_web_agent", self.handle_web_agent_request)
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
@@ -591,7 +590,6 @@ class AudioLoop:
         self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
         self.tool_registry.register("apply_task_fix", lambda task_id: self.automation_engine.apply_fix(task_id)[1] if self.automation_engine else "Automation Engine not available.")
         self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
-        self.tool_registry.register("stop_jules_session", self.jules_agent.dismiss_session)
 
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
         self.tool_registry.register("display_dashboard", self.handle_display_dashboard)

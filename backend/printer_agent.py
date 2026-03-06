@@ -1071,22 +1071,3 @@ class PrinterAgent:
             return f"Printing {os.path.basename(stl_path)} on {printer_obj.name}"
         else:
             return "Failed to upload/start print job."
-
-
-# Standalone test
-if __name__ == "__main__":
-    async def main():
-        agent = PrinterAgent()
-        
-        print("\n=== Testing Printer Discovery ===")
-        printers = await agent.discover_printers(timeout=3)
-        print(f"Found: {printers}")
-        
-        if printers:
-            printer = printers[0]
-            print(f"\n=== Testing Status for {printer['name']} ===")
-            status = await agent.get_print_status(printer['host'])
-            if status:
-                print(f"Status: {status.to_dict()}")
-    
-    asyncio.run(main())

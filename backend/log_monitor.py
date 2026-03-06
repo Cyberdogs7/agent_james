@@ -55,10 +55,6 @@ class LogMonitor:
         # It usually starts at the beginning of the line (no indent) and is not "Traceback..."
         # We'll treat any non-indented line after the start as a potential end,
         # but we need to be careful about multi-line error messages.
-        self.exception_line = re.compile(r'^\w+Error:|^Exception:|^[A-Z]\w+:')
-
-    def set_loop(self, loop):
-        self.loop = loop
 
     def process_chunk(self, text):
         # Accumulate text to handle partial writes
