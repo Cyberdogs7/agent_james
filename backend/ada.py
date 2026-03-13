@@ -67,6 +67,7 @@ from backend.kasa_agent import KasaAgent
 from backend.printer_agent import PrinterAgent
 from backend.trello_agent import TrelloAgent
 from backend.jules_agent import JulesAgent
+from backend.openhands_agent import OpenHandsAgent
 from backend.timer_agent import TimerAgent
 from backend.update_agent import UpdateAgent
 from backend.search_agent import SearchAgent
@@ -160,11 +161,16 @@ class AudioLoop:
 
         # Instantiate JulesAgent for session management and monitoring
         self.jules_agent = JulesAgent(project_manager=self.project_manager)
+        self.openhands_agent = OpenHandsAgent()
 
         self.stop_event = asyncio.Event()
         self._reconnect_needed = asyncio.Event()
         
         self._pending_confirmations = {}
+
+        # Coding Task Routing State
+        self._pending_coding_task_prompt = None
+        self._pending_coding_task_source = None
 
         # Video buffering state
         self._latest_image_payload = None
@@ -539,7 +545,9 @@ class AudioLoop:
         # Explicit Registrations
         self.tool_registry.register("generate_cad", self.handle_cad_request)
         self.tool_registry.register("run_web_agent", self.handle_web_agent_request)
+        self.tool_registry.register("create_coding_task", self.handle_create_coding_task)
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
+        self.tool_registry.register("run_openhands_agent", self.handle_openhands_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
         self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
         self.tool_registry.register("list_jules_sources", self.jules_agent.list_sources_formatted)
@@ -633,7 +641,44 @@ class AudioLoop:
 
     # --- New Handler Methods ---
 
+    async def handle_create_coding_task(self, prompt, source=None):
+        """Initiates a coding task by pausing to ask the user which agent to use."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [ROUTING] 'create_coding_task' called. Prompt: '{prompt}'")
 
+        self._pending_coding_task_prompt = prompt
+        self._pending_coding_task_source = source
+
+        # Instruct the model to immediately ask the user to choose
+        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or Jules for this coding task?' Do not do anything else until they respond."
+
+        try:
+            await self.session.send(input=msg, end_of_turn=True)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send routing prompt: {e}")
+
+        return "Waiting for user to choose the agent."
+
+    async def handle_openhands_request(self, prompt, repo_path=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENHANDS] Task: '{prompt}' (Repo: {repo_path})")
+
+        # Start the agent
+        session = await self.openhands_agent.spawn_agent(prompt, repo_path)
+
+        if session:
+            msg = f"System Notification: Local OpenHands agent started with ID '{session.get('conversation_id')}'. I will notify you when it completes."
+        else:
+            msg = "System Notification: Failed to start OpenHands agent."
+
+        try:
+            await self.session.send(input=msg, end_of_turn=True)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send OpenHands notification: {e}")
+
+        return f"Agent started. ID: {session.get('conversation_id') if session else 'Failed'}"
 
 
     async def handle_spawn_swarm_agent(self, role, prompt, source=None, swarm_id=None):
@@ -1373,6 +1418,37 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                                     
                                     # Only send if there's new text
                                     if delta:
+                                        # Handle Intercept for Routing
+                                        if getattr(self, "_pending_coding_task_prompt", None):
+                                            lower_transcript = transcript.lower()
+                                            if "openhands" in lower_transcript or "open hands" in lower_transcript:
+                                                if INCLUDE_RAW_LOGS:
+                                                    print("[ADA DEBUG] [ROUTING] Intercepted 'openhands'.")
+                                                p = self._pending_coding_task_prompt
+                                                s = self._pending_coding_task_source
+                                                self._pending_coding_task_prompt = None
+                                                self._pending_coding_task_source = None
+                                                asyncio.create_task(self.handle_openhands_request(p, repo_path=s))
+                                                # Tell the model the user chose OpenHands
+                                                try:
+                                                    await self.session.send(input="System Notification: The user chose OpenHands. The task has been routed.", end_of_turn=True)
+                                                except Exception:
+                                                    pass
+
+                                            elif "jules" in lower_transcript:
+                                                if INCLUDE_RAW_LOGS:
+                                                    print("[ADA DEBUG] [ROUTING] Intercepted 'jules'.")
+                                                p = self._pending_coding_task_prompt
+                                                s = self._pending_coding_task_source
+                                                self._pending_coding_task_prompt = None
+                                                self._pending_coding_task_source = None
+                                                asyncio.create_task(self.handle_jules_request(p, source=s))
+                                                # Tell the model the user chose Jules
+                                                try:
+                                                    await self.session.send(input="System Notification: The user chose Jules. The task has been routed.", end_of_turn=True)
+                                                except Exception:
+                                                    pass
+
                                         # User is speaking, so interrupt model playback!
                                         self.clear_audio_queue()
                                         self.set_last_input_source('ui')

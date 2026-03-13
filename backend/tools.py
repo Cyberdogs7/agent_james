@@ -334,6 +334,44 @@ run_jules_agent_tool = {
     }
 }
 
+run_openhands_agent_tool = {
+    "name": "run_openhands_agent",
+    "description": "Creates a new OpenHands coding task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The prompt to send to the OpenHands agent."
+            },
+            "repo_path": {
+                "type": "STRING",
+                "description": "Optional: The repository path to operate on."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
+
+create_coding_task_tool = {
+    "name": "create_coding_task",
+    "description": "Initiates a coding task. Always use this tool when the user asks you to perform a coding task, write code, or fix a bug.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The description of the coding task."
+            },
+            "source": {
+                "type": "STRING",
+                "description": "Optional: The source code or repository path."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
+
 spawn_swarm_agent_tool = {
     "name": "spawn_swarm_agent",
     "description": "Spawns a new Swarm Agent (Jules) with a specific role and task. Use this to delegate work to specialized agents.",
@@ -962,7 +1000,9 @@ all_tools_list = [
     write_file_tool,
     read_directory_tool,
     read_file_tool,
+    create_coding_task_tool,
     run_jules_agent_tool,
+    run_openhands_agent_tool,
     run_ollama_agent_tool,
     spawn_swarm_agent_tool,
     create_swarm_mission_tool,
