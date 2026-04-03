@@ -75,6 +75,7 @@ from backend.scraper_agent import ScraperAgent
 from backend.proactive_agent import ProactiveAgent
 from backend.os_agent import OSAgent
 from backend.music_agent import MusicAgent
+from backend.writing_agent import WritingAgent
 from backend.ollama_agent import OllamaAgent
 from backend.fs_agent import FileSystemAgent
 from backend.git_agent import GitAgent
@@ -191,6 +192,7 @@ class AudioLoop:
         self.ollama_agent = OllamaAgent()
         self.fs_agent = FileSystemAgent(self.project_manager)
         self.git_agent = GitAgent(self.project_manager)
+        self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
 
         self.sct = None
 
@@ -595,40 +597,44 @@ class AudioLoop:
         self.tool_registry.register("control_os", self.os_agent.control)
 
         # Novel Writing Mode Tools
-        self.tool_registry.register("commit_novel_changes", self.handle_commit_novel_changes)
-        self.tool_registry.register("seed", self.handle_seed)
-        self.tool_registry.register("gen_world", self.handle_gen_world)
-        self.tool_registry.register("gen_characters", self.handle_gen_characters)
-        self.tool_registry.register("gen_outline", self.handle_gen_outline)
-        self.tool_registry.register("gen_outline_part2", self.handle_gen_outline_part2)
-        self.tool_registry.register("gen_canon", self.handle_gen_canon)
-        self.tool_registry.register("voice_fingerprint", self.handle_voice_fingerprint)
-        self.tool_registry.register("draft_chapter", self.handle_draft_chapter)
-        self.tool_registry.register("run_drafts", self.handle_run_drafts)
-        self.tool_registry.register("evaluate", self.handle_evaluate)
-        self.tool_registry.register("adversarial_edit", self.handle_adversarial_edit)
-        self.tool_registry.register("compare_chapters", self.handle_compare_chapters)
-        self.tool_registry.register("reader_panel", self.handle_reader_panel)
-        self.tool_registry.register("review", self.handle_review)
-        self.tool_registry.register("gen_brief", self.handle_gen_brief)
-        self.tool_registry.register("gen_revision", self.handle_gen_revision)
-        self.tool_registry.register("apply_cuts", self.handle_apply_cuts)
-        self.tool_registry.register("gen_art", self.handle_gen_art)
-        self.tool_registry.register("gen_art_directions", self.handle_gen_art_directions)
-        self.tool_registry.register("gen_cover_composite", self.handle_gen_cover_composite)
-        self.tool_registry.register("gen_cover_print", self.handle_gen_cover_print)
-        self.tool_registry.register("gen_audiobook_script", self.handle_gen_audiobook_script)
-        self.tool_registry.register("gen_audiobook", self.handle_gen_audiobook)
-        self.tool_registry.register("run_pipeline", self.handle_run_pipeline)
+        self.tool_registry.register("commit_novel_changes", self.writing_agent.commit_novel_changes)
+        self.tool_registry.register("seed", self.writing_agent.seed)
+        self.tool_registry.register("gen_world", self.writing_agent.gen_world)
+        self.tool_registry.register("gen_characters", self.writing_agent.gen_characters)
+        self.tool_registry.register("gen_outline", self.writing_agent.gen_outline)
+        self.tool_registry.register("gen_outline_part2", self.writing_agent.gen_outline_part2)
+        self.tool_registry.register("gen_canon", self.writing_agent.gen_canon)
+        self.tool_registry.register("voice_fingerprint", self.writing_agent.voice_fingerprint)
+        self.tool_registry.register("draft_chapter", self.writing_agent.draft_chapter)
+        self.tool_registry.register("run_drafts", self.writing_agent.run_drafts)
+        self.tool_registry.register("evaluate", self.writing_agent.evaluate)
+        self.tool_registry.register("adversarial_edit", self.writing_agent.adversarial_edit)
+        self.tool_registry.register("compare_chapters", self.writing_agent.compare_chapters)
+        self.tool_registry.register("reader_panel", self.writing_agent.reader_panel)
+        self.tool_registry.register("review", self.writing_agent.review)
+        self.tool_registry.register("gen_brief", self.writing_agent.gen_brief)
+        self.tool_registry.register("gen_revision", self.writing_agent.gen_revision)
+        self.tool_registry.register("apply_cuts", self.writing_agent.apply_cuts)
+        self.tool_registry.register("gen_art", self.writing_agent.gen_art)
+        self.tool_registry.register("gen_art_directions", self.writing_agent.gen_art_directions)
+        self.tool_registry.register("gen_cover_composite", self.writing_agent.gen_cover_composite)
+        self.tool_registry.register("gen_cover_print", self.writing_agent.gen_cover_print)
+        self.tool_registry.register("gen_audiobook_script", self.writing_agent.gen_audiobook_script)
+        self.tool_registry.register("gen_audiobook", self.writing_agent.gen_audiobook)
+        self.tool_registry.register("run_pipeline", self.writing_agent.run_pipeline)
+        self.tool_registry.register("build_arc_summary", self.writing_agent.build_arc_summary)
+        self.tool_registry.register("build_outline", self.writing_agent.build_outline)
+        self.tool_registry.register("build_tex", self.writing_agent.build_tex)
+
         self.tool_registry.register("set_auto_merge_threshold", lambda hours: f"Auto-merge threshold set to {hours} hours." if self.project_manager.update_project_config({"auto_merge_threshold": int(hours * 3600)})[0] else "Failed.")
         self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
         self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
         self.tool_registry.register("apply_task_fix", lambda task_id: self.automation_engine.apply_fix(task_id)[1] if self.automation_engine else "Automation Engine not available.")
         self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
-
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
-        self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
 
+        # Tools returning simple strings from simple project interactions
+        self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
         self.tool_registry.register("change_voice", lambda voice_name: self._execute_project_action(self.project_manager.set_voice, False, voice_name))
         self.tool_registry.register("update_persona", lambda persona: self._execute_project_action(self.project_manager.update_persona, False, persona))
 
@@ -652,118 +658,6 @@ class AudioLoop:
         # Music Agent Tools
         self.tool_registry.register("play_music", self.music_agent.play)
         self.tool_registry.register("control_music", self.music_agent.control)
-
-    # --- Novel Writing Mode Handlers ---
-    async def handle_commit_novel_changes(self, message):
-        """Initializes repo if needed, stages, and commits changes."""
-        repo_path = self.project_manager.get_current_project_path()
-        init_success, init_msg = await self.git_agent.init_git_repo(repo_path)
-        if not init_success:
-            return f"Error: {init_msg}"
-
-        stage_success, stage_msg = await self.git_agent.stage_all(repo_path)
-        if not stage_success:
-            return f"Error staging changes: {stage_msg}"
-
-        commit_success, commit_msg = await self.git_agent.commit_changes(repo_path, message)
-        return commit_msg if commit_success else f"Error: {commit_msg}"
-
-    def handle_seed(self, args=None):
-        """Instructs the agent to Generate seed concepts."""
-        return f"System Instruction: Please execute the task: Generate seed concepts. Use write_file to save the output to the project directory."
-
-    def handle_gen_world(self, args=None):
-        """Instructs the agent to Seed -> world bible."""
-        return f"System Instruction: Please execute the task: Seed -> world bible. Use write_file to save the output to the project directory."
-
-    def handle_gen_characters(self, args=None):
-        """Instructs the agent to Seed + world -> character registry."""
-        return f"System Instruction: Please execute the task: Seed + world -> character registry. Use write_file to save the output to the project directory."
-
-    def handle_gen_outline(self, args=None):
-        """Instructs the agent to Outline with beats and foreshadowing."""
-        return f"System Instruction: Please execute the task: Outline with beats and foreshadowing. Use write_file to save the output to the project directory."
-
-    def handle_gen_outline_part2(self, args=None):
-        """Instructs the agent to Foreshadowing ledger."""
-        return f"System Instruction: Please execute the task: Foreshadowing ledger. Use write_file to save the output to the project directory."
-
-    def handle_gen_canon(self, args=None):
-        """Instructs the agent to Cross-reference hard facts."""
-        return f"System Instruction: Please execute the task: Cross-reference hard facts. Use write_file to save the output to the project directory."
-
-    def handle_voice_fingerprint(self, args=None):
-        """Instructs the agent to Voice analysis and discovery."""
-        return f"System Instruction: Please execute the task: Voice analysis and discovery. Use write_file to save the output to the project directory."
-
-    def handle_draft_chapter(self, args=None):
-        """Instructs the agent to Write a single chapter with anti-pattern rules."""
-        return f"System Instruction: Please execute the task: Write a single chapter with anti-pattern rules. Use write_file to save the output to the project directory."
-
-    def handle_run_drafts(self, args=None):
-        """Instructs the agent to Batch sequential chapter drafter."""
-        return f"System Instruction: Please execute the task: Batch sequential chapter drafter. Use write_file to save the output to the project directory."
-
-    def handle_evaluate(self, args=None):
-        """Instructs the agent to Mechanical slop scorer + LLM judge."""
-        return f"System Instruction: Please execute the task: Mechanical slop scorer + LLM judge. Use write_file to save the output to the project directory."
-
-    def handle_adversarial_edit(self, args=None):
-        """Instructs the agent to 'Cut 500 words' analysis -> classified cuts."""
-        return f"System Instruction: Please execute the task: 'Cut 500 words' analysis -> classified cuts. Use write_file to save the output to the project directory."
-
-    def handle_compare_chapters(self, args=None):
-        """Instructs the agent to Head-to-head Elo tournament."""
-        return f"System Instruction: Please execute the task: Head-to-head Elo tournament. Use write_file to save the output to the project directory."
-
-    def handle_reader_panel(self, args=None):
-        """Instructs the agent to 4-persona novel-level evaluation."""
-        return f"System Instruction: Please execute the task: 4-persona novel-level evaluation. Use write_file to save the output to the project directory."
-
-    def handle_review(self, args=None):
-        """Instructs the agent to Opus dual-persona review with stopping conditions."""
-        return f"System Instruction: Please execute the task: Opus dual-persona review with stopping conditions. Use write_file to save the output to the project directory."
-
-    def handle_gen_brief(self, args=None):
-        """Instructs the agent to Auto-generate revision briefs from feedback."""
-        return f"System Instruction: Please execute the task: Auto-generate revision briefs from feedback. Use write_file to save the output to the project directory."
-
-    def handle_gen_revision(self, args=None):
-        """Instructs the agent to Rewrite a chapter from a revision brief."""
-        return f"System Instruction: Please execute the task: Rewrite a chapter from a revision brief. Use write_file to save the output to the project directory."
-
-    def handle_apply_cuts(self, args=None):
-        """Instructs the agent to Batch adversarial cut applicator."""
-        return f"System Instruction: Please execute the task: Batch adversarial cut applicator. Use write_file to save the output to the project directory."
-
-    def handle_gen_art(self, args=None):
-        """Instructs the agent to Art pipeline: style, curate, ornaments, vectorize."""
-        return f"System Instruction: Please execute the task: Art pipeline: style, curate, ornaments, vectorize. Use write_file to save the output to the project directory."
-
-    def handle_gen_art_directions(self, args=None):
-        """Instructs the agent to Generate diverse art directions for curation."""
-        return f"System Instruction: Please execute the task: Generate diverse art directions for curation. Use write_file to save the output to the project directory."
-
-    def handle_gen_cover_composite(self, args=None):
-        """Instructs the agent to Text overlay on cover art."""
-        return f"System Instruction: Please execute the task: Text overlay on cover art. Use write_file to save the output to the project directory."
-
-    def handle_gen_cover_print(self, args=None):
-        """Instructs the agent to Print-ready full-wrap cover (Lulu/KDP specs)."""
-        return f"System Instruction: Please execute the task: Print-ready full-wrap cover (Lulu/KDP specs). Use write_file to save the output to the project directory."
-
-    def handle_gen_audiobook_script(self, args=None):
-        """Instructs the agent to Parse chapters into speaker-attributed scripts."""
-        return f"System Instruction: Please execute the task: Parse chapters into speaker-attributed scripts. Use write_file to save the output to the project directory."
-
-    def handle_gen_audiobook(self, args=None):
-        """Instructs the agent to Generate multi-voice audio via ElevenLabs."""
-        return f"System Instruction: Please execute the task: Generate multi-voice audio via ElevenLabs. Use write_file to save the output to the project directory."
-
-    def handle_run_pipeline(self, args=None):
-        """Instructs the agent to Full pipeline orchestrator (seed -> finished novel)."""
-        return f"System Instruction: Please execute the task: Full pipeline orchestrator (seed -> finished novel). Use write_file to save the output to the project directory."
-
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
     async def handle_cad_request(self, prompt):
