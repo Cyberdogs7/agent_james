@@ -1,5 +1,52 @@
 from backend.time_utils import set_time_format_tool, get_datetime_tool
 
+# --- Novel Writing Mode Tools ---
+
+commit_novel_changes_tool = {
+    "name": "commit_novel_changes",
+    "description": "Initializes a git repository in the current project (if not exists), stages all changes, and commits them. Use this to save the novel's progress.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "message": {
+                "type": "STRING",
+                "description": "The commit message describing the progress (e.g., 'Drafted chapter 1')."
+            }
+        },
+        "required": ["message"]
+    }
+}
+
+generate_novel_foundation_tool = {
+    "name": "generate_novel_foundation",
+    "description": "Generates foundational documents for a novel (world.md, characters.md, outline.md). This tool returns an instruction prompt directing you to create these files. Call this when starting a new novel.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "seed_idea": {
+                "type": "STRING",
+                "description": "The seed concept or idea for the novel."
+            }
+        },
+        "required": ["seed_idea"]
+    }
+}
+
+draft_novel_chapter_tool = {
+    "name": "draft_novel_chapter",
+    "description": "Drafts a new chapter for the novel. This tool returns an instruction prompt directing you to read the outline and write the next chapter in the chapters/ directory.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "chapter_number": {
+                "type": "INTEGER",
+                "description": "The number of the chapter to draft."
+            }
+        },
+        "required": ["chapter_number"]
+    }
+}
+
 generate_cad_tool = {
     "name": "generate_cad",
     "description": "Generates a 3D CAD model based on a prompt. Use this when the user asks to 'visualize', 'prototype', 'create a wireframe', or 'design' something in 3D.",
@@ -1021,6 +1068,9 @@ all_tools_list = [
     apply_task_fix_tool,
     dismiss_jules_session_tool,
     merge_pull_request_tool,
+    commit_novel_changes_tool,
+    generate_novel_foundation_tool,
+    draft_novel_chapter_tool,
     set_time_format_tool,
     get_datetime_tool
 ] + list(trello_tools.values()) + [

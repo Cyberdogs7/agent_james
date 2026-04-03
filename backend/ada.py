@@ -593,6 +593,11 @@ class AudioLoop:
         self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
         self.tool_registry.register("control_os", self.os_agent.control)
+
+        # Novel Writing Mode Tools
+        self.tool_registry.register("commit_novel_changes", self.handle_commit_novel_changes)
+        self.tool_registry.register("generate_novel_foundation", self.handle_generate_novel_foundation)
+        self.tool_registry.register("draft_novel_chapter", self.handle_draft_novel_chapter)
         self.tool_registry.register("set_auto_merge_threshold", lambda hours: f"Auto-merge threshold set to {hours} hours." if self.project_manager.update_project_config({"auto_merge_threshold": int(hours * 3600)})[0] else "Failed.")
         self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
         self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
@@ -625,6 +630,29 @@ class AudioLoop:
         # Music Agent Tools
         self.tool_registry.register("play_music", self.music_agent.play)
         self.tool_registry.register("control_music", self.music_agent.control)
+
+    # --- Novel Writing Mode Handlers ---
+    async def handle_commit_novel_changes(self, message):
+        """Initializes repo if needed, stages, and commits changes."""
+        repo_path = self.project_manager.get_current_project_path()
+        init_success, init_msg = await self.git_agent.init_git_repo(repo_path)
+        if not init_success:
+            return f"Error: {init_msg}"
+
+        stage_success, stage_msg = await self.git_agent.stage_all(repo_path)
+        if not stage_success:
+            return f"Error staging changes: {stage_msg}"
+
+        commit_success, commit_msg = await self.git_agent.commit_changes(repo_path, message)
+        return commit_msg if commit_success else f"Error: {commit_msg}"
+
+    def handle_generate_novel_foundation(self, seed_idea):
+        """Instructs the agent to generate foundational files."""
+        return f"System Instruction: Please generate world.md, characters.md, and outline.md based on this seed idea: {seed_idea}. Use write_file to save them to the project directory."
+
+    def handle_draft_novel_chapter(self, chapter_number):
+        """Instructs the agent to draft a chapter."""
+        return f"System Instruction: Please read outline.md, then draft chapter {chapter_number} and save it to 'chapters/ch_{chapter_number:02d}.md' using write_file."
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
     async def handle_cad_request(self, prompt):
