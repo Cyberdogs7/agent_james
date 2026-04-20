@@ -154,7 +154,7 @@ class JulesAgent:
 
         return await self.spawn_agent(final_prompt, source, role, callback)
 
-    def start_polling(self, session_id, callback=None):
+    def start_polling(self, session_id, callback=None, interceptor_callback=None):
         """Starts a background task to poll a specific session for updates."""
         if session_id in self.polling_tasks:
             self._log(f"[JULES_AGENT] Already polling session: {session_id}")
@@ -162,7 +162,7 @@ class JulesAgent:
 
         self._log(f"[JULES_AGENT] Starting active polling for session: {session_id}")
         stop_event = asyncio.Event()
-        task = asyncio.create_task(self._poll_loop(session_id, stop_event, callback))
+        task = asyncio.create_task(self._poll_loop(session_id, stop_event, callback, interceptor_callback))
         self.polling_tasks[session_id] = {"task": task, "stop_event": stop_event}
 
         # Cleanup callback
@@ -183,7 +183,7 @@ class JulesAgent:
             return f"Session stopped and dismissed: {self.project_manager.dismiss_jules_session(session_id)[1]}"
         return "Session stopped."
 
-    async def _poll_loop(self, session_id, stop_event, callback):
+    async def _poll_loop(self, session_id, stop_event, callback, interceptor_callback=None):
         """Internal loop to poll for updates on a session."""
         last_activity_count = 0
         last_activity_time = datetime.now()
@@ -204,12 +204,22 @@ class JulesAgent:
                             message = None
                             insight = None
                             if "agentMessage" in activity:
-                                content = activity["agentMessage"]["content"]
-                                insight = content
-                                if "feedback" in content.lower():
-                                    message = f"Jules is asking for feedback on session {session_id}. Please respond."
+                                msg_content = activity["agentMessage"]["content"]
+                                insight = msg_content
+
+                                # Use interceptor if available for agent messages
+                                if interceptor_callback:
+                                    if asyncio.iscoroutinefunction(interceptor_callback):
+                                        await interceptor_callback(session_id, msg_content)
+                                    else:
+                                        interceptor_callback(session_id, msg_content)
+                                    # Skip the normal callback so A.D.A. triage can handle it
+                                    continue
                                 else:
-                                    message = content
+                                    if "feedback" in msg_content.lower():
+                                        message = f"Jules is asking for feedback on session {session_id}. Please respond."
+                                    else:
+                                        message = msg_content
                             elif "plan" in activity:
                                 message = "Jules has generated a plan."
                                 insight = "Generating Plan..."

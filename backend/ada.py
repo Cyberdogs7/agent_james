@@ -264,6 +264,74 @@ class AudioLoop:
         """Handles UI and voice notifications for Jules session status changes."""
         notification_text = f"Jules task '{title}' has moved to {new_state}."
         self.notify_user(notification_text, duration=20000)
+
+    async def _handle_jules_triage(self, session_id, message_content):
+        """
+        Intercepts Jules agent messages, acts as a manager using Ollama to triage,
+        and either auto-replies or escalates to the human user.
+        """
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TRIAGE] Intercepted Jules message for session {session_id}: {message_content[:50]}...")
+
+        # 1. Construct Context
+        context = ""
+        if self.project_manager:
+            context = self.project_manager.get_project_context_summary() or "No specific project context available."
+
+        # 2. Build Triage Prompt
+        triage_prompt = f"""
+You are an engineering manager. Your developer 'Jules' (Session ID: {session_id}) just sent this message:
+
+"{message_content}"
+
+Project Context:
+{context}
+
+Can you answer this question or resolve this blocker immediately using your general engineering knowledge and the provided context?
+If YES: Output ONLY a direct, helpful, and concise response to send back to Jules. Do not include introductory text.
+If NO (it requires high-level human approval, PR review, external API keys, or complex product decisions): Output EXACTLY the word "ESCALATE:" followed by a brief summary of why human attention is needed.
+"""
+
+        # 3. Call internal LLM (Ollama)
+        try:
+            # Reusing the existing OllamaAgent for internal reasoning
+            triage_response = await self.ollama_agent.chat(triage_prompt, role="manager_triage")
+
+            if not triage_response:
+                # Fallback to escalate if LLM fails
+                self.notify_user(f"Jules task {session_id} requires attention: {message_content[:100]}...", duration=20000)
+                return
+
+            triage_response = triage_response.strip()
+
+            if triage_response.startswith("ESCALATE:"):
+                # Human needed!
+                escalation_reason = triage_response.replace("ESCALATE:", "").strip()
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [TRIAGE] ESCALATING session {session_id}. Reason: {escalation_reason}")
+
+                # Notify the user
+                self.notify_user(f"Jules task {session_id} escalated: {escalation_reason}", duration=20000)
+
+                # Optionally update UI or slack
+                if self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):
+                    self.slack_agent.send_message(f"🚨 *Escalation* for Jules Task `{session_id}`:\n{escalation_reason}")
+            else:
+                # Auto-reply!
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [TRIAGE] AUTO-REPLYING to session {session_id}: {triage_response}")
+
+                # Send message back to Jules
+                await self.jules_agent.send_message(session_id, triage_response)
+
+                # Briefly notify UI so user knows Ada handled it
+                self.notify_user(f"Auto-replied to Jules task {session_id}.", duration=5000, send_voice=False)
+
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Triage failed for {session_id}: {e}")
+            self.notify_user(f"Jules task {session_id} sent a message: {message_content[:50]}...", duration=20000)
+
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
@@ -1046,7 +1114,7 @@ class AudioLoop:
         if session_id not in self.jules_agent.polling_tasks:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
-            self.jules_agent.start_polling(session_id, callback=_jules_update_callback)
+            self.jules_agent.start_polling(session_id, callback=_jules_update_callback, interceptor_callback=self._handle_jules_triage)
 
         response = await self.jules_agent.send_message(session_id, feedback)
         if response:
