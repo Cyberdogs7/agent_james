@@ -1281,6 +1281,18 @@ async def get_project_config(sid):
         await sio.emit('project_config', config)
 
 @sio.event
+async def toggle_writing_mode(sid, data):
+    if audio_loop and audio_loop.project_manager:
+        enable = data.get('enable', False)
+        success, msg = audio_loop.project_manager.update_project_config({'mode': 'writing' if enable else 'default'})
+        if success:
+            await sio.emit('status', {'msg': f"Writing mode {'enabled' if enable else 'disabled'}"})
+            config = audio_loop.project_manager.get_project_config()
+            await sio.emit('project_config', config)
+        else:
+            await sio.emit('error', {'msg': msg})
+
+@sio.event
 async def update_project_config(sid, data):
     if audio_loop and audio_loop.project_manager:
         success, msg = audio_loop.project_manager.update_project_config(data)

@@ -1,5 +1,358 @@
 from backend.time_utils import set_time_format_tool, get_datetime_tool
 
+# --- Novel Writing Mode Tools ---
+
+commit_novel_changes_tool = {
+    "name": "commit_novel_changes",
+    "description": "Initializes a git repository in the current project (if not exists), stages all changes, and commits them. Use this to save the novel's progress.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "message": {
+                "type": "STRING",
+                "description": "The commit message describing the progress (e.g., 'Drafted chapter 1')."
+            }
+        },
+        "required": ["message"]
+    }
+}
+
+seed_tool = {
+    "name": "seed",
+    "description": "Generate seed concepts. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_world_tool = {
+    "name": "gen_world",
+    "description": "Seed -> world bible. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_characters_tool = {
+    "name": "gen_characters",
+    "description": "Seed + world -> character registry. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_outline_tool = {
+    "name": "gen_outline",
+    "description": "Outline with beats and foreshadowing. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_outline_part2_tool = {
+    "name": "gen_outline_part2",
+    "description": "Foreshadowing ledger. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_canon_tool = {
+    "name": "gen_canon",
+    "description": "Cross-reference hard facts. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+voice_fingerprint_tool = {
+    "name": "voice_fingerprint",
+    "description": "Voice analysis and discovery. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+draft_chapter_tool = {
+    "name": "draft_chapter",
+    "description": "Write a single chapter with anti-pattern rules. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+run_drafts_tool = {
+    "name": "run_drafts",
+    "description": "Batch sequential chapter drafter. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+evaluate_tool = {
+    "name": "evaluate",
+    "description": "Mechanical slop scorer + LLM judge. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+adversarial_edit_tool = {
+    "name": "adversarial_edit",
+    "description": "'Cut 500 words' analysis -> classified cuts. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+compare_chapters_tool = {
+    "name": "compare_chapters",
+    "description": "Head-to-head Elo tournament. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+reader_panel_tool = {
+    "name": "reader_panel",
+    "description": "4-persona novel-level evaluation. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+review_tool = {
+    "name": "review",
+    "description": "Opus dual-persona review with stopping conditions. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_brief_tool = {
+    "name": "gen_brief",
+    "description": "Auto-generate revision briefs from feedback. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_revision_tool = {
+    "name": "gen_revision",
+    "description": "Rewrite a chapter from a revision brief. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+apply_cuts_tool = {
+    "name": "apply_cuts",
+    "description": "Batch adversarial cut applicator. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_art_tool = {
+    "name": "gen_art",
+    "description": "Art pipeline: style, curate, ornaments, vectorize. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_art_directions_tool = {
+    "name": "gen_art_directions",
+    "description": "Generate diverse art directions for curation. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_cover_composite_tool = {
+    "name": "gen_cover_composite",
+    "description": "Text overlay on cover art. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_cover_print_tool = {
+    "name": "gen_cover_print",
+    "description": "Print-ready full-wrap cover (Lulu/KDP specs). This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_audiobook_script_tool = {
+    "name": "gen_audiobook_script",
+    "description": "Parse chapters into speaker-attributed scripts. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+gen_audiobook_tool = {
+    "name": "gen_audiobook",
+    "description": "Generate multi-voice audio via ElevenLabs. This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
+run_pipeline_tool = {
+    "name": "run_pipeline",
+    "description": "Full pipeline orchestrator (seed -> finished novel). This tool returns an instruction prompt directing you to perform this task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "args": {
+                "type": "STRING",
+                "description": "Optional arguments for the tool."
+            }
+        }
+    }
+}
+
 generate_cad_tool = {
     "name": "generate_cad",
     "description": "Generates a 3D CAD model based on a prompt. Use this when the user asks to 'visualize', 'prototype', 'create a wireframe', or 'design' something in 3D.",
@@ -1021,6 +1374,31 @@ all_tools_list = [
     apply_task_fix_tool,
     dismiss_jules_session_tool,
     merge_pull_request_tool,
+    commit_novel_changes_tool,
+    seed_tool,
+    gen_world_tool,
+    gen_characters_tool,
+    gen_outline_tool,
+    gen_outline_part2_tool,
+    gen_canon_tool,
+    voice_fingerprint_tool,
+    draft_chapter_tool,
+    run_drafts_tool,
+    evaluate_tool,
+    adversarial_edit_tool,
+    compare_chapters_tool,
+    reader_panel_tool,
+    review_tool,
+    gen_brief_tool,
+    gen_revision_tool,
+    apply_cuts_tool,
+    gen_art_tool,
+    gen_art_directions_tool,
+    gen_cover_composite_tool,
+    gen_cover_print_tool,
+    gen_audiobook_script_tool,
+    gen_audiobook_tool,
+    run_pipeline_tool,
     set_time_format_tool,
     get_datetime_tool
 ] + list(trello_tools.values()) + [

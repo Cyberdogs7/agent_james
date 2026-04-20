@@ -30,6 +30,23 @@ class GitAgent:
         except Exception as e:
             return -1, "", str(e)
 
+    async def init_git_repo(self, repo_path):
+        """Initializes a git repository if one doesn't exist."""
+        git_dir = os.path.join(repo_path, ".git")
+        if not os.path.exists(git_dir):
+            code, out, err = await self._run_git(["init"], cwd=repo_path)
+            if code == 0:
+                return True, f"Initialized git repo: {out}"
+            return False, f"Git init failed: {err}"
+        return True, "Git repo already initialized."
+
+    async def stage_all(self, repo_path):
+        """Stages all changes in the repo."""
+        code, out, err = await self._run_git(["add", "."], cwd=repo_path)
+        if code == 0:
+            return True, "Staged all changes."
+        return False, f"Git add failed: {err}"
+
     async def get_current_branch(self, repo_path):
         code, out, err = await self._run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path)
         if code == 0:

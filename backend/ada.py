@@ -75,6 +75,7 @@ from backend.scraper_agent import ScraperAgent
 from backend.proactive_agent import ProactiveAgent
 from backend.os_agent import OSAgent
 from backend.music_agent import MusicAgent
+from backend.writing_agent import WritingAgent
 from backend.ollama_agent import OllamaAgent
 from backend.fs_agent import FileSystemAgent
 from backend.git_agent import GitAgent
@@ -191,6 +192,7 @@ class AudioLoop:
         self.ollama_agent = OllamaAgent()
         self.fs_agent = FileSystemAgent(self.project_manager)
         self.git_agent = GitAgent(self.project_manager)
+        self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
 
         self.sct = None
 
@@ -593,15 +595,46 @@ class AudioLoop:
         self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
         self.tool_registry.register("control_os", self.os_agent.control)
+
+        # Novel Writing Mode Tools
+        self.tool_registry.register("commit_novel_changes", self.writing_agent.commit_novel_changes)
+        self.tool_registry.register("seed", self.writing_agent.seed)
+        self.tool_registry.register("gen_world", self.writing_agent.gen_world)
+        self.tool_registry.register("gen_characters", self.writing_agent.gen_characters)
+        self.tool_registry.register("gen_outline", self.writing_agent.gen_outline)
+        self.tool_registry.register("gen_outline_part2", self.writing_agent.gen_outline_part2)
+        self.tool_registry.register("gen_canon", self.writing_agent.gen_canon)
+        self.tool_registry.register("voice_fingerprint", self.writing_agent.voice_fingerprint)
+        self.tool_registry.register("draft_chapter", self.writing_agent.draft_chapter)
+        self.tool_registry.register("run_drafts", self.writing_agent.run_drafts)
+        self.tool_registry.register("evaluate", self.writing_agent.evaluate)
+        self.tool_registry.register("adversarial_edit", self.writing_agent.adversarial_edit)
+        self.tool_registry.register("compare_chapters", self.writing_agent.compare_chapters)
+        self.tool_registry.register("reader_panel", self.writing_agent.reader_panel)
+        self.tool_registry.register("review", self.writing_agent.review)
+        self.tool_registry.register("gen_brief", self.writing_agent.gen_brief)
+        self.tool_registry.register("gen_revision", self.writing_agent.gen_revision)
+        self.tool_registry.register("apply_cuts", self.writing_agent.apply_cuts)
+        self.tool_registry.register("gen_art", self.writing_agent.gen_art)
+        self.tool_registry.register("gen_art_directions", self.writing_agent.gen_art_directions)
+        self.tool_registry.register("gen_cover_composite", self.writing_agent.gen_cover_composite)
+        self.tool_registry.register("gen_cover_print", self.writing_agent.gen_cover_print)
+        self.tool_registry.register("gen_audiobook_script", self.writing_agent.gen_audiobook_script)
+        self.tool_registry.register("gen_audiobook", self.writing_agent.gen_audiobook)
+        self.tool_registry.register("run_pipeline", self.writing_agent.run_pipeline)
+        self.tool_registry.register("build_arc_summary", self.writing_agent.build_arc_summary)
+        self.tool_registry.register("build_outline", self.writing_agent.build_outline)
+        self.tool_registry.register("build_tex", self.writing_agent.build_tex)
+
         self.tool_registry.register("set_auto_merge_threshold", lambda hours: f"Auto-merge threshold set to {hours} hours." if self.project_manager.update_project_config({"auto_merge_threshold": int(hours * 3600)})[0] else "Failed.")
         self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
         self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
         self.tool_registry.register("apply_task_fix", lambda task_id: self.automation_engine.apply_fix(task_id)[1] if self.automation_engine else "Automation Engine not available.")
         self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
-
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
-        self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
 
+        # Tools returning simple strings from simple project interactions
+        self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
         self.tool_registry.register("change_voice", lambda voice_name: self._execute_project_action(self.project_manager.set_voice, False, voice_name))
         self.tool_registry.register("update_persona", lambda persona: self._execute_project_action(self.project_manager.update_persona, False, persona))
 
