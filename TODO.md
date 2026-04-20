@@ -10,12 +10,12 @@ This document serves as the single source of truth for the evolution of the A.D.
 ## 🌟 WOW / JARVIS-Level Features
 *Big, bold, aspirational capabilities that define identity.*
 
-- [ ] The Overseer
-  - Description: Coordinate specialized sub-agents to solve complex, multi-step tasks autonomously. Swarm logic coordinates specialized researchers, coders, and designers.
-  - Wow Factor: Watching a team of AI agents collaborate in real-time in the terminal/UI to build a full application.
-  - User Impact: Multiplies user capabilities by delegating entire projects instead of individual tasks.
-  - Technical Notes: `JulesAgent` orchestration and `Agency` framework.
-  - Status: Partially Implemented (Basic agent spawning & polling active; Swarm logic pending)
+- [ ] The Overseer (Fleet Commander)
+  - Description: Orchestrate a massive fleet of external developers (Jules instances). A.D.A acts as the Tech Lead/Manager, automatically triaging blockers, answering context questions, and reviewing PRs across 15-75 concurrent agents.
+  - Wow Factor: A massive multiplier effect. You act as "The Board", A.D.A acts as the Manager, and 50+ Jules agents act as your engineering team, all running asynchronously.
+  - User Impact: Infinite scale. Stop micromanaging prompts and start managing a true software factory.
+  - Technical Notes: `JulesAgent` triage interceptor (`ada.py`), internal LLM routing (`OllamaAgent`), Git update hooks, and persistent dashboarding.
+  - Status: Partially Implemented (Triage Interceptor active; Auto-PR review pending)
 
 - [ ] Project Recall
   - Description: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
