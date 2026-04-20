@@ -702,6 +702,9 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
         # Tools returning simple strings from simple project interactions
+
+        self.tool_registry.register("assign_agent_to_repo", self.handle_assign_agent)
+        self.tool_registry.register("add_task_to_repo_queue", self.handle_add_task)
         self.tool_registry.register("display_dashboard", self.handle_display_dashboard)
         self.tool_registry.register("change_voice", lambda voice_name: self._execute_project_action(self.project_manager.set_voice, False, voice_name))
         self.tool_registry.register("update_persona", lambda persona: self._execute_project_action(self.project_manager.update_persona, False, persona))
@@ -1359,6 +1362,21 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             "printers": printers,
             "git": git_status
         }
+
+
+
+    async def handle_assign_agent(self, agent_id, repo_name):
+        from backend.server import fleet_manager, sio
+        if fleet_manager.assign_agent(agent_id, repo_name):
+            await sio.emit('fleet_state_update', fleet_manager.get_state())
+            return f"Assigned {agent_id} to {repo_name}."
+        return f"Failed to assign {agent_id}. Agent may not exist."
+
+    async def handle_add_task(self, repo_name, prompt):
+        from backend.server import fleet_manager, sio
+        fleet_manager.add_task_to_queue(repo_name, prompt)
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+        return f"Task added to {repo_name} queue."
 
     async def handle_display_dashboard(self):
         dashboard_data = await self.get_dashboard_data()

@@ -8,6 +8,7 @@ if sys.platform == 'win32':
 
 import socketio
 import uvicorn
+from backend.fleet_manager import FleetManager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +35,7 @@ from kasa_agent import KasaAgent
 from project_manager import ProjectManager
 from slack_agent import SlackAgent
 from scraper_agent import ScraperAgent
+fleet_manager = FleetManager(data_file="projects/fleet_state.json")
 try:
     from backend.message_deduplicator import MessageDeduplicator
 except ImportError:
@@ -1860,3 +1862,83 @@ if __name__ == "__main__":
         loop="asyncio",
         reload_excludes=["temp_cad_gen.py", "output.stl", "*.stl"]
     )
+
+# --- Fleet Manager Socket.IO Events ---
+
+@sio.event
+async def get_fleet_state(sid):
+    state = fleet_manager.get_state()
+    await sio.emit('fleet_state_update', state, to=sid)
+
+@sio.event
+async def assign_agent_to_repo(sid, data):
+    agent_id = data.get('agent_id')
+    repo_name = data.get('repo_name')
+    if fleet_manager.assign_agent(agent_id, repo_name):
+        # Broadcast update
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+        # Check if there's a task in queue and start it
+        task = fleet_manager.get_next_task(repo_name)
+        if task and audio_loop:
+            fleet_manager.update_agent_session(agent_id, None, "working")
+            prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
+            source = f"github.com/{repo_name}" # Approximate source name
+
+            await sio.emit('status', {'msg': f"Agent {agent_id} picking up task in {repo_name}..."})
+            try:
+                # Fire and forget Jules task
+                asyncio.create_task(audio_loop.jules_agent.start_session(
+                    prompt=prompt,
+                    source=source,
+                    callback=None,
+                    role="DEFAULT"
+                ))
+            except Exception as e:
+                fleet_manager.update_agent_session(agent_id, None, "error")
+                await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
+
+@sio.event
+async def unassign_agent(sid, data):
+    agent_id = data.get('agent_id')
+    if fleet_manager.unassign_agent(agent_id):
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+@sio.event
+async def add_task_to_repo_queue(sid, data):
+    repo_name = data.get('repo_name')
+    prompt = data.get('prompt')
+    fleet_manager.add_task_to_queue(repo_name, prompt)
+    await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+    # Check if there is an idle agent assigned to this repo
+    state = fleet_manager.get_state()
+    idle_agent = next((a for a in state["agents"] if a["current_repo"] == repo_name and a["status"] == "idle"), None)
+
+    if idle_agent and audio_loop:
+        task = fleet_manager.get_next_task(repo_name)
+        if task:
+            agent_id = idle_agent["id"]
+            fleet_manager.update_agent_session(agent_id, None, "working")
+            await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+            prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
+            source = f"github.com/{repo_name}"
+            await sio.emit('status', {'msg': f"Agent {agent_id} picking up new task in {repo_name}..."})
+            try:
+                asyncio.create_task(audio_loop.jules_agent.start_session(
+                    prompt=prompt,
+                    source=source,
+                    callback=None,
+                    role="DEFAULT"
+                ))
+            except Exception as e:
+                fleet_manager.update_agent_session(agent_id, None, "error")
+                await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
+
+@sio.event
+async def remove_task_from_queue(sid, data):
+    repo_name = data.get('repo_name')
+    task_id = data.get('task_id')
+    fleet_manager.remove_task_from_queue(repo_name, task_id)
+    await sio.emit('fleet_state_update', fleet_manager.get_state())

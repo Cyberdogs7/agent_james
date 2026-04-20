@@ -28,6 +28,8 @@ import {
 import PlanVisualizer from './PlanVisualizer';
 import AutomationEditor from './AutomationEditor';
 import SwarmVisualizer from './SwarmVisualizer';
+import FleetManagerUI from './FleetManagerUI';
+
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
@@ -41,6 +43,18 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [selectedRepo, setSelectedRepo] = useState(null);
     const [swarms, setSwarms] = useState([]);
     const [viewMode, setViewMode] = useState('spatial'); // 'spatial' or 'list'
+    const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
+
+    // Add effect for fleet state
+    useEffect(() => {
+        if (socket) {
+            socket.emit('get_fleet_state');
+            const handleFleetState = (data) => setFleetState(data);
+            socket.on('fleet_state_update', handleFleetState);
+            return () => socket.off('fleet_state_update', handleFleetState);
+        }
+    }, [socket]);
+
 
     // Stream control
     useEffect(() => {
