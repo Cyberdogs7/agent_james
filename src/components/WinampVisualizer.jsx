@@ -109,8 +109,8 @@ const WinampVisualizer = ({ socket, onClose }) => {
                     <span className="text-[#00FF00] animate-pulse">⚡</span>
                 </div>
                 <div className="flex gap-1">
-                    <button onClick={() => setMode(m => m === 'spectrum' ? 'oscilloscope' : 'spectrum')} className="hover:text-white">M</button>
-                    <button onClick={onClose} className="hover:text-white"><X size={10} /></button>
+                    <button onClick={() => setMode(m => m === 'spectrum' ? 'oscilloscope' : 'spectrum')} className="hover:text-white" title="Toggle Mode" aria-label="Toggle Mode">M</button>
+                    <button onClick={onClose} className="hover:text-white" title="Close" aria-label="Close"><X size={10} /></button>
                 </div>
             </div>
 
@@ -138,17 +138,17 @@ const WinampVisualizer = ({ socket, onClose }) => {
             {/* Controls */}
             <div className="h-12 flex items-center justify-between px-2 pb-1">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm"><Square size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('play')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm"><Play size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('pause')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm"><Pause size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm"><SkipBack size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm"><SkipForward size={10} fill="#00FF00" /></button>
+                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Stop" aria-label="Stop"><Square size={10} fill="#00FF00" /></button>
+                    <button onClick={() => handleControl('play')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Play" aria-label="Play"><Play size={10} fill="#00FF00" /></button>
+                    <button onClick={() => handleControl('pause')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Pause" aria-label="Pause"><Pause size={10} fill="#00FF00" /></button>
+                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Previous Track" aria-label="Previous Track"><SkipBack size={10} fill="#00FF00" /></button>
+                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Next Track" aria-label="Next Track"><SkipForward size={10} fill="#00FF00" /></button>
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <button onClick={() => handleControl('volume_down')} className="p-1 hover:bg-[#333]">-</button>
+                    <button onClick={() => handleControl('volume_down')} className="p-1 hover:bg-[#333]" title="Volume Down" aria-label="Volume Down">-</button>
                     <Volume2 size={12} />
-                    <button onClick={() => handleControl('volume_up')} className="p-1 hover:bg-[#333]">+</button>
+                    <button onClick={() => handleControl('volume_up')} className="p-1 hover:bg-[#333]" title="Volume Up" aria-label="Volume Up">+</button>
                 </div>
             </div>
         </div>
