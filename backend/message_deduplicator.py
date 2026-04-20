@@ -17,16 +17,21 @@ class MessageDeduplicator:
         Returns True if the message is NEW (not processed).
         Returns False if the message is DUPLICATE (already processed).
         """
-        if message_id in self.processed_set:
-            return False
+        try:
+            if message_id in self.processed_set:
+                return False
 
-        # Add to deque and set
-        if len(self.processed_ids) >= self.max_size:
-            removed_id = self.processed_ids.popleft()
-            if removed_id in self.processed_set:
-                self.processed_set.remove(removed_id)
+            # Add to deque and set
+            if len(self.processed_ids) >= self.max_size:
+                removed_id = self.processed_ids.popleft()
+                if removed_id in self.processed_set:
+                    self.processed_set.remove(removed_id)
 
-        self.processed_ids.append(message_id)
-        self.processed_set.add(message_id)
-        return True
+            self.processed_ids.append(message_id)
+            self.processed_set.add(message_id)
+            return True
+        except TypeError as e:
+            logger.warning(f"Unhashable message_id type: {type(message_id)}. Error: {e}")
+            # Treat as NEW to avoid dropping messages due to hashing errors
+            return True
 
