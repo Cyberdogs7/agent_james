@@ -1,16 +1,17 @@
 import React from 'react';
-import { Mic, MicOff, Settings, Power, Video, VideoOff, Hand, Lightbulb, Printer, Globe, Box, Pen, Folder, Layout } from 'lucide-react';
+import { Mic, MicOff, Settings, Server, Power, Video, VideoOff, Hand, Lightbulb, Printer, Globe, Box, Pen, Folder, Layout } from 'lucide-react';
 
 const ToolsModule = ({
     isConnected,
     isMuted,
     isVideoOn,
     isHandTrackingEnabled,
-    showSettings,
+    showSettings, Server,
     onTogglePower,
     onToggleMute,
     onToggleVideo,
     onToggleSettings,
+    onToggleFleetSettings,
 
     onToggleHand,
     onToggleKasa,
@@ -102,6 +103,15 @@ const ToolsModule = ({
                 >
                     <Settings size={24} />
                 </button>
+
+                <button
+                    className={`p-2 sm:p-3 rounded-full shadow-[0_0_15px_rgba(255,215,0,0.15)] transition-all pointer-events-auto hover:scale-110 active:scale-95 bg-gray-900 border-gold9/30 hover:bg-gold9/10 text-gold9 border`}
+                    onClick={onToggleFleetSettings}
+                    title="Fleet Accounts"
+                >
+                    <Server size={20} className="sm:w-6 sm:h-6" />
+                </button>
+
 
                 {/* Hand Tracking Toggle */}
                 <button

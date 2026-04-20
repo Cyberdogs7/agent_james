@@ -15,6 +15,7 @@ import AuthLock from './components/AuthLock';
 import KasaWindow from './components/KasaWindow';
 import PrinterWindow from './components/PrinterWindow';
 import SettingsWindow from './components/SettingsWindow';
+import FleetSettingsWindow from './components/FleetSettingsWindow';
 import Suggestion from './components/Suggestion';
 import WarRoomDashboard from './components/WarRoomDashboard';
 import ProjectWindow from './components/ProjectWindow';
@@ -97,6 +98,7 @@ function App() {
     const [selectedSpeakerId, setSelectedSpeakerId] = useState(() => localStorage.getItem('selectedSpeakerId') || '');
     const [selectedWebcamId, setSelectedWebcamId] = useState(() => localStorage.getItem('selectedWebcamId') || '');
     const [showSettings, setShowSettings] = useState(false);
+    const [showFleetSettings, setShowFleetSettings] = useState(false);
     const [currentProject, setCurrentProject] = useState('default');
 
     // Modular Mode State
@@ -1614,6 +1616,15 @@ function App() {
                     </div>
                 </div>
 
+
+                {/* Fleet Settings Modal */}
+                {showFleetSettings && (
+                    <FleetSettingsWindow
+                        socket={socket}
+                        onClose={() => setShowFleetSettings(false)}
+                    />
+                )}
+
                 {/* Settings Modal - Moved outside Video so it shows independently */}
                 {showSettings && (
                     <SettingsWindow
@@ -1740,6 +1751,7 @@ function App() {
                         onToggleMute={toggleMute}
                         onToggleVideo={toggleVideo}
                         onToggleSettings={() => setShowSettings(!showSettings)}
+                        onToggleFleetSettings={() => setShowFleetSettings(!showFleetSettings)}
                         onToggleHand={() => setIsHandTrackingEnabled(!isHandTrackingEnabled)}
                         onToggleKasa={toggleKasaWindow}
                         showKasaWindow={showKasaWindow}

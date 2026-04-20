@@ -9,6 +9,7 @@ if sys.platform == 'win32':
 import socketio
 import uvicorn
 from backend.fleet_manager import FleetManager
+from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -232,6 +233,7 @@ kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 
 @app.on_event("startup")
 async def startup_event():
+    init_db()
     global slack_agent, scraper_agent, log_monitor
     import sys
     print(f"[SERVER DEBUG] Startup Event Triggered")
