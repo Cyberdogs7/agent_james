@@ -32,3 +32,5 @@ psutil
 pytest-asyncio
 watchdog
 pyperclip
+ytmusicapi
+yt-dlp
