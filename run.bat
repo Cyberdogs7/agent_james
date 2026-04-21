@@ -1,0 +1,3 @@
+@echo off
+echo Starting Ada-V2...
+npm run dev %*

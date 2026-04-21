@@ -86,12 +86,11 @@ function createWindow() {
 }
 
 function startPythonBackend() {
-    const scriptPath = path.join(__dirname, '../backend/server.py');
-    console.log(`Starting Python backend: ${scriptPath}`);
+    console.log(`Starting Python backend: python3 -m backend.server`);
 
     // Assuming 'python' is in PATH. In prod, this would be the executable.
-    pythonProcess = spawn('python', [scriptPath], {
-        cwd: path.join(__dirname, '../backend'),
+    pythonProcess = spawn('python', ['-m', 'backend.server'], {
+        cwd: path.join(__dirname, '..'),
     });
 
     pythonProcess.stdout.on('data', (data) => {
