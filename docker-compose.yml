@@ -1,0 +1,7 @@
+version: '3.8'
+
+services:
+  ada-v2:
+    build: .
+    environment:
+      - NODE_ENV=production
