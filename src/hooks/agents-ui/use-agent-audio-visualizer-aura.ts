@@ -5,7 +5,7 @@ import {
   animate,
   useMotionValue,
   useMotionValueEvent,
-} from 'motion/react';
+} from 'framer-motion';
 
 export type AgentState = 'idle' | 'listening' | 'speaking' | 'thinking' | 'failed' | 'disconnected' | 'pre-connect-buffering' | 'connecting' | 'initializing';
 
