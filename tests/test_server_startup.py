@@ -6,7 +6,7 @@ import sys
 
 def test_server_port_config():
     # Path to server.py
-    server_path = os.path.join("backend", "server.py")
+    server_path = "backend.server"
 
     # Set custom port
     custom_port = "9999"

@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-python-socketio
+python-socketio[asyncio_client]
 python-multipart
 # Google GenAI SDK (v1beta)
 google-genai
