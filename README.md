@@ -78,6 +78,20 @@ graph TB
 
 ## ⚡ TL;DR Quick Start (Experienced Developers)
 
+### Dockerized Execution
+
+You can build and run ADA V2 using Docker:
+
+```bash
+# Build the Docker image
+docker compose build
+
+# Run the Docker container
+docker compose up
+```
+
+### Local Setup
+
 <details>
 <summary>Click to expand quick setup commands</summary>
 
