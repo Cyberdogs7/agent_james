@@ -7,7 +7,7 @@ python3 -m pip install -r requirements.txt
 
 # Install Node Dependencies
 echo "Installing Node dependencies..."
-pnpm install
+npx pnpm install
 
 # Start the application
-npm run dev "$@"
+npx pnpm run dev "$@"
