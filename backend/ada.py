@@ -2077,6 +2077,9 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
         retry_delay = 1
         is_reconnect = False
 
+        # Start background tasks safely when event loop is running
+        self.giphy_agent.start_precaching_task()
+
         while not self.stop_event.is_set():
             if INCLUDE_RAW_LOGS:
                 print("[ADA DEBUG] [RUN] Main loop is running. Starting session runner.")
