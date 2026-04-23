@@ -14,5 +14,8 @@ if exist "node_modules\electron" rmdir /s /q "node_modules\electron"
 if exist "node_modules\.ignored_electron" rmdir /s /q "node_modules\.ignored_electron"
 npx pnpm install
 
+:: Ensure Electron binary is downloaded and correctly linked
+npx pnpm rebuild electron
+
 :: Start the application
 npx pnpm run dev %*
