@@ -6,7 +6,7 @@ const ToolsModule = ({
     isMuted,
     isVideoOn,
     isHandTrackingEnabled,
-    showSettings, Server,
+    showSettings,
     onTogglePower,
     onToggleMute,
     onToggleVideo,
