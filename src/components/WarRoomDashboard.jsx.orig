@@ -269,7 +269,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-6" style={{ WebkitAppRegion: 'no-drag', pointerEvents: 'auto' }}>
+                    <div className="flex items-center gap-6">
                         <button
                             onClick={() => setShowEditor(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"

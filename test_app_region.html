@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  .drag { -webkit-app-region: drag; position: absolute; top: 0; left: 0; width: 100%; height: 50px; background: red; z-index: 1; }
+  .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,255,0,0.5); z-index: 2; }
+  .no-drag { -webkit-app-region: no-drag; }
+</style>
+</head>
+<body>
+  <div class="drag"></div>
+  <div class="overlay">
+    <button onclick="alert('click')">Click Me (without no-drag)</button>
+    <button class="no-drag" onclick="alert('click2')">Click Me (with no-drag)</button>
+  </div>
+</body>
+</html>
