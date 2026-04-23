@@ -1853,17 +1853,69 @@ async def get_swarms(sid):
     else:
         await sio.emit('error', {'msg': "System not ready"})
 
-if __name__ == "__main__":
-    port = int(os.getenv("SERVER_PORT", 8180))
-    print(f"[SERVER] Starting server on port {port}")
-    uvicorn.run(
-        "server:app_socketio", 
-        host="127.0.0.1", 
-        port=port,
-        reload=False, # Reload enabled causes spawn of worker which might miss the event loop policy patch
-        loop="asyncio",
-        reload_excludes=["temp_cad_gen.py", "output.stl", "*.stl"]
-    )
+# --- Fleet Accounts Socket.IO Events ---
+
+@sio.event
+async def get_accounts(sid):
+    try:
+        accounts = get_all_accounts()
+        await sio.emit('accounts_update', accounts, to=sid)
+    except Exception as e:
+        await sio.emit('account_error', {'message': f"Failed to fetch accounts: {str(e)}"}, to=sid)
+
+@sio.event('add_account')
+async def add_account_event(sid, data):
+    try:
+        api_key = data.get('api_key')
+        name = data.get('name')
+        concurrent = data.get('concurrent_sessions_limit')
+        total = data.get('total_sessions_limit')
+
+        if not api_key:
+            await sio.emit('account_error', {'message': "API Key is required."}, to=sid)
+            return
+
+        account_id = add_account(api_key, name, concurrent, total)
+        if account_id is None:
+             await sio.emit('account_error', {'message': "API Key already exists."}, to=sid)
+        else:
+             accounts = get_all_accounts()
+             await sio.emit('accounts_update', accounts)
+    except Exception as e:
+        await sio.emit('account_error', {'message': f"Failed to add account: {str(e)}"}, to=sid)
+
+@sio.event('update_account')
+async def update_account_event(sid, data):
+    try:
+        account_id = data.get('id')
+        api_key = data.get('api_key')
+        name = data.get('name')
+        concurrent = data.get('concurrent_sessions_limit')
+        total = data.get('total_sessions_limit')
+
+        if not account_id or not api_key:
+             await sio.emit('account_error', {'message': "Account ID and API Key are required."}, to=sid)
+             return
+
+        update_account(account_id, api_key, name, concurrent, total)
+        accounts = get_all_accounts()
+        await sio.emit('accounts_update', accounts)
+    except Exception as e:
+        await sio.emit('account_error', {'message': f"Failed to update account: {str(e)}"}, to=sid)
+
+@sio.event('delete_account')
+async def delete_account_event(sid, data):
+    try:
+        account_id = data.get('id')
+        if not account_id:
+            await sio.emit('account_error', {'message': "Account ID is required."}, to=sid)
+            return
+
+        delete_account(account_id)
+        accounts = get_all_accounts()
+        await sio.emit('accounts_update', accounts)
+    except Exception as e:
+        await sio.emit('account_error', {'message': f"Failed to delete account: {str(e)}"}, to=sid)
 
 # --- Fleet Manager Socket.IO Events ---
 
@@ -1944,3 +1996,15 @@ async def remove_task_from_queue(sid, data):
     task_id = data.get('task_id')
     fleet_manager.remove_task_from_queue(repo_name, task_id)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+if __name__ == "__main__":
+    port = int(os.getenv("SERVER_PORT", 8180))
+    print(f"[SERVER] Starting server on port {port}")
+    uvicorn.run(
+        "server:app_socketio",
+        host="127.0.0.1",
+        port=port,
+        reload=False, # Reload enabled causes spawn of worker which might miss the event loop policy patch
+        loop="asyncio",
+        reload_excludes=["temp_cad_gen.py", "output.stl", "*.stl"]
+    )
