@@ -243,6 +243,11 @@ class AudioLoop:
         self._last_input_transcription = ""
         self._last_output_transcription = ""
 
+    def update_permissions(self, permissions):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] Updating permissions: {permissions}")
+        self.tool_permissions = permissions
+
     def set_paused(self, paused):
         self.paused = paused
 
@@ -1635,7 +1640,11 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
 
                             # Confirmation Logic
                             confirmed = True
-                            if self.tool_registry.is_confirmation_required(fc.name):
+                            requires_confirmation = self.tool_registry.is_confirmation_required(fc.name)
+                            if hasattr(self, 'tool_permissions') and fc.name in self.tool_permissions:
+                                requires_confirmation = self.tool_permissions[fc.name]
+
+                            if requires_confirmation:
                                 if self.on_tool_confirmation:
                                     import uuid
                                     request_id = str(uuid.uuid4())
