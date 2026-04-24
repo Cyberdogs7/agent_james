@@ -1704,9 +1704,27 @@ all_tools_list = [
                 "prompt": {
                     "type": "STRING",
                     "description": "The task instructions for the agent."
+                },
+                "depends_on": {
+                    "type": "STRING",
+                    "description": "Optional: the ID of a task that must complete before this one starts."
                 }
             },
             "required": ["repo_name", "prompt"]
+        }
+    },
+    {
+        "name": "clear_completed_fleet_tasks",
+        "description": "Clears all completed tasks from a repository's task queue.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "repo_name": {
+                    "type": "STRING",
+                    "description": "The name of the repository."
+                }
+            },
+            "required": ["repo_name"]
         }
     },
     {

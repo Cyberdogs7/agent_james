@@ -1924,33 +1924,69 @@ async def get_fleet_state(sid):
     state = fleet_manager.get_state()
     await sio.emit('fleet_state_update', state, to=sid)
 
+async def check_and_start_next_task(repo_name, agent_id=None):
+    """Helper to check if there are tasks and idle agents in a repo and start one."""
+    if not audio_loop:
+        return
+
+    task = fleet_manager.get_next_task(repo_name)
+    if not task:
+        return
+
+    if agent_id is None:
+        state = fleet_manager.get_state()
+        idle_agent = next((a for a in state["agents"] if a["current_repo"] == repo_name and a["status"] == "idle"), None)
+        if not idle_agent:
+            return
+        agent_id = idle_agent["id"]
+
+    fleet_manager.update_agent_session(agent_id, None, "working")
+    fleet_manager.update_task_status(repo_name, task["id"], "in_progress", agent_id)
+    await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+    prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
+    source = f"github.com/{repo_name}"
+    await sio.emit('status', {'msg': f"Agent {agent_id} picking up task in {repo_name}..."})
+
+    async def _on_jules_finished(message):
+        # Callback wrapper that looks for completion/failure signals
+        # JulesAgent sends generic messages through callback
+        # NOTE: We look for exact specific signal strings that JulesAgent emits
+        if "Jules has completed the session" in message or "Session Completed." in message:
+            print(f"[SERVER] Jules session completed for task {task['id']}")
+            fleet_manager.update_task_status(repo_name, task["id"], "completed")
+            fleet_manager.update_agent_session(agent_id, None, "idle")
+            await sio.emit('fleet_state_update', fleet_manager.get_state())
+            # Check for next task recursively now that an agent is free
+            await check_and_start_next_task(repo_name, agent_id)
+        elif "Error polling" in message or "failed" in message.lower() and ("Task Execution Failed" in message or "Exception" in message):
+            print(f"[SERVER] Jules session failed for task {task['id']}")
+            fleet_manager.update_task_status(repo_name, task["id"], "failed")
+            fleet_manager.update_agent_session(agent_id, None, "idle")
+            await sio.emit('fleet_state_update', fleet_manager.get_state())
+            # Still check next task
+            await check_and_start_next_task(repo_name, agent_id)
+
+    try:
+        asyncio.create_task(audio_loop.jules_agent.spawn_agent(
+            prompt=prompt,
+            source=source,
+            callback=_on_jules_finished,
+            role="DEFAULT"
+        ))
+    except Exception as e:
+        fleet_manager.update_task_status(repo_name, task["id"], "failed")
+        fleet_manager.update_agent_session(agent_id, None, "error")
+        await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+
 @sio.event
 async def assign_agent_to_repo(sid, data):
     agent_id = data.get('agent_id')
     repo_name = data.get('repo_name')
     if fleet_manager.assign_agent(agent_id, repo_name):
-        # Broadcast update
         await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-        # Check if there's a task in queue and start it
-        task = fleet_manager.get_next_task(repo_name)
-        if task and audio_loop:
-            fleet_manager.update_agent_session(agent_id, None, "working")
-            prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
-            source = f"github.com/{repo_name}" # Approximate source name
-
-            await sio.emit('status', {'msg': f"Agent {agent_id} picking up task in {repo_name}..."})
-            try:
-                # Fire and forget Jules task
-                asyncio.create_task(audio_loop.jules_agent.start_session(
-                    prompt=prompt,
-                    source=source,
-                    callback=None,
-                    role="DEFAULT"
-                ))
-            except Exception as e:
-                fleet_manager.update_agent_session(agent_id, None, "error")
-                await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
+        await check_and_start_next_task(repo_name, agent_id)
 
 @sio.event
 async def unassign_agent(sid, data):
@@ -1962,33 +1998,17 @@ async def unassign_agent(sid, data):
 async def add_task_to_repo_queue(sid, data):
     repo_name = data.get('repo_name')
     prompt = data.get('prompt')
-    fleet_manager.add_task_to_queue(repo_name, prompt)
+    depends_on = data.get('depends_on')
+    fleet_manager.add_task_to_queue(repo_name, prompt, depends_on)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
 
-    # Check if there is an idle agent assigned to this repo
-    state = fleet_manager.get_state()
-    idle_agent = next((a for a in state["agents"] if a["current_repo"] == repo_name and a["status"] == "idle"), None)
+    await check_and_start_next_task(repo_name)
 
-    if idle_agent and audio_loop:
-        task = fleet_manager.get_next_task(repo_name)
-        if task:
-            agent_id = idle_agent["id"]
-            fleet_manager.update_agent_session(agent_id, None, "working")
-            await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-            prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
-            source = f"github.com/{repo_name}"
-            await sio.emit('status', {'msg': f"Agent {agent_id} picking up new task in {repo_name}..."})
-            try:
-                asyncio.create_task(audio_loop.jules_agent.start_session(
-                    prompt=prompt,
-                    source=source,
-                    callback=None,
-                    role="DEFAULT"
-                ))
-            except Exception as e:
-                fleet_manager.update_agent_session(agent_id, None, "error")
-                await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
+@sio.event
+async def clear_completed_tasks(sid, data):
+    repo_name = data.get('repo_name')
+    fleet_manager.clear_completed_tasks(repo_name)
+    await sio.emit('fleet_state_update', fleet_manager.get_state())
 
 @sio.event
 async def remove_task_from_queue(sid, data):
