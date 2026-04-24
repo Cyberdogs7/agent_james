@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, onAssign, onUnassign, onAddTask, onRemoveTask }) => {
+const FleetManagerUI = ({ fleetState, onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted }) => {
     const { agents = [], repos = [] } = fleetState || {};
 
     // Derived state
@@ -44,12 +44,15 @@ const FleetManagerUI = ({ fleetState, onAssign, onUnassign, onAddTask, onRemoveT
     };
 
     const [newTaskPrompts, setNewTaskPrompts] = useState({});
+    const [newTaskDependencies, setNewTaskDependencies] = useState({});
 
     const handleAddTask = (repoName) => {
         const prompt = newTaskPrompts[repoName];
+        const dependsOn = newTaskDependencies[repoName];
         if (prompt && prompt.trim()) {
-            onAddTask(repoName, prompt.trim());
+            onAddTask(repoName, prompt.trim(), dependsOn);
             setNewTaskPrompts(prev => ({ ...prev, [repoName]: '' }));
+            setNewTaskDependencies(prev => ({ ...prev, [repoName]: '' }));
         }
     };
 
@@ -183,42 +186,103 @@ const FleetManagerUI = ({ fleetState, onAssign, onUnassign, onAddTask, onRemoveT
 
                                 {/* Task Queue */}
                                 <div className="p-4 flex-1 flex flex-col bg-[#131313]">
-                                    <div className="text-[10px] font-bold text-[#474746] mb-3 tracking-widest flex justify-between">
+                                    <div className="text-[10px] font-bold text-[#474746] mb-3 tracking-widest flex justify-between items-center">
                                         <span>TASK QUEUE ({repo.queue?.length || 0})</span>
+                                        {repo.queue?.some(t => t.status === 'completed') && (
+                                            <button
+                                                onClick={() => onClearCompleted && onClearCompleted(repo.name)}
+                                                className="text-[9px] bg-[#1C1B1B] hover:bg-[#2A2A2A] text-[#888] px-2 py-1 rounded transition-colors"
+                                            >
+                                                CLEAR COMPLETED
+                                            </button>
+                                        )}
                                     </div>
 
-                                    <div className="flex gap-2 mb-4">
-                                        <input
-                                            type="text"
-                                            value={newTaskPrompts[repo.name] || ''}
-                                            onChange={(e) => setNewTaskPrompts({...newTaskPrompts, [repo.name]: e.target.value})}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleAddTask(repo.name)}
-                                            placeholder="Assign new task..."
-                                            className="flex-1 bg-[#0E0E0E] border-b-2 border-[#201F1F] focus:border-[#FFB300] text-sm text-[#E5E2E1] font-mono px-3 py-2 outline-none transition-colors placeholder-[#474746]"
-                                        />
-                                        <button
-                                            onClick={() => handleAddTask(repo.name)}
-                                            className="bg-[#FFB300]/10 text-[#FFB300] border border-[#FFB300]/30 hover:bg-[#FFB300] hover:text-black p-2 rounded transition-all"
-                                        >
-                                            <Plus size={18} />
-                                        </button>
+                                    <div className="flex flex-col gap-2 mb-4">
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={newTaskPrompts[repo.name] || ''}
+                                                onChange={(e) => setNewTaskPrompts({...newTaskPrompts, [repo.name]: e.target.value})}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleAddTask(repo.name)}
+                                                placeholder="Assign new task..."
+                                                className="flex-1 bg-[#0E0E0E] border-b-2 border-[#201F1F] focus:border-[#FFB300] text-sm text-[#E5E2E1] font-mono px-3 py-2 outline-none transition-colors placeholder-[#474746]"
+                                            />
+                                            <button
+                                                onClick={() => handleAddTask(repo.name)}
+                                                className="bg-[#FFB300]/10 text-[#FFB300] border border-[#FFB300]/30 hover:bg-[#FFB300] hover:text-black p-2 rounded transition-all"
+                                            >
+                                                <Plus size={18} />
+                                            </button>
+                                        </div>
+                                        {repo.queue?.length > 0 && (
+                                            <select
+                                                value={newTaskDependencies[repo.name] || ''}
+                                                onChange={(e) => setNewTaskDependencies({...newTaskDependencies, [repo.name]: e.target.value})}
+                                                className="bg-[#0E0E0E] text-xs font-mono text-[#888] border border-[#201F1F] rounded p-1 outline-none"
+                                            >
+                                                <option value="">No dependencies</option>
+                                                {repo.queue.map(t => (
+                                                    <option key={t.id} value={t.id}>
+                                                        Depends on: {t.prompt.substring(0, 30)}{t.prompt.length > 30 ? '...' : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
 
                                     <div className="flex-1 overflow-y-auto space-y-2 max-h-48 scrollbar-hide">
-                                        {repo.queue?.map((task, i) => (
-                                            <div key={task.id} className="group flex justify-between items-start p-2 rounded bg-[#1C1B1B] border border-transparent hover:border-[#2A2A2A]">
-                                                <div className="flex items-start gap-2 flex-1">
-                                                    <div className="text-[#474746] font-mono text-[10px] mt-0.5 w-4">{i+1}.</div>
-                                                    <div className="text-xs text-[#C8C6C5] line-clamp-2">{task.prompt}</div>
+                                        {repo.queue?.map((task, i) => {
+                                            let taskBorder = 'border-transparent';
+                                            let taskBg = 'bg-[#1C1B1B]';
+                                            let statusText = 'PENDING';
+                                            let textStyle = 'text-[#C8C6C5]';
+
+                                            if (task.status === 'in_progress') {
+                                                taskBorder = 'border-[#FFB300]/30';
+                                                taskBg = 'bg-[#FFB300]/5';
+                                                statusText = `IN PROGRESS (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                            } else if (task.status === 'completed') {
+                                                taskBorder = 'border-green-500/30';
+                                                taskBg = 'bg-green-500/5';
+                                                statusText = 'COMPLETED';
+                                                textStyle = 'text-green-500/70 line-through';
+                                            } else if (task.status === 'failed') {
+                                                taskBorder = 'border-red-500/30';
+                                                taskBg = 'bg-red-500/5';
+                                                statusText = 'FAILED';
+                                            }
+
+                                            // Find dependency label
+                                            let dependencyLabel = null;
+                                            if (task.depends_on) {
+                                                const depTask = repo.queue.find(t => t.id === task.depends_on);
+                                                if (depTask) {
+                                                    dependencyLabel = `Depends on: ${depTask.prompt.substring(0, 20)}...`;
+                                                }
+                                            }
+
+                                            return (
+                                                <div key={task.id} className={`group flex justify-between items-start p-2 rounded ${taskBg} border ${taskBorder} hover:border-[#2A2A2A] transition-colors`}>
+                                                    <div className="flex items-start gap-2 flex-1">
+                                                        <div className="text-[#474746] font-mono text-[10px] mt-0.5 w-4">{i+1}.</div>
+                                                        <div className="flex flex-col">
+                                                            <div className={`text-xs ${textStyle} line-clamp-2`}>{task.prompt}</div>
+                                                            <div className="flex gap-2 mt-1">
+                                                                <span className="text-[9px] font-mono text-[#888]">{statusText}</span>
+                                                                {dependencyLabel && <span className="text-[9px] font-mono text-orange-500/50">{dependencyLabel}</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => onRemoveTask(repo.name, task.id)}
+                                                        className="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-500 transition-opacity p-1"
+                                                    >
+                                                        <Plus size={14} className="rotate-45" />
+                                                    </button>
                                                 </div>
-                                                <button
-                                                    onClick={() => onRemoveTask(repo.name, task.id)}
-                                                    className="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-500 transition-opacity p-1"
-                                                >
-                                                    <Plus size={14} className="rotate-45" />
-                                                </button>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                         {(!repo.queue || repo.queue.length === 0) && (
                                             <div className="flex flex-col items-center justify-center text-[#474746] py-6 opacity-50">
                                                 <Inbox size={24} className="mb-2" />

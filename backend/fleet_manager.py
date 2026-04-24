@@ -57,16 +57,37 @@ class FleetManager:
             self.repos[repo_name] = {"name": repo_name, "queue": []}
             self.save_state()
 
-    def add_task_to_queue(self, repo_name, prompt):
+    def add_task_to_queue(self, repo_name, prompt, depends_on=None):
         self.ensure_repo(repo_name)
         task_id = f"task_{int(time.time()*1000)}"
-        self.repos[repo_name]["queue"].append({"id": task_id, "prompt": prompt})
+        self.repos[repo_name]["queue"].append({
+            "id": task_id,
+            "prompt": prompt,
+            "status": "pending", # pending, in_progress, completed, failed
+            "depends_on": depends_on,
+            "agent_id": None
+        })
         self.save_state()
         return task_id
+
+    def update_task_status(self, repo_name, task_id, status, agent_id=None):
+        if repo_name in self.repos:
+            for task in self.repos[repo_name]["queue"]:
+                if task["id"] == task_id:
+                    task["status"] = status
+                    if agent_id is not None:
+                        task["agent_id"] = agent_id
+                    break
+            self.save_state()
 
     def remove_task_from_queue(self, repo_name, task_id):
         if repo_name in self.repos:
             self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t["id"] != task_id]
+            self.save_state()
+
+    def clear_completed_tasks(self, repo_name):
+        if repo_name in self.repos:
+            self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t.get("status") != "completed"]
             self.save_state()
 
     def assign_agent(self, agent_id, repo_name):
@@ -100,8 +121,21 @@ class FleetManager:
             self.save_state()
 
     def get_next_task(self, repo_name):
+        """Returns the next pending task whose dependencies are satisfied."""
         if repo_name in self.repos and self.repos[repo_name]["queue"]:
-            return self.repos[repo_name]["queue"].pop(0)
+            queue = self.repos[repo_name]["queue"]
+            # Pre-compute ALL task states for dependency checking
+            # If a task is no longer in the queue (e.g., cleared), its status is 'cleared'
+            task_status = {t["id"]: t.get("status") for t in queue}
+
+            for task in queue:
+                if task.get("status", "pending") == "pending":
+                    depends_on = task.get("depends_on")
+                    # Task is unblocked if it has no dependency, OR
+                    # if the dependency is completed, OR
+                    # if the dependency is no longer in the queue (was cleared).
+                    if not depends_on or task_status.get(depends_on) == "completed" or depends_on not in task_status:
+                        return task
         return None
 
     def check_stuck_and_idle_agents(self):

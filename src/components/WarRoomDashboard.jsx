@@ -328,10 +328,27 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             >
                                 OBJECTIVES
                             </button>
+                            <button
+                                onClick={() => setActiveTab('fleet')}
+                                className={`text-sm font-bold tracking-widest transition-colors ${activeTab === 'fleet' ? 'text-gold9' : 'text-gold9/40 hover:text-gold9/70'}`}
+                            >
+                                FLEET
+                            </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
-                            {activeTab === 'tasks' ? (
+                            {activeTab === 'fleet' ? (
+                                <div className="h-full w-full rounded overflow-hidden">
+                                    <FleetManagerUI
+                                        fleetState={fleetState}
+                                        onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
+                                        onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
+                                        onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
+                                        onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
+                                        onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
+                                    />
+                                </div>
+                            ) : activeTab === 'tasks' ? (
                                 tasks.length === 0 ? (
                                     <div className="text-center text-gold9/40 py-10 italic text-xs">
                                         No active worker nodes.
