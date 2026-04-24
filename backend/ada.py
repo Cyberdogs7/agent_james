@@ -1890,6 +1890,9 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
         if event['type'] == 'git_commit':
             msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
             self.notify_user(msg)
+        elif event['type'] == 'trello_move':
+            msg = f"New card '{event.get('card_name')}' added to Trello list '{event.get('list_name')}' in board '{event.get('board_name')}'."
+            self.notify_user(msg)
         elif event['type'] == 'notification':
             msg = event.get('message', 'No message provided.')
             self.notify_user(msg)
