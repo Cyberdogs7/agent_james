@@ -61,6 +61,7 @@ class AutomationEngine:
 
         # Start Git Monitor Task
         asyncio.create_task(self._monitor_git_loop())
+        asyncio.create_task(self._monitor_trello_loop())
 
         while not self.stop_event.is_set():
             try:
@@ -115,6 +116,83 @@ class AutomationEngine:
                 print(f"[AutomationEngine] Git Monitor Error: {e}")
 
             await asyncio.sleep(30)
+
+
+    async def _monitor_trello_loop(self):
+        """Background task to monitor Trello lists for new cards."""
+        try:
+            from backend.trello_agent import TrelloAgent
+            trello_agent = TrelloAgent()
+        except Exception as e:
+            print(f"[AutomationEngine] Trello monitor not started: {e}")
+            return
+
+        print("[AutomationEngine] Starting Trello monitor loop...")
+
+        seen_cards = {} # list_id -> set of card ids
+        first_run = True
+
+        while not self.stop_event.is_set():
+            try:
+                # 1. Collect all Trello triggers from all projects
+                trello_lists_to_monitor = set()
+                projects = self.project_manager.list_projects()
+                for project_name in projects:
+                    project_path = self.project_manager.get_project_path(project_name)
+                    temp_manager = self.task_manager.__class__(project_path)
+                    tasks = temp_manager.list_tasks()
+                    for task in tasks:
+                        if task.get('status') == 'active':
+                            trigger = task.get('trigger', {})
+                            if trigger.get('type') == 'trello':
+                                list_name = trigger.get('value')
+                                if list_name:
+                                    trello_lists_to_monitor.add(list_name.lower())
+
+                if trello_lists_to_monitor:
+                    # Fetch all boards and lists to find matching list IDs
+                    boards = await trello_agent.list_boards()
+                    if boards:
+                        for board in boards:
+                            board_id = board.get('id')
+                            lists = await trello_agent.list_lists(board_id)
+                            if lists:
+                                for lst in lists:
+                                    list_name = lst.get('name', '').lower()
+                                    if list_name in trello_lists_to_monitor:
+                                        list_id = lst.get('id')
+                                        cards = await trello_agent.list_cards(list_id)
+
+                                        if cards is not None:
+                                            current_card_ids = {card.get('id') for card in cards}
+
+                                            if list_id not in seen_cards:
+                                                # First time we see this list, just populate
+                                                seen_cards[list_id] = current_card_ids
+                                            else:
+                                                new_card_ids = current_card_ids - seen_cards[list_id]
+                                                for card_id in new_card_ids:
+                                                    # Find the full card object
+                                                    card = next((c for c in cards if c.get('id') == card_id), None)
+                                                    if card:
+                                                        event_data = {
+                                                            'card_name': card.get('name'),
+                                                            'list_name': lst.get('name'),
+                                                            'board_name': board.get('name'),
+                                                            'url': card.get('url')
+                                                        }
+                                                        print(f"[AutomationEngine] Detected New Trello Card: {card.get('name')} in {lst.get('name')}")
+                                                        await self.trigger_event('trello_move', event_data)
+                                                        if getattr(self, 'ada', None):
+                                                            await self.ada.handle_external_event({'type': 'trello_move', **event_data})
+
+                                                seen_cards[list_id] = current_card_ids
+
+                first_run = False
+            except Exception as e:
+                print(f"[AutomationEngine] Trello Monitor Error: {e}")
+
+            await asyncio.sleep(60)
 
     def stop(self):
         """Stops the automation loop."""
@@ -479,6 +557,15 @@ class AutomationEngine:
                         if target_repo == event_repo or target_repo in event_repo:
                             print(f"[AutomationEngine] Git Event matched task: '{task['title']}' in project '{project_name}'")
                             await self._execute_task(task, context=event_data, project_context=project_name)
+
+                elif trigger.get('type') == 'trello' and event_type == 'trello_move':
+                    target_list = trigger.get('value')
+                    event_list = event_data.get('list_name')
+
+                    if target_list and event_list and target_list.lower() == event_list.lower():
+                        print(f"[AutomationEngine] Trello Event matched task: '{task['title']}' in project '{project_name}'")
+                        await self._execute_task(task, context=event_data, project_context=project_name)
+
 
     async def _generate_fix(self, script_path, error_log):
         """Uses Gemini to generate a fix for a failed script."""
