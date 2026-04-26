@@ -10,6 +10,8 @@ import socketio
 import uvicorn
 from backend.fleet_manager import FleetManager
 from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
+from backend.jules_agent import JulesAgent
+import random
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
@@ -2000,7 +2002,17 @@ async def check_and_start_next_task(repo_name, agent_id=None):
 
     async def run_spawn():
         try:
-            session = await audio_loop.jules_agent.spawn_agent(
+            # Pick a fleet account randomly if available
+            accounts = get_all_accounts()
+            if accounts:
+                selected_account = random.choice(accounts)
+                fleet_api_key = selected_account.get("api_key")
+                print(f"[SERVER] Spawning task using Fleet Account: {selected_account.get('name', 'Unnamed')}")
+                agent_instance = JulesAgent(api_key=fleet_api_key, project_manager=audio_loop.project_manager)
+            else:
+                agent_instance = audio_loop.jules_agent
+
+            session = await agent_instance.spawn_agent(
                 prompt=prompt,
                 source=source,
                 callback=_on_jules_finished,
