@@ -1729,13 +1729,13 @@ all_tools_list = [
     },
     {
         "name": "control_music",
-        "description": "Controls music playback (pause, resume, next, previous, volume).",
+        "description": "Controls music playback (pause, resume, next, previous, shuffle, volume).",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "enum": ["play", "pause", "resume", "next", "previous", "volume_up", "volume_down"],
+                    "enum": ["play", "pause", "resume", "next", "previous", "shuffle", "volume_up", "volume_down"],
                     "description": "The action to perform."
                 }
             },
