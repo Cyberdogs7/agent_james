@@ -240,17 +240,18 @@ class MusicAgent:
 
             # Push to ADA's queue if available
             if self._audio_queue:
+                import array
+                import sys
+                import time
+
+                # Ensure data length is even for 16-bit PCM
+                if len(data) % 2 != 0:
+                    data = data[:-1]
+
+                arr = array.array('h', data)
+
                 # Apply volume scaling
                 if self.volume != 1.0:
-                    import array
-                    import sys
-
-                    # Ensure data length is even for 16-bit PCM
-                    if len(data) % 2 != 0:
-                        data = data[:-1]
-
-                    arr = array.array('h', data)
-
                     # Ensure little-endian byte order matches struct behavior
                     if sys.byteorder != 'little':
                         arr.byteswap()
@@ -266,18 +267,29 @@ class MusicAgent:
 
                 # Visualization logic
                 if self.sio:
-                    # Simple volume-based vis
-                    # Sample a few bytes
-                    import math
+                    try:
+                        current_time = time.time()
+                        # Rate limit visualizer emission to approx 30 fps (33ms) to avoid flooding the socket
+                        if not hasattr(self, '_last_vis_emit') or (current_time - self._last_vis_emit) >= 0.033:
+                            self._last_vis_emit = current_time
+                            # Extract real amplitude chunks for the visualizer
+                            step = max(1, len(arr) // 64)
+                            vis_data = []
+                            for i in range(64):
+                                start_idx = i * step
+                                end_idx = min(len(arr), start_idx + step)
+                                if start_idx < len(arr):
+                                    chunk = arr[start_idx:end_idx]
+                                    max_val = max(max(chunk), abs(min(chunk))) if chunk else 0
+                                    val = min(255, int((max_val / 32768.0) * 255))
+                                else:
+                                    val = 0
+                                vis_data.append(val)
 
-                    # Async emit to avoid blocking audio loop
-                    if random.random() < 0.1: # Don't flood
-                        try:
-                            # Generate pseudo-spectrum
-                            vis_data = [min(255, b + random.randint(0, 50)) for b in data[:64]]
+                            # Async emit to avoid blocking audio loop
                             asyncio.create_task(self.sio.emit('music_vis_data', {"data": vis_data}))
-                        except:
-                            pass
+                    except Exception as e:
+                        self.logger.debug(f"Vis error: {e}")
 
                 await self._audio_queue.put(data)
 
