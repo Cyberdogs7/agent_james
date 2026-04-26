@@ -75,7 +75,7 @@ const KasaWindow = ({
         <div
             id="kasa"
             onMouseDown={onMouseDown}
-            className={`absolute flex flex-col gap-2 p-4 rounded-xl backdrop-blur-md bg-black/60 border border-gold9/20 transition-all duration-200 select-none
+            className={`absolute flex flex-col gap-2 p-4 rounded-xl backdrop-blur-md bg-black/60 border border-gold9/20 ${activeDragElement === "kasa" ? "" : "transition-all duration-200"} select-none
                 ${activeDragElement === 'kasa' ? 'ring-2 ring-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)]' : 'shadow-[0_0_20px_rgba(255,215,0,0.1)]'}
             `}
             style={{

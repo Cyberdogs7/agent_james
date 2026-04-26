@@ -35,7 +35,7 @@ const ChatModule = ({
         <div
             id="chat"
             onMouseDown={onMouseDown}
-            className={`absolute px-6 py-4 pointer-events-auto transition-all duration-200 
+            className={`absolute px-6 py-4 pointer-events-auto ${activeDragElement === "chat" ? "" : "transition-all duration-200"}
             backdrop-blur-xl bg-black/40 border border-gold9/20 shadow-2xl rounded-2xl
             ${isModularMode ? (activeDragElement === 'chat' ? 'ring-2 ring-green-500' : 'ring-1 ring-yellow-500/30') : ''}
         `}

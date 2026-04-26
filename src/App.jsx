@@ -1993,7 +1993,7 @@ function App() {
         {/* Central Visualizer (AI Audio) */}
         <div
           id="visualizer"
-          className={`absolute flex items-center justify-center transition-all duration-200
+          className={`absolute flex items-center justify-center ${activeDragElement === "visualizer" ? "" : "transition-all duration-200"}
                         backdrop-blur-xl bg-black/30 border border-white/10 shadow-2xl overflow-visible
                         ${isModularMode ? (activeDragElement === "visualizer" ? "ring-2 ring-green-500 bg-green-500/10" : "ring-1 ring-yellow-500/30 bg-yellow-500/5") + " rounded-2xl pointer-events-auto" : "rounded-2xl pointer-events-none"}
                     `}
@@ -2035,7 +2035,7 @@ function App() {
 
         <div
           id="video"
-          className={`fixed bottom-4 right-4 transition-all duration-200
+          className={`fixed bottom-4 right-4 ${activeDragElement === "video" ? "" : "transition-all duration-200"}
                         ${isVideoOn ? "opacity-100" : "opacity-0 pointer-events-none"}
                         backdrop-blur-md bg-black/40 border border-white/10 shadow-xl rounded-xl
                     `}
@@ -2099,7 +2099,7 @@ function App() {
         {showCadWindow && (
           <div
             id="cad"
-            className={`absolute flex flex-col transition-all duration-200
+            className={`absolute flex flex-col ${activeDragElement === "cad" ? "" : "transition-all duration-200"}
                         backdrop-blur-xl bg-black/40 border border-white/10 shadow-2xl overflow-hidden rounded-2xl
                         ${activeDragElement === "cad" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
@@ -2146,7 +2146,7 @@ function App() {
         {showBrowserWindow && (
           <div
             id="browser"
-            className={`absolute flex flex-col transition-all duration-200
+            className={`absolute flex flex-col ${activeDragElement === "browser" ? "" : "transition-all duration-200"}
                         backdrop-blur-xl bg-black/40 border border-white/10 shadow-2xl overflow-hidden rounded-lg
                         ${activeDragElement === "browser" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
@@ -2271,7 +2271,7 @@ function App() {
         {showMusicPlayer && (
           <div
             id="music"
-            className={`absolute flex flex-col transition-all duration-200
+            className={`absolute flex flex-col ${activeDragElement === "music" ? "" : "transition-all duration-200"}
                         backdrop-blur-xl shadow-2xl overflow-hidden rounded-md
                         ${activeDragElement === "music" ? "ring-2 ring-green-500" : ""}
                     `}
