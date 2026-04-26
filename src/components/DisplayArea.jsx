@@ -3,6 +3,7 @@ import Visualizer from './Visualizer';
 import WeatherWidget from './WeatherWidget';
 import TimerCarousel from './TimerCarousel';
 import AvatarCanvas from './AvatarCanvas';
+import SelectWindow from './SelectWindow';
 import { X } from 'lucide-react';
 
 const DisplayArea = ({ socket, isListening, audioData, intensity, timers, currentProject, facePosition }) => {
@@ -100,6 +101,9 @@ const DisplayArea = ({ socket, isListening, audioData, intensity, timers, curren
       case 'widget':
         if (displayContent.widget_type === 'weather') {
           return <WeatherWidget data={displayContent.data} />;
+        }
+        if (displayContent.widget_type === 'select') {
+          return <SelectWindow options={displayContent.data.options} socket={socket} onSelect={handleDismiss} />;
         }
         return null;
       default:
