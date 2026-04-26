@@ -265,6 +265,7 @@ class AutomationEngine:
                 owner = repo.get('owner')
                 name = repo.get('name')
                 if not owner or not name: continue
+                if repo.get('auto_merge_disabled', False): continue
 
                 # List PRs
                 prs = await client.list_pull_requests(owner, name)

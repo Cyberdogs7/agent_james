@@ -55,6 +55,15 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         }
     }, [socket]);
 
+    useEffect(() => {
+        if (selectedRepo) {
+            const updatedRepo = fleetStatus.find(r => r.name === selectedRepo.name);
+            if (updatedRepo && JSON.stringify(updatedRepo) !== JSON.stringify(selectedRepo)) {
+                setSelectedRepo(updatedRepo);
+            }
+        }
+    }, [fleetStatus, selectedRepo]);
+
 
     // Stream control
     useEffect(() => {
@@ -1242,6 +1251,22 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
     const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [reviewBranch, setReviewBranch] = useState(null);
+    const [autoMergeDisabled, setAutoMergeDisabled] = useState(repo.auto_merge_disabled || false);
+
+    useEffect(() => {
+        setAutoMergeDisabled(repo.auto_merge_disabled || false);
+    }, [repo]);
+
+    const handleAutoMergeToggle = () => {
+        const newValue = !autoMergeDisabled;
+        setAutoMergeDisabled(newValue);
+        if (socket) {
+            socket.emit('update_repo_config', {
+                repo: repo.name,
+                config: { auto_merge_disabled: newValue }
+            });
+        }
+    };
 
     useEffect(() => {
         if (socket) {
@@ -1282,6 +1307,20 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
                     </div>
                     <button onClick={onClose} className="text-gold9/50 hover:text-gold9 p-2">✕</button>
                 </div>
+
+                <div className="p-4 border-b border-gold9/10 bg-black">
+                    <div className="text-sm font-bold text-gold9 mb-2 uppercase tracking-widest">Allowed Actions</div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={!autoMergeDisabled}
+                            onChange={handleAutoMergeToggle}
+                            className="accent-gold9 bg-black border-gold9"
+                        />
+                        <span className="text-xs text-gold9/80">Allow Smart Auto-Merge</span>
+                    </label>
+                </div>
+
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide space-y-2">
                     {loading ? (
                         <div className="text-center text-gold9/40 py-10 animate-pulse">Scanning Remote Refs...</div>
