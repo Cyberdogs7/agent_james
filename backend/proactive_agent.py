@@ -57,17 +57,17 @@ class ProactiveAgent:
 
             # Simple Heuristics
             if content.startswith("http://") or content.startswith("https://"):
-                return "I noticed you copied a link. Should I open it or summarize it?"
+                return f"I noticed you copied a link: {content}\n\nShould I open it or summarize it?"
 
             # Check for code-like patterns
             if any(k in content for k in ["def ", "class ", "import ", "function ", "const ", "var ", "let "]):
                 # Only if it's multi-line or long enough to be interesting
                 if len(content.split('\n')) > 1 or len(content) > 40:
-                    return "I noticed you copied some code. Should I explain it or create a file?"
+                    return f"I noticed you copied some code:\n\n```\n{content}\n```\n\nShould I explain it or create a file?"
 
             # Check for errors
             if "error" in content.lower() or "exception" in content.lower() or "traceback" in content.lower():
-                return "I noticed an error message. Should I help debug it?"
+                return f"I noticed an error message:\n\n```\n{content}\n```\n\nShould I help debug it?"
 
             return None
 
