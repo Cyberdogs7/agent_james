@@ -630,6 +630,12 @@ function App() {
             }, 10000); // Hide after 10 seconds
         });
 
+        socket.on('music_status', (data) => {
+            if (data.status === 'playing') {
+                setShowMusicPlayer(true);
+            }
+        });
+
         socket.on('display_content', (data) => {
             console.log("Received Display Content:", data);
             if (data.widget_type === 'dashboard') {
@@ -752,6 +758,7 @@ function App() {
             socket.off('print_status_update');
             socket.off('project_config');
             socket.off('error');
+            socket.off('music_status');
 
             stopMicVisualizer();
             stopVideo();
