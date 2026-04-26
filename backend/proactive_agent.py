@@ -209,9 +209,25 @@ class ProactiveAgent:
                     continue
 
                 now = datetime.now()
+                current_date = now.date()
+                greeting_type = None
+
                 if 6 <= now.hour < 12:
-                    await self._make_suggestion("Good morning! Is there anything I can help you with today?")
+                    greeting_type = "morning"
+                    suggestion_text = "Good morning! Is there anything I can help you with today?"
                 elif 12 <= now.hour < 18:
-                    await self._make_suggestion("Good afternoon! Is there a task I can help you with?")
+                    greeting_type = "afternoon"
+                    suggestion_text = "Good afternoon! Is there a task I can help you with?"
                 else:
-                    await self._make_suggestion("Good evening! Can I help you wrap up your day?")
+                    greeting_type = "evening"
+                    suggestion_text = "Good evening! Can I help you wrap up your day?"
+
+                # Suppression mechanism: only send if we haven't sent this specific greeting today
+                if getattr(self, 'last_greeting_date', None) != current_date or getattr(self, 'last_greeting_type', None) != greeting_type:
+                    self.last_greeting_date = current_date
+                    self.last_greeting_type = greeting_type
+                    await self._make_suggestion(suggestion_text)
+                else:
+                    # If we already greeted them, we don't want to just keep trying immediately
+                    # So we update last_suggestion_time to delay the next check
+                    self.last_suggestion_time = time.time()
