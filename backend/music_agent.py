@@ -4,9 +4,9 @@ import random
 import subprocess
 import threading
 import time
+import shutil
 from ytmusicapi import YTMusic
 import yt_dlp
-import imageio_ffmpeg
 
 class MusicAgent:
     def __init__(self, sio=None):
@@ -20,6 +20,8 @@ class MusicAgent:
         self.ffmpeg_process = None
         self._stop_event = asyncio.Event()
         self._audio_queue = None # Set by ada.py if pushing to global mix
+        self.internal_queue = asyncio.Queue(maxsize=2000) # Pre-buffer up to ~5.5 minutes of audio
+        self._download_task = None
 
         # Internal state
         self.volume = 1.0
@@ -49,12 +51,35 @@ class MusicAgent:
         self.logger.info("MusicAgent stopped.")
 
     async def _kill_ffmpeg(self):
+        if self._download_task:
+            self._download_task.cancel()
+            self._download_task = None
+
+        # Drain internal queue
+        while not self.internal_queue.empty():
+            try:
+                self.internal_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+
+        # Send EOF to unblock the _stream_reader task
+        try:
+            self.internal_queue.put_nowait(None)
+        except asyncio.QueueFull:
+            pass
+
+        # Immediately replace the queue so new streams start fresh
+        self.internal_queue = asyncio.Queue(maxsize=2000)
+
         if self.ffmpeg_process:
             try:
                 self.ffmpeg_process.terminate()
-                await self.ffmpeg_process.wait()
+                await asyncio.wait_for(self.ffmpeg_process.wait(), timeout=2.0)
             except:
-                pass
+                try:
+                    self.ffmpeg_process.kill()
+                except:
+                    pass
             self.ffmpeg_process = None
 
     async def play(self, query):
@@ -158,10 +183,15 @@ class MusicAgent:
             # Start Streaming via FFmpeg
             await self._kill_ffmpeg()
 
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            ffmpeg_path = shutil.which("ffmpeg")
+            if not ffmpeg_path:
+                raise Exception("ffmpeg is not installed on the system.")
+
             cmd = [
                 ffmpeg_path,
-                '-re', # Read at native frame rate (important for streaming)
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_delay_max', '5',
                 '-i', stream_url,
                 '-f', 's16le',
                 '-acodec', 'pcm_s16le',
@@ -183,6 +213,7 @@ class MusicAgent:
             self.paused = False
 
             # Start reading from stdout
+            self._download_task = asyncio.create_task(self._ffmpeg_reader())
             asyncio.create_task(self._stream_reader())
 
             if self.sio:
@@ -199,14 +230,32 @@ class MusicAgent:
             await asyncio.sleep(1) # Backoff
             asyncio.create_task(self._play_current_track())
 
+    async def _ffmpeg_reader(self):
+        """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
+        chunk_size = 8192
+        while self.is_playing and self.ffmpeg_process:
+            if self.ffmpeg_process.returncode is not None:
+                break
+
+            data = await self.ffmpeg_process.stdout.read(chunk_size)
+            if not data:
+                break
+
+            await self.internal_queue.put(data)
+
+        # Put None to signal EOF to the playback task
+        await self.internal_queue.put(None)
 
     async def _stream_reader(self):
-        """Reads from ffmpeg stdout and pushes to audio queue."""
-        chunk_size = 8192
+        """Reads from internal queue and pushes to audio queue at playback speed."""
         start_time = asyncio.get_event_loop().time()
         last_emit_time = start_time
 
-        while self.is_playing and self.ffmpeg_process:
+        # For 24kHz, 1 channel, 16-bit PCM: 48000 bytes/sec.
+        bytes_per_sec = 24000 * 1 * 2
+        total_bytes_played = 0
+
+        while self.is_playing:
             if self.paused:
                 await asyncio.sleep(0.1)
                 # Adjust start time to account for pause duration
@@ -227,15 +276,12 @@ class MusicAgent:
                     }))
                 last_emit_time = current_time
 
-            if self.ffmpeg_process.returncode is not None:
-                self.logger.info("FFmpeg process finished.")
-                self.is_playing = False
-                break
-
-            # Read chunk directly from asyncio pipe
-            data = await self.ffmpeg_process.stdout.read(chunk_size)
+            # Read chunk directly from internal cache queue
+            data = await self.internal_queue.get()
 
             if not data:
+                self.logger.info("Internal audio queue finished.")
+                self.is_playing = False
                 break
 
             # Push to ADA's queue if available
@@ -281,8 +327,16 @@ class MusicAgent:
 
                 await self._audio_queue.put(data)
 
-            # Since we used -re in ffmpeg, it limits speed, but we should yield
-            await asyncio.sleep(0) # Yield
+            # Manual rate-limiting to simulate real-time playback and handle drift
+            total_bytes_played += len(data)
+            expected_time = total_bytes_played / bytes_per_sec
+
+            # calculate actual elapsed time
+            actual_elapsed = asyncio.get_event_loop().time() - start_time
+            sleep_delay = expected_time - actual_elapsed
+
+            if sleep_delay > 0:
+                await asyncio.sleep(sleep_delay)
 
         if not self._stop_event.is_set():
              # Natural end of track, go to next
