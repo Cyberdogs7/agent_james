@@ -421,7 +421,7 @@ async def start_audio(sid, data=None):
     def on_audio_data(data_bytes):
         # We need to schedule this on the event loop
         # This is high frequency, so we might want to downsample or batch if it's too much
-        asyncio.create_task(sio.emit('audio_data', {'data': list(data_bytes)}))
+        asyncio.create_task(sio.emit('audio_data', {'data': data_bytes}))
 
     # Callback to send CAL data to frontend
     def on_cad_data(data):

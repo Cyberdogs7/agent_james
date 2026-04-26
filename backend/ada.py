@@ -1855,24 +1855,25 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 # Mixing
                 mixed_data = None
                 if voice_data and music_data:
+                    import array
                     # Match lengths (they should be roughly similar chunks)
                     min_len = min(len(voice_data), len(music_data))
                     min_len = (min_len // 2) * 2 # Ensure even number of bytes for 16-bit PCM
-                    count = min_len // 2
 
-                    v_shorts = struct.unpack(f"<{count}h", voice_data[:min_len])
-                    m_shorts = struct.unpack(f"<{count}h", music_data[:min_len])
+                    v_arr = array.array('h', voice_data[:min_len])
+                    m_arr = array.array('h', music_data[:min_len])
+                    mixed = array.array('h', v_arr)
 
-                    mixed = []
-                    for v, m in zip(v_shorts, m_shorts):
-                        # Duck music
-                        if should_duck:
-                            m = int(m * DUCK_VOLUME)
-                        # Mix and clamp
-                        sample = max(-32768, min(32767, v + m))
-                        mixed.append(sample)
+                    if should_duck:
+                        DUCK_FACTOR = int(DUCK_VOLUME * 256)
+                        for i in range(len(mixed)):
+                            m = (m_arr[i] * DUCK_FACTOR) >> 8
+                            mixed[i] = max(-32768, min(32767, mixed[i] + m))
+                    else:
+                        for i in range(len(mixed)):
+                            mixed[i] = max(-32768, min(32767, mixed[i] + m_arr[i]))
 
-                    mixed_data = struct.pack(f"<{count}h", *mixed)
+                    mixed_data = mixed.tobytes()
 
                     # If one buffer had remainder, append it (mostly edge cases)
                     if len(voice_data) > min_len:
@@ -1882,10 +1883,12 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                          m_rem_len = (len(m_rem) // 2) * 2
                          m_rem = m_rem[:m_rem_len]
                          if should_duck and m_rem_len > 0:
-                             rem_count = m_rem_len // 2
-                             rem_shorts = struct.unpack(f"<{rem_count}h", m_rem)
-                             ducked_rem = [max(-32768, min(32767, int(m * DUCK_VOLUME))) for m in rem_shorts]
-                             mixed_data += struct.pack(f"<{rem_count}h", *ducked_rem)
+                             import array
+                             rem_arr = array.array('h', m_rem)
+                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
+                             for i in range(len(rem_arr)):
+                                 rem_arr[i] = max(-32768, min(32767, (rem_arr[i] * DUCK_FACTOR) >> 8))
+                             mixed_data += rem_arr.tobytes()
                          else:
                              mixed_data += m_rem
 
@@ -1894,11 +1897,13 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 elif music_data:
                     if should_duck:
                          m_len = (len(music_data) // 2) * 2
-                         m_count = m_len // 2
-                         if m_count > 0:
-                             m_shorts = struct.unpack(f"<{m_count}h", music_data[:m_len])
-                             ducked = [max(-32768, min(32767, int(m * DUCK_VOLUME))) for m in m_shorts]
-                             mixed_data = struct.pack(f"<{m_count}h", *ducked)
+                         if m_len > 0:
+                             import array
+                             m_arr = array.array('h', music_data[:m_len])
+                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
+                             for i in range(len(m_arr)):
+                                 m_arr[i] = max(-32768, min(32767, (m_arr[i] * DUCK_FACTOR) >> 8))
+                             mixed_data = m_arr.tobytes()
                              if len(music_data) > m_len:
                                  mixed_data += music_data[m_len:]
                          else:
