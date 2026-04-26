@@ -36,7 +36,7 @@ const ToolsModule = ({
         <div
             id="tools"
             onMouseDown={onMouseDown}
-            className={`absolute px-6 py-3 transition-all duration-200 
+            className={`absolute px-6 py-3 ${activeDragElement === "tools" ? "" : "transition-all duration-200"}
                         backdrop-blur-xl bg-black/40 border border-gold9/20 shadow-2xl rounded-full`}
             style={{
                 left: position.x,

@@ -89,7 +89,7 @@ const PrinterWindow = ({
                 width: '380px',
                 zIndex: zIndex
             }}
-            className="pointer-events-auto backdrop-blur-xl bg-black/80 border border-gold9/20 rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.1)] overflow-hidden flex flex-col"
+            className={`pointer-events-auto backdrop-blur-xl bg-black/80 border border-gold9/20 rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.1)] overflow-hidden flex flex-col ${activeDragElement === "printer" ? "" : "transition-all duration-200"}`}
         >
             {/* Header */}
             <div data-drag-handle className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5 cursor-grab active:cursor-grabbing">
