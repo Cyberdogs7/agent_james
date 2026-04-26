@@ -20,6 +20,8 @@ class TestAutomation(unittest.IsolatedAsyncioTestCase):
         # Mocking get_current_project_path to return a Path object, as TaskManager expects it (or string is fine usually)
         # But my code uses `Path(project_path)` so string is fine.
         self.mock_pm.get_current_project_path.return_value = self.test_dir
+        self.mock_pm.list_projects.return_value = ["temp_project"]
+        self.mock_pm.get_project_path.return_value = self.test_dir
 
         self.engine = AutomationEngine(self.task_manager, self.mock_pm)
 

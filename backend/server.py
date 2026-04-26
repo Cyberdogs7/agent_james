@@ -1495,7 +1495,8 @@ async def get_fleet_status(sid):
                 "name": f"{owner}/{name}",
                 "branch": default_branch,
                 "status": "Remote",
-                "last_commit": commit_info
+                "last_commit": commit_info,
+                "auto_merge_disabled": repo.get('auto_merge_disabled', False)
             }
 
         tasks = [fetch_repo_status(repo) for repo in fleet]
@@ -1815,6 +1816,31 @@ async def save_github_token(sid, data):
         await sio.emit('status', {'msg': "GitHub token saved securely."})
     else:
         await sio.emit('error', {'msg': "No token provided."})
+
+@sio.event
+async def update_repo_config(sid, data):
+    repo_name = data.get("repo")
+    config = data.get("config", {})
+    if not repo_name:
+        return
+
+    pm = audio_loop.project_manager if (audio_loop and audio_loop.project_manager) else project_manager
+    if not pm:
+        return
+
+    fleet = pm.load_fleet()
+    updated = False
+    for r in fleet:
+        full_name = f"{r.get('owner')}/{r.get('name')}"
+        if full_name == repo_name:
+            for k, v in config.items():
+                r[k] = v
+            updated = True
+            break
+
+    if updated:
+        pm.save_fleet(fleet)
+        await get_fleet_status(sid)
 
 @sio.event
 async def sync_fleet(sid):
