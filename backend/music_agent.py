@@ -75,11 +75,22 @@ class MusicAgent:
             try:
                 self.ffmpeg_process.terminate()
                 await asyncio.wait_for(self.ffmpeg_process.wait(), timeout=2.0)
-            except:
+            except Exception:
                 try:
                     self.ffmpeg_process.kill()
-                except:
+                    await asyncio.wait_for(self.ffmpeg_process.wait(), timeout=2.0)
+                except Exception:
                     pass
+
+            # Extra cleanup to prevent ProactorEventLoop warnings on Windows
+            import sys
+            if sys.platform == 'win32' and hasattr(self.ffmpeg_process, '_transport'):
+                try:
+                    if self.ffmpeg_process._transport:
+                        self.ffmpeg_process._transport.close()
+                except Exception:
+                    pass
+
             self.ffmpeg_process = None
 
     async def play(self, query):
