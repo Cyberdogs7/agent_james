@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mic, MicOff, Settings, Server, Power, Video, VideoOff, Hand, Lightbulb, Printer, Globe, Box, Pen, Folder, Layout } from 'lucide-react';
+import { Mic, MicOff, Settings, Server, Power, Video, VideoOff, Globe, Activity, Music, Pen, Folder, Layout } from 'lucide-react';
 
 const ToolsModule = ({
     isConnected,
@@ -13,13 +13,10 @@ const ToolsModule = ({
     onToggleSettings,
     onToggleFleetSettings,
 
-    onToggleHand,
-    onToggleKasa,
-    showKasaWindow,
-    onTogglePrinter,
-    showPrinterWindow,
-    onToggleCad,
-    showCadWindow,
+    onToggleMusicPlayer,
+    showMusicPlayer,
+    onToggleMusicControls,
+    showMusicControls,
     onToggleBrowser,
     showBrowserWindow,
 
@@ -113,56 +110,30 @@ const ToolsModule = ({
                 </button>
 
 
-                {/* Hand Tracking Toggle */}
+                {/* Music Player / Visualizer Toggle */}
                 <button
-                    onClick={onToggleHand}
-                    title={isHandTrackingEnabled ? "Disable Hand Tracking" : "Enable Hand Tracking"}
-                    aria-label={isHandTrackingEnabled ? "Disable Hand Tracking" : "Enable Hand Tracking"}
-                    className={`p-3 rounded-full border-2 transition-all duration-300 ${isHandTrackingEnabled
-                        ? 'border-orange-500 bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 shadow-[0_0_15px_rgba(249,115,22,0.3)]'
+                    onClick={onToggleMusicPlayer}
+                    title="Toggle Music Visualizer"
+                    aria-label="Toggle Music Visualizer"
+                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showMusicPlayer
+                        ? 'border-pink-500 bg-pink-500/10 text-pink-500 hover:bg-pink-500/20 shadow-[0_0_15px_rgba(236,72,153,0.3)]'
                         : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
                         } `}
                 >
-                    <Hand size={24} />
+                    <Activity size={24} />
                 </button>
 
-                {/* Kasa Light Control */}
+                {/* Music Controls Toggle */}
                 <button
-                    onClick={onToggleKasa}
-                    title="Toggle Smart Home Controls"
-                    aria-label="Toggle Smart Home Controls"
-                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showKasaWindow
-                        ? 'border-yellow-300 bg-yellow-300/10 text-yellow-300 hover:bg-yellow-300/20 shadow-[0_0_15px_rgba(253,224,71,0.3)]'
+                    onClick={onToggleMusicControls}
+                    title="Toggle Media Controls"
+                    aria-label="Toggle Media Controls"
+                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showMusicControls
+                        ? 'border-cyan-400 bg-cyan-400/10 text-cyan-400 hover:bg-cyan-400/20 shadow-[0_0_15px_rgba(34,211,238,0.3)]'
                         : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
                         } `}
                 >
-                    <Lightbulb size={24} />
-                </button>
-
-                {/* 3D Printer Control */}
-                <button
-                    onClick={onTogglePrinter}
-                    title="Toggle 3D Printer Controls"
-                    aria-label="Toggle 3D Printer Controls"
-                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showPrinterWindow
-                        ? 'border-green-400 bg-green-400/10 text-green-400 hover:bg-green-400/20'
-                        : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
-                        } `}
-                >
-                    <Printer size={24} />
-                </button>
-
-                {/* CAD Agent Toggle */}
-                <button
-                    onClick={onToggleCad}
-                    title="Toggle CAD Agent"
-                    aria-label="Toggle CAD Agent"
-                    className={`p-3 rounded-full border-2 transition-all duration-300 ${showCadWindow
-                        ? 'border-gold9 bg-gold9/10 text-gold9 hover:bg-gold9/20 shadow-[0_0_15px_rgba(255,215,0,0.3)]'
-                        : 'border-gold8 text-gold8 hover:border-gold9 hover:text-gold9'
-                        } `}
-                >
-                    <Box size={24} />
+                    <Music size={24} />
                 </button>
 
                 {/* Web Agent Toggle */}
