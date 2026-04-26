@@ -96,6 +96,10 @@ class TestAutomation(unittest.IsolatedAsyncioTestCase):
             action_value="Commit detected"
         )
 
+        # Mock list_projects and get_project_path
+        self.mock_pm.list_projects.return_value = ["test_project"]
+        self.mock_pm.get_project_path.return_value = self.test_dir
+
         # Mock execute
         self.engine._execute_task = MagicMock()
         f = asyncio.Future()
