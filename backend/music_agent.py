@@ -41,6 +41,11 @@ class MusicAgent:
         self._stop_event.set()
         await self._kill_ffmpeg()
         self.is_playing = False
+        if self.sio:
+             await self.sio.emit('music_status', {
+                "status": "stopped",
+                "track": None
+            })
         self.logger.info("MusicAgent stopped.")
 
     async def _kill_ffmpeg(self):
@@ -265,11 +270,21 @@ class MusicAgent:
                 # Better to just discard data if paused? No, resume should pick up.
                 # Actually, simplest pause is to stop reading from stdout in the loop
                 pass
+            if self.sio:
+                 await self.sio.emit('music_status', {
+                    "status": "playing",
+                    "track": self.current_track
+                })
             return "Resumed. (Reminder: Music is now playing. Follow Music Playback Behavior: use GIFs instead of voice for simple responses.)"
 
         elif action == "pause":
             if self.is_playing:
                 self.paused = True
+                if self.sio:
+                     await self.sio.emit('music_status', {
+                        "status": "paused",
+                        "track": self.current_track
+                    })
                 return "Paused. (Music is stopped/paused. You may resume normal voice responses.)"
             return "Not playing."
 
