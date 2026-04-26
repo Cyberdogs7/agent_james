@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Minimize, Maximize, Play, Pause, Square, SkipForward, SkipBack, Volume2 } from 'lucide-react';
+import { X } from 'lucide-react';
 
 const WinampVisualizer = ({ socket, onClose }) => {
     const canvasRef = useRef(null);
@@ -96,12 +96,8 @@ const WinampVisualizer = ({ socket, onClose }) => {
         };
     }, [mode]);
 
-    const handleControl = (action) => {
-        socket.emit('control_music', { action });
-    };
-
     return (
-        <div className="flex flex-col h-full bg-[#1a1a1a] text-[#00FF00] font-mono text-xs select-none">
+        <div className="flex flex-col h-full bg-[#1a1a1a] text-[#00FF00] font-mono text-xs select-none pb-1">
             {/* Header / Title Bar */}
             <div className="h-5 bg-[#2d2d2d] flex items-center justify-between px-2 cursor-grab active:cursor-grabbing border-b border-[#4a4a4a]">
                 <div className="flex items-center gap-1">
@@ -135,22 +131,6 @@ const WinampVisualizer = ({ socket, onClose }) => {
                 </div>
             </div>
 
-            {/* Controls */}
-            <div className="h-12 flex items-center justify-between px-2 pb-1">
-                <div className="flex items-center gap-2">
-                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Stop" aria-label="Stop"><Square size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('play')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Play" aria-label="Play"><Play size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('pause')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Pause" aria-label="Pause"><Pause size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Previous Track" aria-label="Previous Track"><SkipBack size={10} fill="#00FF00" /></button>
-                    <button onClick={() => handleControl('stop')} className="p-1 hover:bg-[#333] border border-[#4a4a4a] rounded-sm" title="Next Track" aria-label="Next Track"><SkipForward size={10} fill="#00FF00" /></button>
-                </div>
-
-                <div className="flex items-center gap-1">
-                    <button onClick={() => handleControl('volume_down')} className="p-1 hover:bg-[#333]" title="Volume Down" aria-label="Volume Down">-</button>
-                    <Volume2 size={12} />
-                    <button onClick={() => handleControl('volume_up')} className="p-1 hover:bg-[#333]" title="Volume Up" aria-label="Volume Up">+</button>
-                </div>
-            </div>
         </div>
     );
 };

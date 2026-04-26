@@ -20,6 +20,7 @@ import Suggestion from './components/Suggestion';
 import WarRoomDashboard from './components/WarRoomDashboard';
 import ProjectWindow from './components/ProjectWindow';
 import WinampVisualizer from './components/WinampVisualizer';
+import MusicPlayerBar from './components/MusicPlayerBar';
 
 
 
@@ -1865,6 +1866,9 @@ function App() {
                     onClose={() => setShowWarRoom(false)}
                 />
             )}
+
+            {/* Global Music Controls */}
+            <MusicPlayerBar socket={socket} />
         </div>
     );
 }
