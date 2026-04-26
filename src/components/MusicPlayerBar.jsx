@@ -38,8 +38,9 @@ const MusicPlayerBar = ({ socket }) => {
             <div className="fixed bottom-4 right-4 z-[100]">
                 <button
                     onClick={() => setIsMinimized(false)}
-                    className="w-12 h-12 bg-[#212121] border border-[#383838] rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform shadow-lg"
+                    className="w-12 h-12 bg-[#212121] border border-[#383838] rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform shadow-lg focus-visible:ring-2 focus-visible:ring-white outline-none"
                     title="Show Music Player"
+                    aria-label="Show Music Player"
                 >
                     <ChevronUp size={24} />
                 </button>
@@ -67,22 +68,44 @@ const MusicPlayerBar = ({ socket }) => {
             {/* Center: Controls */}
             <div className="flex-1 flex flex-col items-center justify-center gap-1">
                 <div className="flex items-center gap-6">
-                    <button className="text-[#aaaaaa] hover:text-white transition-colors disabled:opacity-50" disabled>
+                    <button
+                        className="text-[#aaaaaa] hover:text-white transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
+                        disabled
+                        title="Shuffle (coming soon)"
+                        aria-label="Shuffle"
+                    >
                         <Shuffle size={18} />
                     </button>
-                    <button onClick={() => handleControl('previous')} className="text-[#aaaaaa] hover:text-white transition-colors">
+                    <button
+                        onClick={() => handleControl('previous')}
+                        className="text-[#aaaaaa] hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
+                        title="Previous Track"
+                        aria-label="Previous Track"
+                    >
                         <SkipBack size={20} fill="currentColor" />
                     </button>
                     <button
                         onClick={() => handleControl(status.status === 'playing' ? 'pause' : 'resume')}
-                        className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition-transform"
+                        className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition-transform focus-visible:ring-2 focus-visible:ring-white outline-none"
+                        title={status.status === 'playing' ? 'Pause' : 'Play'}
+                        aria-label={status.status === 'playing' ? 'Pause' : 'Play'}
                     >
                         {status.status === 'playing' ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
                     </button>
-                    <button onClick={() => handleControl('next')} className="text-[#aaaaaa] hover:text-white transition-colors">
+                    <button
+                        onClick={() => handleControl('next')}
+                        className="text-[#aaaaaa] hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
+                        title="Next Track"
+                        aria-label="Next Track"
+                    >
                         <SkipForward size={20} fill="currentColor" />
                     </button>
-                    <button className="text-[#aaaaaa] hover:text-white transition-colors disabled:opacity-50" disabled>
+                    <button
+                        className="text-[#aaaaaa] hover:text-white transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
+                        disabled
+                        title="Repeat (coming soon)"
+                        aria-label="Repeat"
+                    >
                         <Repeat size={18} />
                     </button>
                 </div>
@@ -101,17 +124,23 @@ const MusicPlayerBar = ({ socket }) => {
             {/* Right: Additional Controls */}
             <div className="w-1/3 flex items-center justify-end gap-4">
                 <div className="flex items-center gap-2 text-[#aaaaaa] group">
-                    <button onClick={() => handleControl('volume_down')} className="hover:text-white transition-colors">
+                    <button
+                        onClick={() => handleControl('volume_down')}
+                        className="hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
+                        title="Volume Down"
+                        aria-label="Volume Down"
+                    >
                         <Volume2 size={20} />
                     </button>
-                    <div className="w-24 h-1 bg-[#4d4d4d] rounded-full overflow-hidden cursor-pointer hover:h-1.5 transition-all group-hover:bg-[#5a5a5a]">
+                    <div className="w-24 h-1 bg-[#4d4d4d] rounded-full overflow-hidden cursor-pointer hover:h-1.5 transition-all group-hover:bg-[#5a5a5a]" title="Volume" aria-label="Volume Control" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
                         <div className="w-1/2 h-full bg-white rounded-full"></div>
                     </div>
                 </div>
                 <button
                     onClick={() => setIsMinimized(true)}
-                    className="text-[#aaaaaa] hover:text-white transition-colors ml-4"
+                    className="text-[#aaaaaa] hover:text-white transition-colors ml-4 focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
                     title="Hide Controls"
+                    aria-label="Hide Controls"
                 >
                     <ChevronDown size={20} />
                 </button>
