@@ -188,7 +188,8 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     };
 
     // Helper to organize sessions into swarms and solo
-    const organizeSessions = () => {
+    // ⚡ Bolt: Memoized expensive array mapping and filtering to prevent recalculation on every render
+    const { swarmGroups, soloSessions } = React.useMemo(() => {
         const swarmGroups = swarms.map(swarm => {
             const swarmSessions = jules.filter(s => swarm.sessions.includes(s.id));
             return {
@@ -201,9 +202,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         const soloSessions = jules.filter(s => !swarmSessionIds.has(s.id));
 
         return { swarmGroups, soloSessions };
-    };
-
-    const { swarmGroups, soloSessions } = organizeSessions();
+    }, [swarms, jules]);
 
     const renderSessionItem = (session, i) => {
         const { role, cleanTitle } = getRoleFromTitle(session.title || session.id);
