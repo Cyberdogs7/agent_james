@@ -52,7 +52,7 @@ class MusicAgent:
         if self.ffmpeg_process:
             try:
                 self.ffmpeg_process.terminate()
-                self.ffmpeg_process.wait()
+                await self.ffmpeg_process.wait()
             except:
                 pass
             self.ffmpeg_process = None
@@ -172,11 +172,11 @@ class MusicAgent:
                 '-' # Output to pipe
             ]
 
-            self.ffmpeg_process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                bufsize=1024 * 10
+            self.ffmpeg_process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                limit=1024 * 64
             )
 
             self.is_playing = True
@@ -202,7 +202,7 @@ class MusicAgent:
 
     async def _stream_reader(self):
         """Reads from ffmpeg stdout and pushes to audio queue."""
-        chunk_size = 1024
+        chunk_size = 8192
         start_time = asyncio.get_event_loop().time()
         last_emit_time = start_time
 
@@ -227,28 +227,42 @@ class MusicAgent:
                     }))
                 last_emit_time = current_time
 
-            if self.ffmpeg_process.poll() is not None:
+            if self.ffmpeg_process.returncode is not None:
                 self.logger.info("FFmpeg process finished.")
                 self.is_playing = False
                 break
 
-            # Read chunk in thread
-            data = await asyncio.to_thread(self.ffmpeg_process.stdout.read, chunk_size)
+            # Read chunk directly from asyncio pipe
+            data = await self.ffmpeg_process.stdout.read(chunk_size)
 
             if not data:
                 break
 
             # Push to ADA's queue if available
             if self._audio_queue:
-                import struct
-
                 # Apply volume scaling
                 if self.volume != 1.0:
-                    count = len(data) // 2
-                    shorts = struct.unpack(f"<{count}h", data)
-                    # Apply volume and clamp
-                    scaled = [max(-32768, min(32767, int(s * self.volume))) for s in shorts]
-                    data = struct.pack(f"<{count}h", *scaled)
+                    import array
+                    import sys
+
+                    # Ensure data length is even for 16-bit PCM
+                    if len(data) % 2 != 0:
+                        data = data[:-1]
+
+                    arr = array.array('h', data)
+
+                    # Ensure little-endian byte order matches struct behavior
+                    if sys.byteorder != 'little':
+                        arr.byteswap()
+
+                    vol_int = int(self.volume * 256)
+                    for i in range(len(arr)):
+                        arr[i] = max(-32768, min(32767, (arr[i] * vol_int) >> 8))
+
+                    if sys.byteorder != 'little':
+                        arr.byteswap()
+
+                    data = arr.tobytes()
 
                 # Visualization logic
                 if self.sio:
