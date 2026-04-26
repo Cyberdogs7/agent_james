@@ -6,6 +6,7 @@ import threading
 import time
 from ytmusicapi import YTMusic
 import yt_dlp
+import imageio_ffmpeg
 
 class MusicAgent:
     def __init__(self, sio=None):
@@ -91,8 +92,9 @@ class MusicAgent:
 
             # FFmpeg command to output PCM S16LE 24000Hz Mono (matching ADA's default)
             # ADA uses 24000Hz for receive/playback
+            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
             cmd = [
-                'ffmpeg',
+                ffmpeg_path,
                 '-re', # Read at native frame rate (important for streaming)
                 '-i', stream_url,
                 '-f', 's16le',
