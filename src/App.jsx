@@ -19,6 +19,7 @@ import FleetSettingsWindow from './components/FleetSettingsWindow';
 import Suggestion from './components/Suggestion';
 import WarRoomDashboard from './components/WarRoomDashboard';
 import ProjectWindow from './components/ProjectWindow';
+import WinampVisualizer from './components/WinampVisualizer';
 import MusicPlayerBar from './components/MusicPlayerBar';
 
 
@@ -71,6 +72,7 @@ function App() {
     const [showBrowserWindow, setShowBrowserWindow] = useState(false);
     const [showWarRoom, setShowWarRoom] = useState(false);
     const [showProjectWindow, setShowProjectWindow] = useState(false);
+    const [showMusicPlayer, setShowMusicPlayer] = useState(false);
     const [isWritingMode, setIsWritingMode] = useState(false);
     const [warRoomData, setWarRoomData] = useState(null);
     const [suggestion, setSuggestion] = useState(null);
@@ -111,6 +113,7 @@ function App() {
         kasa: { x: window.innerWidth / 2 + 350, y: window.innerHeight / 2 - 100 },
         printer: { x: window.innerWidth / 2 - 350, y: window.innerHeight / 2 - 100 },
         project_window: { x: window.innerWidth / 2 - 350, y: window.innerHeight / 2 + 100 },
+        music: { x: window.innerWidth / 2 + 350, y: window.innerHeight / 2 + 100 },
         tools: { x: window.innerWidth / 2, y: window.innerHeight - 100 } // Fixed bottom OFFSET
     });
 
@@ -123,13 +126,14 @@ function App() {
         video: { w: 320, h: 180 },
         kasa: { w: 300, h: 380 }, // Approx
         printer: { w: 380, h: 380 }, // Approx
-        project_window: { w: 300, h: 300 } // Approx
+        project_window: { w: 300, h: 300 }, // Approx
+        music: { w: 300, h: 200 }
     });
     const [activeDragElement, setActiveDragElement] = useState(null);
 
     // Z-Index Stacking Order (last element = highest z-index)
     const [zIndexOrder, setZIndexOrder] = useState([
-        'visualizer', 'chat', 'tools', 'video', 'cad', 'browser', 'kasa', 'printer', 'project_window'
+        'visualizer', 'chat', 'tools', 'video', 'cad', 'browser', 'kasa', 'printer', 'project_window', 'music'
     ]);
 
     // Hand Control State
@@ -1812,6 +1816,31 @@ function App() {
                     />
                 )}
 
+                {/* Winamp Music Player */}
+                {showMusicPlayer && (
+                    <div
+                        id="music"
+                        className={`absolute flex flex-col transition-all duration-200
+                        backdrop-blur-xl shadow-2xl overflow-hidden rounded-md
+                        ${activeDragElement === 'music' ? 'ring-2 ring-green-500' : ''}
+                    `}
+                        style={{
+                            left: elementPositions.music?.x || window.innerWidth / 2 + 200,
+                            top: elementPositions.music?.y || window.innerHeight / 2,
+                            transform: 'translate(-50%, -50%)',
+                            width: `${elementSizes.music.w}px`,
+                            height: `${elementSizes.music.h}px`,
+                            pointerEvents: 'auto',
+                            zIndex: getZIndex('music')
+                        }}
+                        onMouseDown={(e) => handleMouseDown(e, 'music')}
+                    >
+                        <WinampVisualizer
+                            socket={socket}
+                            onClose={() => setShowMusicPlayer(false)}
+                        />
+                    </div>
+                )}
 
                 {/* Memory Prompt removed - memory is now actively saved to project */}
 
@@ -1838,7 +1867,7 @@ function App() {
                 />
             )}
 
-            {/* YouTube Music Player Bar */}
+            {/* Global Music Controls */}
             <MusicPlayerBar socket={socket} />
         </div>
     );
