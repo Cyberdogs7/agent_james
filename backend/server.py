@@ -1511,6 +1511,15 @@ async def get_fleet_status(sid):
         token = audio_loop.project_manager.get_github_token()
 
         if not token:
+            # Emit basic status so UI has *something*
+            basic_fleet = [{
+                "name": f"{r['owner']}/{r['name']}",
+                "branch": "unknown",
+                "status": "Remote (No Auth)",
+                "last_commit": None,
+                "auto_merge_disabled": r.get('auto_merge_disabled', False)
+            } for r in fleet]
+            await sio.emit('fleet_status_update', basic_fleet, to=sid)
             await sio.emit('error', {'msg': "No GitHub Token found. Please Authenticate.", 'code': 'AUTH_REQUIRED'})
             return
 

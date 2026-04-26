@@ -53,27 +53,26 @@ class ProjectManager:
     def load_fleet(self):
         project_fleet_file = self.get_current_project_path() / "fleet.json"
 
-        # Migration Check: If project fleet doesn't exist but global does, migrate
-        if not project_fleet_file.exists() and self.global_fleet_file.exists():
-            print(f"[ProjectManager] Migrating fleet.json to project: {self.current_project}")
+        # Reverse Migration Check: If global fleet doesn't exist but project does, migrate it back
+        if not self.global_fleet_file.exists() and project_fleet_file.exists():
+            print(f"[ProjectManager] Migrating fleet.json back to global scope from project: {self.current_project}")
             try:
-                # Move the file
-                shutil.move(str(self.global_fleet_file), str(project_fleet_file))
+                # Move the file back
+                shutil.move(str(project_fleet_file), str(self.global_fleet_file))
             except Exception as e:
-                print(f"[ProjectManager] Error migrating fleet.json: {e}")
+                print(f"[ProjectManager] Error migrating fleet.json back to global scope: {e}")
 
-        # Load from project
-        if project_fleet_file.exists():
+        # Load from global
+        if self.global_fleet_file.exists():
             try:
-                with open(project_fleet_file, "r") as f:
+                with open(self.global_fleet_file, "r") as f:
                     return json.load(f)
             except:
                 pass
         return []
 
     def save_fleet(self, fleet):
-        project_fleet_file = self.get_current_project_path() / "fleet.json"
-        with open(project_fleet_file, "w") as f:
+        with open(self.global_fleet_file, "w") as f:
             json.dump(fleet, f, indent=4)
 
     def create_project(self, name: str):
