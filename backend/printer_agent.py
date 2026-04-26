@@ -967,18 +967,27 @@ class PrinterAgent:
                             }
                         )
                     else:
-                         if printer.host not in self._error_tracker:
-                            self._log(f"[PRINTER] Moonraker status failed ({resp.status})")
-                            self._error_tracker.add(printer.host)
-                         return None
+                         if resp.status == 404:
+                             if printer.host not in self._error_tracker:
+                                 self._log(f"[PRINTER] Moonraker status failed (404). Trying OctoPrint compatibility layer...")
+                                 self._error_tracker.add(printer.host)
+                             return await self._status_octoprint(printer)
+                         else:
+                             if printer.host not in self._error_tracker:
+                                 self._log(f"[PRINTER] Moonraker status failed ({resp.status})")
+                                 self._error_tracker.add(printer.host)
+                             return None
         except Exception as e:
             msg = str(e)
-            if printer.host not in self._error_tracker:
-                if "404" in msg:
-                     self._log(f"[PRINTER] Moonraker status failed (404) at {url}")
-                else:
+            if "404" in msg:
+                 if printer.host not in self._error_tracker:
+                     self._log(f"[PRINTER] Moonraker status failed (404) at {url}. Trying OctoPrint compatibility layer...")
+                     self._error_tracker.add(printer.host)
+                 return await self._status_octoprint(printer)
+            else:
+                 if printer.host not in self._error_tracker:
                      self._log(f"[PRINTER] Moonraker status failed: {e}")
-                self._error_tracker.add(printer.host)
+                     self._error_tracker.add(printer.host)
             
             return PrintStatus(
                 printer=printer.name,
