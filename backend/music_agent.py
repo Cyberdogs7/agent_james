@@ -147,9 +147,13 @@ class MusicAgent:
             def get_url(vid):
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
-                    return info['url']
+                    return info['url'], info.get('duration'), info.get('duration_string')
 
-            stream_url = await asyncio.to_thread(get_url, video_id)
+            stream_url, duration, duration_string = await asyncio.to_thread(get_url, video_id)
+
+            self.current_track['duration'] = duration
+            if duration_string:
+                self.current_track['time'] = duration_string
 
             # Start Streaming via FFmpeg
             await self._kill_ffmpeg()
@@ -199,11 +203,29 @@ class MusicAgent:
     async def _stream_reader(self):
         """Reads from ffmpeg stdout and pushes to audio queue."""
         chunk_size = 1024
+        start_time = asyncio.get_event_loop().time()
+        last_emit_time = start_time
 
         while self.is_playing and self.ffmpeg_process:
             if self.paused:
                 await asyncio.sleep(0.1)
+                # Adjust start time to account for pause duration
+                start_time += 0.1
+                last_emit_time += 0.1
                 continue
+
+            current_time = asyncio.get_event_loop().time()
+            elapsed = current_time - start_time
+            self.current_track['progress'] = elapsed
+
+            # Emit progress periodically (e.g., every 1 second)
+            if current_time - last_emit_time >= 1.0:
+                if self.sio:
+                    asyncio.create_task(self.sio.emit('music_status', {
+                        "status": "playing",
+                        "track": self.current_track
+                    }))
+                last_emit_time = current_time
 
             if self.ffmpeg_process.poll() is not None:
                 self.logger.info("FFmpeg process finished.")
