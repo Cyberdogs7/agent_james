@@ -90,40 +90,56 @@ class ProjectManager:
             return True, f"Project '{safe_name}' created."
         return False, f"Project '{safe_name}' already exists."
 
-    def set_github_token(self, token: str):
-        """Saves the GitHub token to the current project's config.json."""
-        self.update_project_config({"github_token": token})
-        return True
-
     def get_github_token(self):
-        """Retrieves the GitHub token from project config, migrating from global settings if necessary."""
-        # 1. Check Project Config
+        """Retrieves the GitHub token from global settings.json, migrating from project config if necessary."""
+        # 1. Check Project Config (Migration)
         config = self.get_project_config()
         token = config.get("github_token")
+
+        settings_path = self.workspace_root / "settings.json"
+
         if token:
+            print(f"[ProjectManager] Migrating GitHub token to global settings from project: {self.current_project}")
+
+            # Save to global settings
+            settings = {}
+            if settings_path.exists():
+                try:
+                    with open(settings_path, "r") as f:
+                        settings = json.load(f)
+                except Exception as e:
+                    print(f"[ProjectManager] Error reading settings.json: {e}")
+
+            settings["github_token"] = token
+            try:
+                with open(settings_path, "w") as f:
+                    json.dump(settings, f, indent=4)
+            except Exception as e:
+                print(f"[ProjectManager] Error writing to settings.json: {e}")
+
+            # Remove from project config
+            config_path = self.get_current_project_path() / "config.json"
+            if config_path.exists():
+                try:
+                    with open(config_path, "r", encoding="utf-8") as f:
+                        proj_config = json.load(f)
+                    if "github_token" in proj_config:
+                        del proj_config["github_token"]
+                        with open(config_path, "w", encoding="utf-8") as f:
+                            json.dump(proj_config, f, indent=4)
+                except Exception as e:
+                    print(f"[ProjectManager] Error removing token from config.json: {e}")
+
             return token
 
-        # 2. Check Global Settings (Migration)
-        settings_path = self.workspace_root / "settings.json"
+        # 2. Check Global Settings
         if settings_path.exists():
             try:
                 with open(settings_path, "r") as f:
                     settings = json.load(f)
-
-                global_token = settings.get("github_token")
-                if global_token:
-                    print(f"[ProjectManager] Migrating GitHub token to project: {self.current_project}")
-                    # Save to project
-                    self.set_github_token(global_token)
-
-                    # Remove from global settings
-                    del settings["github_token"]
-                    with open(settings_path, "w") as f:
-                        json.dump(settings, f, indent=4)
-
-                    return global_token
+                return settings.get("github_token")
             except Exception as e:
-                print(f"[ProjectManager] Error reading/migrating settings.json: {e}")
+                print(f"[ProjectManager] Error reading settings.json: {e}")
 
         return None
 

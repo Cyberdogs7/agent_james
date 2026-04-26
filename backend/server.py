@@ -217,11 +217,6 @@ def load_settings():
                 # Merge with defaults to ensure new keys exist
                 deep_merge(SETTINGS, loaded)
 
-            # Clean up deprecated github_token from global settings memory
-            # It is now managed per-project by ProjectManager
-            if "github_token" in SETTINGS:
-                del SETTINGS["github_token"]
-
             print(f"Loaded settings: {SETTINGS}")
         except Exception as e:
             print(f"Error loading settings: {e}")
@@ -1811,7 +1806,8 @@ async def update_tool_permissions(sid, data):
 async def save_github_token(sid, data):
     token = data.get('token')
     if token:
-        project_manager.set_github_token(token)
+        SETTINGS["github_token"] = token
+        save_settings()
         await sio.emit('status', {'msg': "GitHub token saved securely."})
     else:
         await sio.emit('error', {'msg': "No token provided."})
