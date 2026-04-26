@@ -161,6 +161,9 @@ class MusicAgent:
             ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
             cmd = [
                 ffmpeg_path,
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_delay_max', '5',
                 '-re', # Read at native frame rate (important for streaming)
                 '-i', stream_url,
                 '-f', 's16le',
