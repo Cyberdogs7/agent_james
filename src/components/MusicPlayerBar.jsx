@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Shuffle, Repeat, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Pause, Square, SkipBack, SkipForward, Volume2, Shuffle, Repeat, ChevronDown, ChevronUp } from 'lucide-react';
 
 const MusicPlayerBar = ({ socket }) => {
     const [status, setStatus] = useState({ status: 'stopped', track: null });
@@ -102,6 +102,14 @@ const MusicPlayerBar = ({ socket }) => {
                         aria-label={status.status === 'playing' ? 'Pause' : 'Play'}
                     >
                         {status.status === 'playing' ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />}
+                    </button>
+                    <button
+                        onClick={() => handleControl('stop')}
+                        className="text-[#aaaaaa] hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-white outline-none rounded"
+                        title="Stop"
+                        aria-label="Stop"
+                    >
+                        <Square size={18} fill="currentColor" />
                     </button>
                     <button
                         onClick={() => handleControl('next')}

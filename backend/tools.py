@@ -1735,7 +1735,7 @@ all_tools_list = [
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "enum": ["play", "pause", "resume", "next", "previous", "shuffle", "volume_up", "volume_down"],
+                    "enum": ["play", "pause", "resume", "stop", "next", "previous", "shuffle", "volume_up", "volume_down"],
                     "description": "The action to perform."
                 }
             },
