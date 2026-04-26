@@ -1758,17 +1758,123 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
             if INCLUDE_RAW_LOGS:
                 print("[ADA] PyAudio not available. Audio output will only be sent to frontend.")
 
+        import struct
+        last_voice_time = 0
+        DUCK_DURATION = 1.0 # Keep ducking for 1 sec after voice stops
+        DUCK_VOLUME = 0.15 # 85% reduction
+
         while True:
             try:
-                bytestream = await self.audio_in_queue.get()
+                voice_data = None
+                music_data = None
 
-                # Always send to frontend
-                if self.on_audio_data:
-                    self.on_audio_data(bytestream)
+                # We wait for either queue to have data using a timeout mechanism
+                # to avoid blocking indefinitely if only one stream is active.
 
-                # Play locally if stream is available
-                if stream:
-                    await asyncio.to_thread(stream.write, bytestream)
+                # Fetch whatever is currently available immediately
+                try:
+                    voice_data = self.audio_in_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+
+                try:
+                    music_data = self.music_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+
+                # If both are empty, block and wait for the first one to emit data
+                if not voice_data and not music_data:
+                    voice_task = asyncio.create_task(self.audio_in_queue.get())
+                    music_task = asyncio.create_task(self.music_queue.get())
+
+                    done, pending = await asyncio.wait(
+                        [voice_task, music_task],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+
+                    for t in pending:
+                        t.cancel()
+
+                    for t in done:
+                        if t == voice_task:
+                            voice_data = t.result()
+                        elif t == music_task:
+                            music_data = t.result()
+
+                if music_data and getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
+                    # Discard music data if paused (to prevent buffer buildup)
+                    music_data = None
+
+                now = time.time()
+                if voice_data:
+                    last_voice_time = now
+
+                # Ducking logic
+                should_duck = (now - last_voice_time) < DUCK_DURATION
+
+                # Mixing
+                mixed_data = None
+                if voice_data and music_data:
+                    # Match lengths (they should be roughly similar chunks)
+                    min_len = min(len(voice_data), len(music_data))
+                    min_len = (min_len // 2) * 2 # Ensure even number of bytes for 16-bit PCM
+                    count = min_len // 2
+
+                    v_shorts = struct.unpack(f"<{count}h", voice_data[:min_len])
+                    m_shorts = struct.unpack(f"<{count}h", music_data[:min_len])
+
+                    mixed = []
+                    for v, m in zip(v_shorts, m_shorts):
+                        # Duck music
+                        if should_duck:
+                            m = int(m * DUCK_VOLUME)
+                        # Mix and clamp
+                        sample = max(-32768, min(32767, v + m))
+                        mixed.append(sample)
+
+                    mixed_data = struct.pack(f"<{count}h", *mixed)
+
+                    # If one buffer had remainder, append it (mostly edge cases)
+                    if len(voice_data) > min_len:
+                         mixed_data += voice_data[min_len:]
+                    elif len(music_data) > min_len:
+                         m_rem = music_data[min_len:]
+                         m_rem_len = (len(m_rem) // 2) * 2
+                         m_rem = m_rem[:m_rem_len]
+                         if should_duck and m_rem_len > 0:
+                             rem_count = m_rem_len // 2
+                             rem_shorts = struct.unpack(f"<{rem_count}h", m_rem)
+                             ducked_rem = [max(-32768, min(32767, int(m * DUCK_VOLUME))) for m in rem_shorts]
+                             mixed_data += struct.pack(f"<{rem_count}h", *ducked_rem)
+                         else:
+                             mixed_data += m_rem
+
+                elif voice_data:
+                    mixed_data = voice_data
+                elif music_data:
+                    if should_duck:
+                         m_len = (len(music_data) // 2) * 2
+                         m_count = m_len // 2
+                         if m_count > 0:
+                             m_shorts = struct.unpack(f"<{m_count}h", music_data[:m_len])
+                             ducked = [max(-32768, min(32767, int(m * DUCK_VOLUME))) for m in m_shorts]
+                             mixed_data = struct.pack(f"<{m_count}h", *ducked)
+                             if len(music_data) > m_len:
+                                 mixed_data += music_data[m_len:]
+                         else:
+                             mixed_data = music_data
+                    else:
+                         mixed_data = music_data
+
+                if mixed_data:
+                    # Always send to frontend
+                    if self.on_audio_data:
+                        self.on_audio_data(mixed_data)
+
+                    # Play locally if stream is available
+                    if stream:
+                        await asyncio.to_thread(stream.write, mixed_data)
+
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA] [ERR] Error in play_audio loop: {e}")
@@ -1941,11 +2047,12 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
                     self.proactive_agent.session = session
 
                     self.audio_in_queue = asyncio.Queue()
+                    self.music_queue = asyncio.Queue()
                     self.out_queue = asyncio.Queue(maxsize=10)
 
-                    # Wire MusicAgent to the main audio queue
+                    # Wire MusicAgent to the dedicated music queue
                     if self.music_agent:
-                        self.music_agent.set_audio_queue(self.audio_in_queue)
+                        self.music_agent.set_audio_queue(self.music_queue)
 
                     tasks.append(asyncio.create_task(self.send_realtime()))
                     # Run listen_audio as a separate, non-critical background task
