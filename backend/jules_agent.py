@@ -190,15 +190,19 @@ class JulesAgent:
 
         while not stop_event.is_set():
             try:
+                session_obj = await self.get_session(session_id)
                 activities_response = await self.list_activities(session_id)
+
                 if activities_response and "activities" in activities_response:
                     activities = activities_response["activities"]
                     new_activities = activities[last_activity_count:]
 
+                    messages_to_send = []
+                    session_completed = False
+                    insight = None
+
                     if new_activities:
                         last_activity_time = datetime.now()
-                        messages_to_send = []
-                        session_completed = False
 
                         for activity in new_activities:
                             message = None
@@ -234,36 +238,50 @@ class JulesAgent:
                             if message:
                                 messages_to_send.append(message)
 
-                        if messages_to_send:
-                            combined_message = "\n".join(messages_to_send)
-                            final_message = f"Jules Update ({session_id}):\n{combined_message}"
+                    # Explicitly check session state as activities might be delayed or miss completion
+                    if session_obj and not session_completed:
+                        state = session_obj.get("state")
+                        if state == "COMPLETED":
+                            messages_to_send.append("Jules has completed the session.")
+                            insight = "Session Completed."
+                            self.session_insights[session_id] = insight
+                            session_completed = True
+                        elif state in ["FAILED", "ERROR"]:
+                            messages_to_send.append("Jules session failed. Task Execution Failed.")
+                            insight = "Session Failed."
+                            self.session_insights[session_id] = insight
+                            session_completed = True
 
-                            # Invoke callback if provided, else fall back to direct session send (Legacy)
-                            if callback:
-                                if asyncio.iscoroutinefunction(callback):
-                                    await callback(final_message)
-                                else:
-                                    callback(final_message)
-                            elif self.session:
-                                # Legacy fallback
-                                try:
-                                    await asyncio.wait_for(
-                                        self.session.send(input=final_message, end_of_turn=False),
-                                        timeout=10.0
-                                    )
-                                except Exception as e:
-                                    self._log(f"[JULES_AGENT] [ERR] Failed to send update: {e}")
+                    if messages_to_send:
+                        combined_message = "\n".join(messages_to_send)
+                        final_message = f"Jules Update ({session_id}):\n{combined_message}"
 
-                        if session_completed:
-                            self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
-                            stop_event.set()
+                        # Invoke callback if provided, else fall back to direct session send (Legacy)
+                        if callback:
+                            if asyncio.iscoroutinefunction(callback):
+                                await callback(final_message)
+                            else:
+                                callback(final_message)
+                        elif self.session:
+                            # Legacy fallback
+                            try:
+                                await asyncio.wait_for(
+                                    self.session.send(input=final_message, end_of_turn=False),
+                                    timeout=10.0
+                                )
+                            except Exception as e:
+                                self._log(f"[JULES_AGENT] [ERR] Failed to send update: {e}")
 
-                        last_activity_count = len(activities)
-                    else:
-                        # No new activity, check for timeout
-                        if datetime.now() - last_activity_time > timedelta(minutes=20):
-                            self._log(f"[JULES_AGENT] Session {session_id} timed out. Stopping polling.")
-                            stop_event.set()
+                    if session_completed:
+                        self._log(f"[JULES_AGENT] Session {session_id} complete. Stopping polling.")
+                        stop_event.set()
+
+                    last_activity_count = len(activities)
+                else:
+                    # No new activity, check for timeout
+                    if datetime.now() - last_activity_time > timedelta(minutes=20):
+                        self._log(f"[JULES_AGENT] Session {session_id} timed out. Stopping polling.")
+                        stop_event.set()
 
                 if not stop_event.is_set():
                     await asyncio.sleep(10)

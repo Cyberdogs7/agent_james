@@ -1998,18 +1998,29 @@ async def check_and_start_next_task(repo_name, agent_id=None):
             # Still check next task
             await check_and_start_next_task(repo_name, agent_id)
 
-    try:
-        asyncio.create_task(audio_loop.jules_agent.spawn_agent(
-            prompt=prompt,
-            source=source,
-            callback=_on_jules_finished,
-            role="DEFAULT"
-        ))
-    except Exception as e:
-        fleet_manager.update_task_status(repo_name, task["id"], "failed")
-        fleet_manager.update_agent_session(agent_id, None, "error")
-        await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
-        await sio.emit('fleet_state_update', fleet_manager.get_state())
+    async def run_spawn():
+        try:
+            session = await audio_loop.jules_agent.spawn_agent(
+                prompt=prompt,
+                source=source,
+                callback=_on_jules_finished,
+                role="DEFAULT"
+            )
+            if session:
+                session_id = session.get('name')
+                fleet_manager.update_agent_session(agent_id, session_id, "working")
+                await sio.emit('fleet_state_update', fleet_manager.get_state())
+            else:
+                fleet_manager.update_task_status(repo_name, task["id"], "failed")
+                fleet_manager.update_agent_session(agent_id, None, "error")
+                await sio.emit('fleet_state_update', fleet_manager.get_state())
+        except Exception as e:
+            fleet_manager.update_task_status(repo_name, task["id"], "failed")
+            fleet_manager.update_agent_session(agent_id, None, "error")
+            await sio.emit('error', {'msg': f"Failed to start task for {agent_id}: {e}"})
+            await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+    asyncio.create_task(run_spawn())
 
 @sio.event
 async def assign_agent_to_repo(sid, data):

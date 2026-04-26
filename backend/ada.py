@@ -1032,8 +1032,38 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}' (Role: {role})")
 
+        is_force_restart = False
+        if prompt.startswith("FORCE_RESTART:"):
+            is_force_restart = True
+            prompt = prompt.replace("FORCE_RESTART:", "", 1).strip()
+
         # We use the persistent instance self.jules_agent instead of creating a new one
         # to ensure centralized management of polling tasks.
+
+        if not is_force_restart:
+            clean_title_prompt = prompt.replace('\n', ' ').replace('\r', ' ').strip()[:40] # Jules truncates to 50, but let's be safe
+
+            try:
+                existing_sessions = await self.jules_agent.list_sessions()
+                for session in existing_sessions:
+                    s_title = session.get('title', '')
+                    if not s_title:
+                        continue
+                    if clean_title_prompt in s_title or s_title in clean_title_prompt:
+                        matching_title = s_title
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [JULES] Found potential duplicate session: {matching_title}")
+
+                        msg = f"System Notification: A similar Jules task '{matching_title}' already exists. Please ask the user if they want to restart it. If they approve, run the task again but prepend 'FORCE_RESTART:' to the prompt."
+                        try:
+                            await self.session.send(input=msg, end_of_turn=True)
+                        except Exception as e:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [ERR] Failed to send duplicate task notification: {e}")
+                        return "Duplicate task detected. Asking user for permission."
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WARN] Failed to check for duplicate sessions: {e}")
 
         if not source:
             if INCLUDE_RAW_LOGS:
