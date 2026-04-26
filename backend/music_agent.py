@@ -178,6 +178,9 @@ class MusicAgent:
             self.is_playing = True
             self.paused = False
 
+            # Start reading from stdout
+            asyncio.create_task(self._stream_reader())
+
             if self.sio:
                 await self.sio.emit('music_status', {
                     "status": "playing",
@@ -271,7 +274,7 @@ class MusicAgent:
                 # Actually, simplest pause is to stop reading from stdout in the loop
                 pass
             if self.sio:
-                 await self.sio.emit('music_status', {
+                await self.sio.emit('music_status', {
                     "status": "playing",
                     "track": self.current_track
                 })
@@ -281,7 +284,7 @@ class MusicAgent:
             if self.is_playing:
                 self.paused = True
                 if self.sio:
-                     await self.sio.emit('music_status', {
+                    await self.sio.emit('music_status', {
                         "status": "paused",
                         "track": self.current_track
                     })
