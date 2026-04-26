@@ -4,9 +4,9 @@ import random
 import subprocess
 import threading
 import time
+import shutil
 from ytmusicapi import YTMusic
 import yt_dlp
-import imageio_ffmpeg
 
 class MusicAgent:
     def __init__(self, sio=None):
@@ -67,6 +67,9 @@ class MusicAgent:
             self.internal_queue.put_nowait(None)
         except asyncio.QueueFull:
             pass
+
+        # Immediately replace the queue so new streams start fresh
+        self.internal_queue = asyncio.Queue(maxsize=2000)
 
         if self.ffmpeg_process:
             try:
@@ -180,7 +183,10 @@ class MusicAgent:
             # Start Streaming via FFmpeg
             await self._kill_ffmpeg()
 
-            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            ffmpeg_path = shutil.which("ffmpeg")
+            if not ffmpeg_path:
+                raise Exception("ffmpeg is not installed on the system.")
+
             cmd = [
                 ffmpeg_path,
                 '-reconnect', '1',
