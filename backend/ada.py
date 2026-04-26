@@ -760,7 +760,16 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self._pending_coding_task_source = source
 
         # Instruct the model to immediately ask the user to choose
-        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or Jules for this coding task?' Do not do anything else until they respond."
+        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or Jules for this coding task?' and then immediately display a select window with those two options. Do not do anything else until they respond."
+
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "widget",
+                "widget_type": "select",
+                "data": {
+                    "options": ["OpenHands", "Jules"]
+                }
+            })
 
         try:
             await self.session.send(input=msg, end_of_turn=True)
@@ -1443,6 +1452,9 @@ This is a strict, multi-step tool use process. You must follow it exactly.
 
 **War Room / Dashboard:**
 If the user asks for a "status report", "situation report", "war room", or "dashboard", use the `display_dashboard` tool immediately. This tool aggregates all project, device, and agent status into a single visual view.
+
+**Select Options Window:**
+If you need to ask the user to choose between options (e.g. which agent to use, or confirming an action with options), you should display a select window using the `display_content` tool with `content_type='widget'`, `widget_type='select'`, and `data={'options': ['Option 1', 'Option 2']}`. This will pop up a window for the user to make a selection.
 
 **Vision Capabilities (VLA):**
 You have access to a real-time video feed of the user and their environment.
