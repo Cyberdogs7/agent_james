@@ -265,10 +265,46 @@ class AudioLoop:
             print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
         self._reconnect_needed.set()
 
-    async def _handle_jules_status_change(self, title, new_state):
-        """Handles UI and voice notifications for Jules session status changes."""
+    async def _handle_jules_status_change(self, session_id, title, new_state):
+        """Handles UI and voice notifications for Jules session status changes and syncs fleet."""
         notification_text = f"Jules task '{title}' has moved to {new_state}."
         self.notify_user(notification_text, duration=20000)
+
+        # Try to sync this state change with the fleet manager
+        try:
+            from backend.server import fleet_manager, sio, check_and_start_next_task, fleet_account_active_sessions, get_all_accounts
+
+            agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+            if agent_id and repo_name and task_id:
+                # Map Jules state to fleet state where possible
+                # The fleet manager queue tracks "status": pending, in_progress, completed, failed
+                # The agent tracks "status": idle, working, stuck, error
+
+                if new_state == "COMPLETED":
+                    fleet_manager.update_task_status(repo_name, task_id, "completed")
+                    fleet_manager.update_agent_session(agent_id, None, "idle")
+                elif new_state == "FAILED":
+                    fleet_manager.update_task_status(repo_name, task_id, "failed")
+                    fleet_manager.update_agent_session(agent_id, None, "error")
+                elif new_state in ["QUEUED", "PLANNING", "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "IN_PROGRESS"]:
+                    fleet_manager.update_task_status(repo_name, task_id, "in_progress")
+                    fleet_manager.update_agent_session(agent_id, session_id, "working")
+                elif new_state == "PAUSED":
+                    fleet_manager.update_task_status(repo_name, task_id, "in_progress")
+                    fleet_manager.update_agent_session(agent_id, session_id, "stuck")
+
+                # Emit update
+                await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+                # If finished, optionally trigger next task if the agent is now idle
+                if new_state in ["COMPLETED", "FAILED"]:
+                    # Wait a tiny bit to let _on_jules_finished handle it if it hasn't already
+                    await asyncio.sleep(1)
+                    await check_and_start_next_task(repo_name, agent_id)
+
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to sync fleet status for {session_id}: {e}")
 
     async def _handle_jules_triage(self, session_id, message_content):
         """
@@ -760,7 +796,16 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self._pending_coding_task_source = source
 
         # Instruct the model to immediately ask the user to choose
-        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or Jules for this coding task?' Do not do anything else until they respond."
+        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or Jules for this coding task?' and then immediately display a select window with those two options. Do not do anything else until they respond."
+
+        if self.on_display_content:
+            self.on_display_content({
+                "content_type": "widget",
+                "widget_type": "select",
+                "data": {
+                    "options": ["OpenHands", "Jules"]
+                }
+            })
 
         try:
             await self.session.send(input=msg, end_of_turn=True)
@@ -1444,6 +1489,9 @@ This is a strict, multi-step tool use process. You must follow it exactly.
 **War Room / Dashboard:**
 If the user asks for a "status report", "situation report", "war room", or "dashboard", use the `display_dashboard` tool immediately. This tool aggregates all project, device, and agent status into a single visual view.
 
+**Select Options Window:**
+If you need to ask the user to choose between options (e.g. which agent to use, or confirming an action with options), you should display a select window using the `display_content` tool with `content_type='widget'`, `widget_type='select'`, and `data={'options': ['Option 1', 'Option 2']}`. This will pop up a window for the user to make a selection.
+
 **Vision Capabilities (VLA):**
 You have access to a real-time video feed of the user and their environment.
 - You can see objects, text, and gestures.
@@ -1855,24 +1903,25 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 # Mixing
                 mixed_data = None
                 if voice_data and music_data:
+                    import array
                     # Match lengths (they should be roughly similar chunks)
                     min_len = min(len(voice_data), len(music_data))
                     min_len = (min_len // 2) * 2 # Ensure even number of bytes for 16-bit PCM
-                    count = min_len // 2
 
-                    v_shorts = struct.unpack(f"<{count}h", voice_data[:min_len])
-                    m_shorts = struct.unpack(f"<{count}h", music_data[:min_len])
+                    v_arr = array.array('h', voice_data[:min_len])
+                    m_arr = array.array('h', music_data[:min_len])
+                    mixed = array.array('h', v_arr)
 
-                    mixed = []
-                    for v, m in zip(v_shorts, m_shorts):
-                        # Duck music
-                        if should_duck:
-                            m = int(m * DUCK_VOLUME)
-                        # Mix and clamp
-                        sample = max(-32768, min(32767, v + m))
-                        mixed.append(sample)
+                    if should_duck:
+                        DUCK_FACTOR = int(DUCK_VOLUME * 256)
+                        for i in range(len(mixed)):
+                            m = (m_arr[i] * DUCK_FACTOR) >> 8
+                            mixed[i] = max(-32768, min(32767, mixed[i] + m))
+                    else:
+                        for i in range(len(mixed)):
+                            mixed[i] = max(-32768, min(32767, mixed[i] + m_arr[i]))
 
-                    mixed_data = struct.pack(f"<{count}h", *mixed)
+                    mixed_data = mixed.tobytes()
 
                     # If one buffer had remainder, append it (mostly edge cases)
                     if len(voice_data) > min_len:
@@ -1882,10 +1931,12 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                          m_rem_len = (len(m_rem) // 2) * 2
                          m_rem = m_rem[:m_rem_len]
                          if should_duck and m_rem_len > 0:
-                             rem_count = m_rem_len // 2
-                             rem_shorts = struct.unpack(f"<{rem_count}h", m_rem)
-                             ducked_rem = [max(-32768, min(32767, int(m * DUCK_VOLUME))) for m in rem_shorts]
-                             mixed_data += struct.pack(f"<{rem_count}h", *ducked_rem)
+                             import array
+                             rem_arr = array.array('h', m_rem)
+                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
+                             for i in range(len(rem_arr)):
+                                 rem_arr[i] = max(-32768, min(32767, (rem_arr[i] * DUCK_FACTOR) >> 8))
+                             mixed_data += rem_arr.tobytes()
                          else:
                              mixed_data += m_rem
 
@@ -1894,11 +1945,13 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 elif music_data:
                     if should_duck:
                          m_len = (len(music_data) // 2) * 2
-                         m_count = m_len // 2
-                         if m_count > 0:
-                             m_shorts = struct.unpack(f"<{m_count}h", music_data[:m_len])
-                             ducked = [max(-32768, min(32767, int(m * DUCK_VOLUME))) for m in m_shorts]
-                             mixed_data = struct.pack(f"<{m_count}h", *ducked)
+                         if m_len > 0:
+                             import array
+                             m_arr = array.array('h', music_data[:m_len])
+                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
+                             for i in range(len(m_arr)):
+                                 m_arr[i] = max(-32768, min(32767, (m_arr[i] * DUCK_FACTOR) >> 8))
+                             mixed_data = m_arr.tobytes()
                              if len(music_data) > m_len:
                                  mixed_data += music_data[m_len:]
                          else:

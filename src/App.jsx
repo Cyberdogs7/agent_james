@@ -463,6 +463,245 @@ function App() {
           }
           smoothedData[i] = sum / history.length;
         }
+    }, [isConnected, isAuthenticated, socketConnected, micDevices, selectedMicId]);
+
+    useEffect(() => {
+        // Socket IO Setup
+        socket.on('connect', () => {
+            setStatus('Connected');
+            setSocketConnected(true);
+            socket.emit('get_settings');
+        });
+        socket.on('disconnect', () => {
+            setStatus('Disconnected');
+            setSocketConnected(false);
+        });
+        socket.on('status', (data) => {
+            addMessage('System', data.msg);
+            // Update status bar based on backend messages
+            if (data.msg === 'A.D.A Started') {
+                setStatus('Model Connected');
+            } else if (data.msg === 'A.D.A Stopped') {
+                setStatus('Connected');
+            }
+        });
+        socket.on('audio_data', (data) => {
+            // data.data will be an ArrayBuffer from socket.io since we sent raw bytes
+            // The audio data is 16-bit PCM (Int16), but the visualizer expects unsigned or normalized values.
+            // Let's use Int16Array and take absolute values, scaled down to 0-255 range for the visualizer.
+            let rawData;
+            if (data.data instanceof ArrayBuffer) {
+                const int16View = new Int16Array(data.data);
+                rawData = new Array(Math.min(int16View.length, 64)); // The visualizer uses a 64-element array typically
+                const step = Math.max(1, Math.floor(int16View.length / rawData.length));
+                for (let i = 0; i < rawData.length; i++) {
+                    // Take max absolute value in the window
+                    let maxVal = 0;
+                    for (let j = 0; j < step && (i * step + j) < int16View.length; j++) {
+                        maxVal = Math.max(maxVal, Math.abs(int16View[i * step + j]));
+                    }
+                    // Scale 0-32768 to 0-255
+                    rawData[i] = Math.min(255, Math.floor((maxVal / 32768) * 255));
+                }
+            } else if (Array.isArray(data.data)) {
+                // Fallback if it's still an array for some reason
+                rawData = data.data.slice(0, 64);
+            } else {
+                return;
+            }
+
+            const history = audioHistoryRef.current;
+            const smoothingWindow = 3; // Averaging window
+
+            history.push(rawData);
+            if (history.length > smoothingWindow) {
+                history.shift();
+            }
+
+            if (history.length > 0) {
+                const smoothedData = new Array(rawData.length).fill(0);
+                for (let i = 0; i < rawData.length; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < history.length; j++) {
+                        sum += history[j][i] || 0;
+                    }
+                    smoothedData[i] = sum / history.length;
+                }
+
+                // Threshold to force silence
+                const silenceThreshold = 5;
+                const isSilent = smoothedData.every(val => val < silenceThreshold);
+                if (isSilent) {
+                    setAiAudioData(new Array(rawData.length).fill(0));
+                } else {
+                    setAiAudioData(smoothedData);
+                }
+            } else {
+                setAiAudioData(rawData);
+            }
+        });
+        socket.on('auth_status', (data) => {
+            console.log("Auth Status:", data);
+            setIsAuthenticated(data.authenticated);
+            if (data.authenticated) {
+                // If authenticated, hide lock screen with animation (handled by component if visible)
+                // But simpler: just hide it
+                // Actually, wait for animation if it WAS visible.
+                // For now, let's just assume if authenticated -> hide
+                // But we want the component to invoke onAnimationComplete.
+                // If we are starting up (and face auth disabled), we want it FALSE immediately.
+                if (!isLockScreenVisible) {
+                    // Do nothing, already hidden
+                }
+            } else {
+                // If NOT authenticated, show lock screen
+                setIsLockScreenVisible(true);
+            }
+        });
+
+        socket.on('settings', (settings) => {
+            console.log("[Settings] Received:", settings);
+            if (settings && typeof settings.face_auth_enabled !== 'undefined') {
+                setFaceAuthEnabled(settings.face_auth_enabled);
+                localStorage.setItem('face_auth_enabled', settings.face_auth_enabled);
+            }
+            if (typeof settings.camera_flipped !== 'undefined') {
+                console.log("[Settings] Camera flip set to:", settings.camera_flipped);
+                setIsCameraFlipped(settings.camera_flipped);
+            }
+        });
+        socket.on('error', (data) => {
+            console.error("Socket Error:", data);
+            addMessage('System', `Error: ${data.msg}`);
+        });
+        socket.on('cad_data', (data) => {
+            console.log("Received CAD Data:", data);
+            setCadData(data);
+            setCadThoughts(''); // Clear thoughts when generation complete
+            setShowCadWindow(true); // Open window when data arrives
+            // Auto-show the window if it's hidden, clamped to viewport
+            if (!elementPositions.cad) {
+                const size = { w: 400, h: 400 };
+                const clamped = clampToViewport({ x: window.innerWidth / 2 + 150, y: window.innerHeight / 2 }, size);
+                setElementPositions(prev => ({
+                    ...prev,
+                    cad: clamped
+                }));
+            }
+        });
+        socket.on('cad_status', (data) => {
+            console.log("Received CAD Status:", data);
+            // Extract retry info from extended payload
+            if (data.attempt) {
+                setCadRetryInfo({
+                    attempt: data.attempt,
+                    maxAttempts: data.max_attempts || 3,
+                    error: data.error
+                });
+            }
+            if (data.status === 'generating' || data.status === 'retrying') {
+                setCadData({ format: 'loading' });
+                setShowCadWindow(true);
+                if (data.status === 'generating' && data.attempt === 1) {
+                    setCadThoughts(''); // Clear previous thoughts for new generation
+                }
+                // Auto-show the window, clamped to viewport
+                if (!elementPositions.cad) {
+                    const size = { w: 400, h: 400 };
+                    const clamped = clampToViewport({ x: window.innerWidth / 2 + 150, y: window.innerHeight / 2 }, size);
+                    setElementPositions(prev => ({
+                        ...prev,
+                        cad: clamped
+                    }));
+                }
+            } else if (data.status === 'failed') {
+                // Keep loading state but show error
+                setCadData({ format: 'loading' });
+            }
+        });
+        socket.on('cad_thought', (data) => {
+            // Append streaming thought text
+            setCadThoughts(prev => prev + data.text);
+        });
+        socket.on('browser_frame', (data) => {
+            setBrowserData(prev => ({
+                image: data.image,
+                logs: [...prev.logs, data.log].filter(l => l).slice(-50) // Keep last 50 logs
+            }));
+            setShowBrowserWindow(true);
+            // Auto-show browser window if hidden, clamped to viewport
+            if (!elementPositions.browser) {
+                const size = { w: 550, h: 380 };
+                const clamped = clampToViewport({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 }, size);
+                setElementPositions(prev => ({
+                    ...prev,
+                    browser: clamped
+                }));
+            }
+        });
+
+        // Handle streaming transcription
+        socket.on('transcription', (data) => {
+            setMessages(prev => {
+                const lastMsg = prev[prev.length - 1];
+
+                // If the last message is from the same sender, append the chunk
+                if (lastMsg && lastMsg.sender === data.sender) {
+                    // Create a NEW object instead of mutating (prevents React StrictMode duplication)
+                    return [
+                        ...prev.slice(0, -1),
+                        {
+                            ...lastMsg,
+                            text: lastMsg.text + data.text
+                        }
+                    ];
+                } else {
+                    // New message block
+                    return [...prev, {
+                        sender: data.sender,
+                        text: data.text,
+                        time: new Date().toLocaleTimeString()
+                    }];
+                }
+            });
+        });
+
+        // Handle tool confirmation requests
+        socket.on('tool_confirmation_request', (data) => {
+            console.log("Received Confirmation Request:", data);
+            setConfirmationRequest(data);
+        });
+
+        // Handle Print Window Request (from CadWindow)
+        socket.on('request_print_window', () => {
+            setShowPrinterWindow(true);
+            const size = { w: 380, h: 380 };
+            const clamped = clampToViewport({ x: window.innerWidth / 2, y: window.innerHeight / 2 }, size);
+            setElementPositions(prev => ({
+                ...prev,
+                printer: clamped
+            }));
+        });
+
+        // Kasa Devices
+        socket.on('kasa_devices', (devices) => {
+            console.log("Kasa Devices:", devices);
+            setKasaDevices(devices);
+        });
+
+        socket.on('kasa_update', (data) => {
+            setKasaDevices(prev => prev.map(d => {
+                if (d.ip === data.ip) {
+                    // Update only fields that are not null/undefined
+                    return {
+                        ...d,
+                        is_on: data.is_on !== null ? data.is_on : d.is_on,
+                        brightness: data.brightness !== null ? data.brightness : d.brightness
+                    };
+                }
+                return d;
+            }));
+        });
 
         // Threshold to force silence
         const silenceThreshold = 5;

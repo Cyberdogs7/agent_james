@@ -1443,7 +1443,7 @@ all_tools_list = [
                 },
                 "widget_type": {
                     "type": "STRING",
-                    "description": "The kind of widget, e.g., 'weather'."
+                    "description": "The kind of widget, e.g., 'weather' or 'select'."
                 },
                 "data": {
                     "type": "OBJECT",
