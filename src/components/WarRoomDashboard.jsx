@@ -25,9 +25,7 @@ import {
     GitBranch,
     GitMerge
 } from 'lucide-react';
-import PlanVisualizer from './PlanVisualizer';
 import AutomationEditor from './AutomationEditor';
-import SwarmVisualizer from './SwarmVisualizer';
 import FleetManagerUI from './FleetManagerUI';
 
 
@@ -35,15 +33,13 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [time, setTime] = useState(new Date());
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
-    const [activeTab, setActiveTab] = useState('tasks'); // 'trello' or 'tasks'
-    const [selectedSession, setSelectedSession] = useState(null);
+        const [selectedSession, setSelectedSession] = useState(null);
     const [selectedArtifact, setSelectedArtifact] = useState(null);
     const [fleetStatus, setFleetStatus] = useState([]);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [selectedRepo, setSelectedRepo] = useState(null);
     const [swarms, setSwarms] = useState([]);
-    const [viewMode, setViewMode] = useState('spatial'); // 'spatial' or 'list'
-    const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
+        const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
 
     // Add effect for fleet state
     useEffect(() => {
@@ -317,278 +313,92 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                 {/* MAIN GRID */}
                 <div className="relative z-10 grid grid-cols-12 grid-rows-6 gap-6 flex-1 min-h-0">
 
-                    {/* COL 1: INTEL (TASKS / TRELLO) - Spans 3 cols */}
-                    <motion.div
-                        variants={itemVariants}
-                        className="col-span-3 row-span-6 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden group hover:border-gold9/40 transition-colors"
-                    >
-                        <div className="absolute top-0 right-0 p-2 opacity-50 pointer-events-none">
-                            <Layers className="w-24 h-24 text-gold9/5" />
-                        </div>
+                    {/* FLEET MANAGER (AGENT POOL + KINETIC COMMAND) */}
+                    <div className="col-span-9 row-span-6 bg-black/40 border border-gold9/20 rounded-xl overflow-hidden flex flex-col">
+                        <FleetManagerUI
+                            fleetState={fleetState}
+                            julesSessions={jules}
+                            onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
+                            onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
+                            onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
+                            onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
+                            onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
+                        />
+                    </div>
 
-                        {/* Tabs */}
-                        <div className="flex items-center gap-4 border-b border-gold9/10 pb-2 mb-4">
-                            <button
-                                onClick={() => setActiveTab('tasks')}
-                                className={`text-sm font-bold tracking-widest transition-colors ${activeTab === 'tasks' ? 'text-gold9' : 'text-gold9/40 hover:text-gold9/70'}`}
-                            >
-                                AUTOMATIONS
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('trello')}
-                                className={`text-sm font-bold tracking-widest transition-colors ${activeTab === 'trello' ? 'text-gold9' : 'text-gold9/40 hover:text-gold9/70'}`}
-                            >
-                                OBJECTIVES
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('fleet')}
-                                className={`text-sm font-bold tracking-widest transition-colors ${activeTab === 'fleet' ? 'text-gold9' : 'text-gold9/40 hover:text-gold9/70'}`}
-                            >
-                                FLEET
-                            </button>
-                        </div>
+                    {/* RIGHT COLUMN: FLEET COMMAND (GIT) & STATS */}
+                    <div className="col-span-3 row-span-6 flex flex-col gap-6">
+                        {/* STATS */}
+                        <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
+                            <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
+                                <div className="text-xs text-gold9/60">ACTIVE AGENTS</div>
+                                <div className="text-2xl font-bold text-green-400">{system_stats.active_agents}</div>
+                            </div>
+                            <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
+                                <div className="text-xs text-gold9/60">SUCCESS RATE</div>
+                                <div className="text-2xl font-bold text-blue-400">{system_stats.success_rate}%</div>
+                            </div>
+                        </motion.div>
 
-                        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
-                            {activeTab === 'fleet' ? (
-                                <div className="h-full w-full rounded overflow-hidden">
-                                    <FleetManagerUI
-                                        fleetState={fleetState}
-                                        onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
-                                        onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
-                                        onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
-                                        onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
-                                        onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
-                                    />
-                                </div>
-                            ) : activeTab === 'tasks' ? (
-                                tasks.length === 0 ? (
-                                    <div className="text-center text-gold9/40 py-10 italic text-xs">
-                                        No active worker nodes.
-                                        <br/>Click COMMAND to deploy.
-                                    </div>
-                                ) : (
-                                    tasks.map((task, i) => (
-                                        <div key={i} className={`bg-gold9/5 border p-3 rounded hover:bg-gold9/10 transition-colors group/item ${task.status === 'failed' ? 'border-red-500/50 bg-red-500/5' : 'border-gold9/10'}`}>
-                                            <div className="flex justify-between items-start mb-1">
-                                                <div className="text-sm font-bold text-gold9">
-                                                    {task.title}
-                                                    {task.status === 'failed' && <span className="ml-2 text-[10px] bg-red-500 text-white px-1 rounded">FAILED</span>}
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {task.healing && (
-                                                        <button
-                                                            onClick={() => handleApplyFix(task.id)}
-                                                            className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold hover:bg-green-400 transition-colors flex items-center gap-1"
-                                                            title="Apply AI Fix"
-                                                        >
-                                                            <Zap size={10} fill="currentColor" />
-                                                            APPLY FIX
-                                                        </button>
-                                                    )}
-                                                    {task.trigger.type === 'manual' && (
-                                                        <button
-                                                            onClick={() => handleRunTask(task.id)}
-                                                            className="text-green-400 hover:text-green-300 p-1 rounded hover:bg-green-500/20 transition-colors"
-                                                            title="Run Now"
-                                                        >
-                                                            <Play size={12} fill="currentColor" />
-                                                        </button>
-                                                    )}
-                                                    <button onClick={() => handleDeleteTask(task.id)} className="text-gold9/20 hover:text-red-500 transition-colors">
-                                                        <Trash2 size={12} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="text-[10px] text-gold9/50 flex gap-2 items-center">
-                                                <span className="bg-gold9/10 px-1 rounded">TRIG: {task.trigger.type.toUpperCase()}</span>
-                                                <span className="bg-blue-500/10 text-blue-400 px-1 rounded">ACT: {task.action.type.toUpperCase()}</span>
-                                                {task.healing && (
-                                                    <span className="text-green-400 italic ml-auto">
-                                                        Repair ready
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))
-                                )
-                            ) : (
-                                trello.length === 0 ? (
-                                    <div className="text-center text-gold9/40 py-10 italic">No active objectives detected.</div>
-                                ) : (
-                                    trello.map((card, i) => (
-                                        <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors group/item">
-                                            <div className="text-xs text-gold9/50 mb-1 flex justify-between items-center">
-                                                <div className="flex justify-between flex-1">
-                                                    <span>{card.listName || 'PENDING'}</span>
-                                                    <span className="mr-2">#{card.idShort}</span>
-                                                </div>
-                                                <button onClick={() => handleDeleteObjective(card.id)} className="text-gold9/20 hover:text-red-500 transition-colors">
-                                                    <Trash2 size={12} />
-                                                </button>
-                                            </div>
-                                            <div className="font-medium text-sm text-gray-200">{card.name}</div>
-                                        </div>
-                                    ))
-                                )
-                            )}
-                        </div>
-                    </motion.div>
-
-                    {/* COL 2: CENTER COMMS (JULES) - Spans 5 cols */}
-                    <motion.div
-                        variants={itemVariants}
-                        className="col-span-5 row-span-4 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden"
-                    >
-                        <div className="absolute top-0 right-0 p-2 opacity-50 pointer-events-none">
-                            <Activity className="w-24 h-24 text-gold9/5" />
-                        </div>
-                        <div className="relative z-10 flex items-center justify-between border-b border-gold9/10 pb-2 mb-4">
-                            <h2 className="flex items-center gap-2 text-lg font-bold tracking-widest">
-                                <Cpu className="w-5 h-5 text-gold9" />
-                                AGENT STATUS (JULES)
-                            </h2>
-                            <div className="flex gap-2">
+                        {/* FLEET COMMAND (GIT) */}
+                        <motion.div
+                            variants={itemVariants}
+                            className="flex-1 flex flex-col gap-4 bg-black/40 border border-gold9/20 rounded-xl p-4 overflow-hidden"
+                        >
+                            <div className="flex items-center justify-between border-b border-gold9/10 pb-2 mb-2">
+                                <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest">
+                                    <GitBranch className="w-4 h-4 text-gold9" />
+                                    <span className="text-gold9">FLEET COMMAND</span>
+                                </h2>
                                 <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`p-1 rounded transition-colors ${viewMode === 'list' ? 'bg-gold9 text-black' : 'text-gold9/40 hover:text-gold9'}`}
+                                    onClick={handleSyncFleet}
+                                    className="text-[10px] text-gold9/60 hover:text-gold9 flex items-center gap-1 border border-gold9/20 px-2 py-1 rounded hover:bg-gold9/10 transition-colors"
                                 >
-                                    <List size={14} />
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('spatial')}
-                                    className={`p-1 rounded transition-colors ${viewMode === 'spatial' ? 'bg-gold9 text-black' : 'text-gold9/40 hover:text-gold9'}`}
-                                >
-                                    <Layers size={14} />
+                                    <Activity size={10} />
+                                    SYNC REPOS
                                 </button>
                             </div>
-                        </div>
 
-                        {viewMode === 'spatial' ? (
-                             <SwarmVisualizer swarmGroups={swarmGroups} soloSessions={soloSessions} />
-                        ) : (
-                            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4">
-                                {/* Empty State */}
-                                {jules.length === 0 && swarmGroups.length === 0 && (
-                                    <div className="h-full flex flex-col items-center justify-center text-gold9/40 gap-2">
-                                        <Activity className="w-8 h-8 opacity-50" />
-                                        <span className="italic">No active agents in field.</span>
+                            <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
+                                {fleetStatus.length === 0 ? (
+                                    <div className="text-xs text-gold9/40 italic text-center py-10">
+                                        No repositories under command.
                                     </div>
-                                )}
-
-                                {/* Render Swarms */}
-                                {swarmGroups.map(swarm => (
-                                    <div key={swarm.id} className="border border-purple-500/30 bg-purple-500/5 rounded-xl overflow-hidden">
-                                        <div className="flex items-center justify-between p-2 bg-purple-500/10 border-b border-purple-500/20">
-                                            <div className="flex items-center gap-2 text-purple-400">
-                                                <Layers size={14} />
-                                                <span className="text-xs font-bold tracking-widest uppercase">MISSION: {swarm.title}</span>
+                                ) : (
+                                    fleetStatus.map((repo, i) => (
+                                        <div
+                                            key={i}
+                                            onClick={() => setSelectedRepo(repo)}
+                                            className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer"
+                                        >
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <div className="text-sm font-bold text-gold9">{repo.name}</div>
+                                                    <div className="flex items-center gap-2 text-[10px] font-mono mt-1">
+                                                        <span className={`text-${repo.branch === 'main' || repo.branch === 'master' ? 'gray-400' : 'green-400'}`}>
+                                                            {repo.branch}
+                                                        </span>
+                                                        <span className="text-gold9/30">|</span>
+                                                        <span className="text-gray-500">REMOTE</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <span className="text-[9px] text-purple-500/50 font-mono">ID: {swarm.id.substring(0, 4)}</span>
-                                        </div>
-                                        <div className="p-2">
-                                            {swarm.activeSessions.length === 0 ? (
-                                                <div className="text-[10px] text-purple-500/40 italic text-center py-2">Deploying agents...</div>
-                                            ) : (
-                                                swarm.activeSessions.map(renderSessionItem)
+
+                                            {repo.last_commit && (
+                                                <div className="text-[10px] bg-black/30 p-2 rounded border border-white/5">
+                                                    <div className="text-gold9/70 font-bold mb-0.5 truncate">{repo.last_commit.message}</div>
+                                                    <div className="text-gray-500 flex justify-between">
+                                                        <span>{repo.last_commit.author}</span>
+                                                        <span>{new Date(repo.last_commit.date).toLocaleDateString()}</span>
+                                                    </div>
+                                                </div>
                                             )}
                                         </div>
-                                    </div>
-                                ))}
-
-                                {/* Render Solo Agents */}
-                                {soloSessions.length > 0 && (
-                                    <div>
-                                        {swarmGroups.length > 0 && (
-                                            <div className="text-[10px] font-bold text-gold9/30 tracking-widest mb-2 mt-4 px-1">INDEPENDENT OPERATIVES</div>
-                                        )}
-                                        {soloSessions.map(renderSessionItem)}
-                                    </div>
+                                    ))
                                 )}
                             </div>
-                        )}
-                    </motion.div>
-
-                    {/* COL 2 BOTTOM: AGENT STATS */}
-                    <motion.div
-                        variants={itemVariants}
-                        className="col-span-5 row-span-2 grid grid-cols-3 gap-4"
-                    >
-                        <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">ACTIVE AGENTS</div>
-                            <div className="text-2xl font-bold text-green-400">{system_stats.active_agents}</div>
-                            <Activity className="w-4 h-4 self-end text-gold9/30" />
-                        </div>
-                        <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">TOTAL DEPLOYED</div>
-                            <div className="text-2xl font-bold text-gold9">{system_stats.total_agents}</div>
-                            <Cpu className="w-4 h-4 self-end text-gold9/30" />
-                        </div>
-                        <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
-                            <div className="text-xs text-gold9/60">SUCCESS RATE</div>
-                            <div className="text-2xl font-bold text-blue-400">{system_stats.success_rate}%</div>
-                            <CheckCircle className="w-4 h-4 self-end text-gold9/30" />
-                        </div>
-                    </motion.div>
-
-                    {/* COL 3: FLEET COMMAND (GIT) - Spans 4 cols, full height */}
-                    <motion.div
-                        variants={itemVariants}
-                        className="col-span-4 row-span-6 flex flex-col gap-4 bg-black/40 border border-gold9/20 rounded-xl p-4 overflow-hidden"
-                    >
-                        <div className="flex items-center justify-between border-b border-gold9/10 pb-2 mb-2">
-                            <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest">
-                                <GitBranch className="w-4 h-4 text-gold9" />
-                                <span className="text-gold9">FLEET COMMAND</span>
-                            </h2>
-                            <button
-                                onClick={handleSyncFleet}
-                                className="text-[10px] text-gold9/60 hover:text-gold9 flex items-center gap-1 border border-gold9/20 px-2 py-1 rounded hover:bg-gold9/10 transition-colors"
-                            >
-                                <Activity size={10} />
-                                SYNC REPOS
-                            </button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-3">
-                            {fleetStatus.length === 0 ? (
-                                <div className="text-xs text-gold9/40 italic text-center py-10">
-                                    No repositories under command.
-                                </div>
-                            ) : (
-                                fleetStatus.map((repo, i) => (
-                                    <div
-                                        key={i}
-                                        onClick={() => setSelectedRepo(repo)}
-                                        className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer"
-                                    >
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <div className="text-sm font-bold text-gold9">{repo.name}</div>
-                                                <div className="flex items-center gap-2 text-[10px] font-mono mt-1">
-                                                    <span className={`text-${repo.branch === 'main' || repo.branch === 'master' ? 'gray-400' : 'green-400'}`}>
-                                                        {repo.branch}
-                                                    </span>
-                                                    <span className="text-gold9/30">|</span>
-                                                    <span className="text-gray-500">REMOTE</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {repo.last_commit && (
-                                            <div className="text-[10px] bg-black/30 p-2 rounded border border-white/5">
-                                                <div className="text-gold9/70 font-bold mb-0.5 truncate">{repo.last_commit.message}</div>
-                                                <div className="flex justify-between text-gold9/40">
-                                                    <span>{repo.last_commit.author}</span>
-                                                    <span>{repo.last_commit.date}</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </motion.div>
-
+                        </motion.div>
+                    </div>
                 </div>
 
                 {/* FOOTER */}
