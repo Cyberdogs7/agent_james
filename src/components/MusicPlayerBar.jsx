@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, Shuffle, Repeat } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Volume2, Shuffle, Repeat, ChevronDown, ChevronUp } from 'lucide-react';
 
 const MusicPlayerBar = ({ socket }) => {
     const [status, setStatus] = useState({ status: 'stopped', track: null });
     const [isVisible, setIsVisible] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(false);
 
     useEffect(() => {
         if (!socket) return;
@@ -31,6 +32,20 @@ const MusicPlayerBar = ({ socket }) => {
     };
 
     if (!isVisible) return null;
+
+    if (isMinimized) {
+        return (
+            <div className="fixed bottom-4 right-4 z-[100]">
+                <button
+                    onClick={() => setIsMinimized(false)}
+                    className="w-12 h-12 bg-[#212121] border border-[#383838] rounded-full flex items-center justify-center text-white hover:scale-105 transition-transform shadow-lg"
+                    title="Show Music Player"
+                >
+                    <ChevronUp size={24} />
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed bottom-0 left-0 right-0 h-[72px] bg-[#212121] border-t border-[#383838] flex items-center px-4 z-[100] text-white select-none">
@@ -93,6 +108,13 @@ const MusicPlayerBar = ({ socket }) => {
                         <div className="w-1/2 h-full bg-white rounded-full"></div>
                     </div>
                 </div>
+                <button
+                    onClick={() => setIsMinimized(true)}
+                    className="text-[#aaaaaa] hover:text-white transition-colors ml-4"
+                    title="Hide Controls"
+                >
+                    <ChevronDown size={20} />
+                </button>
             </div>
         </div>
     );
