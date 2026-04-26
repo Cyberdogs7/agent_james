@@ -1760,6 +1760,8 @@ function App() {
                         onToggleVideo={toggleVideo}
                         onToggleSettings={() => setShowSettings(!showSettings)}
                         onToggleFleetSettings={() => setShowFleetSettings(!showFleetSettings)}
+                        onToggleMusicPlayer={() => setShowMusicPlayer(!showMusicPlayer)}
+                        showMusicPlayer={showMusicPlayer}
                         onToggleHand={() => setIsHandTrackingEnabled(!isHandTrackingEnabled)}
                         onToggleKasa={toggleKasaWindow}
                         showKasaWindow={showKasaWindow}
