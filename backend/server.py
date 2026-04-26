@@ -1,5 +1,6 @@
 import sys
 import asyncio
+from backend.jules_agent import JulesAgent
 
 # Fix for asyncio subprocess support on Windows
 # MUST BE SET BEFORE OTHER IMPORTS
@@ -236,6 +237,39 @@ authenticator = None
 kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 # tool_permissions is now SETTINGS["tool_permissions"]
 
+
+async def initial_fleet_sync():
+    print("[SERVER] Running initial fleet sync...")
+    try:
+
+        # Try to get API key from config
+        config = project_manager.get_project_config()
+        api_key = config.get("jules_api_key") or os.getenv("JULES_API_KEY")
+
+        if not api_key:
+            print("[SERVER] Cannot perform initial fleet sync: No Jules API Key found.")
+            return
+
+        agent = JulesAgent(api_key=api_key)
+        response = await agent.list_sources()
+
+        sources = []
+        if response and isinstance(response, dict) and "sources" in response:
+            sources = response["sources"]
+        elif isinstance(response, list):
+            sources = response
+
+        if sources:
+            # Use to_thread to prevent blocking if it does any heavy IO
+
+            results, status = await asyncio.to_thread(project_manager.sync_jules_repos, sources)
+            print(f"[SERVER] Initial fleet sync complete. Status: {status}")
+        else:
+            print("[SERVER] Initial fleet sync: No sources found or failed to fetch.")
+
+    except Exception as e:
+        print(f"[SERVER] Error during initial fleet sync: {e}")
+
 async def startup_event():
     init_db()
     global slack_agent, scraper_agent, log_monitor
@@ -290,6 +324,9 @@ async def startup_event():
     automation_engine = AutomationEngine(task_manager, project_manager)
     asyncio.create_task(automation_engine.start())
     print("[SERVER] Automation Engine started.")
+
+    print("[SERVER] Startup: Triggering initial fleet sync...")
+    asyncio.create_task(initial_fleet_sync())
 
 
 @app.get("/status")
