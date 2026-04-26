@@ -21,7 +21,13 @@ class ProactiveAgent:
         self.genai_client = genai_client
         self.last_suggestion_time = 0
         self.last_vision_check_time = 0
-        self.last_clipboard_content = ""
+
+        # Initialize with current clipboard content to avoid triggering on startup
+        try:
+            self.last_clipboard_content = pyperclip.paste().strip()
+        except Exception:
+            self.last_clipboard_content = ""
+
         self.last_analyzed_project = None
         self.clipboard_failure_count = 0
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
