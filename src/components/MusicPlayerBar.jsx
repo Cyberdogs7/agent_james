@@ -31,7 +31,18 @@ const MusicPlayerBar = ({ socket }) => {
         socket.emit('control_music', { action });
     };
 
+    const formatTime = (seconds) => {
+        if (!seconds || isNaN(seconds)) return '0:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
     if (!isVisible) return null;
+
+    const progress = status.track?.progress || 0;
+    const duration = status.track?.duration || 0;
+    const progressPercent = duration > 0 ? (progress / duration) * 100 : 0;
 
     if (isMinimized) {
         return (
@@ -109,11 +120,14 @@ const MusicPlayerBar = ({ socket }) => {
                         <Repeat size={18} />
                     </button>
                 </div>
-                {/* Progress bar placeholder (simulated) */}
+                {/* Progress bar */}
                 <div className="w-full max-w-md flex items-center gap-2 text-[11px] text-[#aaaaaa]">
-                    <span>0:00</span>
+                    <span>{formatTime(progress)}</span>
                     <div className="flex-1 h-1 bg-[#4d4d4d] rounded-full overflow-hidden cursor-pointer hover:h-1.5 transition-all">
-                        <div className="w-1/3 h-full bg-red-600 rounded-full relative">
+                        <div
+                            className="h-full bg-red-600 rounded-full relative"
+                            style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
+                        >
                             <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-red-600 rounded-full opacity-0 hover:opacity-100 transition-opacity"></div>
                         </div>
                     </div>
