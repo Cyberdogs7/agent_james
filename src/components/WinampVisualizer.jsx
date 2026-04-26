@@ -99,7 +99,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
     return (
         <div className="flex flex-col h-full bg-[#1a1a1a] text-[#00FF00] font-mono text-xs select-none pb-1">
             {/* Header / Title Bar */}
-            <div className="h-5 bg-[#2d2d2d] flex items-center justify-between px-2 cursor-grab active:cursor-grabbing border-b border-[#4a4a4a]">
+            <div data-drag-handle className="h-5 bg-[#2d2d2d] flex items-center justify-between px-2 cursor-grab active:cursor-grabbing border-b border-[#4a4a4a]">
                 <div className="flex items-center gap-1">
                     <span className="text-[#cbced0]">WINAMP</span>
                     <span className="text-[#00FF00] animate-pulse">⚡</span>
