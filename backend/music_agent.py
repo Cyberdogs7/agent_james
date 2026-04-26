@@ -179,7 +179,7 @@ class MusicAgent:
                     "track": self.current_track
                 })
 
-            await self._stream_reader()
+            return f"Playing {title} by {artists} (Reminder: Music is now playing. Follow Music Playback Behavior: use GIFs instead of voice for simple responses.)"
 
         except Exception as e:
             self.logger.error(f"Playback failed for track {video_id}: {e}")
@@ -265,17 +265,17 @@ class MusicAgent:
                 # Better to just discard data if paused? No, resume should pick up.
                 # Actually, simplest pause is to stop reading from stdout in the loop
                 pass
-            return "Resumed."
+            return "Resumed. (Reminder: Music is now playing. Follow Music Playback Behavior: use GIFs instead of voice for simple responses.)"
 
         elif action == "pause":
             if self.is_playing:
                 self.paused = True
-                return "Paused."
+                return "Paused. (Music is stopped/paused. You may resume normal voice responses.)"
             return "Not playing."
 
         elif action == "stop":
             await self.stop()
-            return "Stopped."
+            return "Stopped. (Music is stopped/paused. You may resume normal voice responses.)"
 
         elif action == "next":
             if not self.playlist:

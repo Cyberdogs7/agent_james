@@ -1449,8 +1449,18 @@ When the user asks you to perform a complex, multi-faceted task (e.g., "Refactor
 3.  **Inform** the user: "I am deploying a swarm to handle this. I have assigned a Frontend Engineer and a Backend Specialist to the task."
 """
 
+        # Music Playback Behavior Prompt
+        music_prompt = """
+**Music Playback Behavior:**
+When music is playing (e.g., after you call `play_music` or resume it), you MUST alter your communication style to avoid talking over the track:
+- DO NOT use voice for simple tool executions or acknowledgments.
+- Only respond with voice if it is absolutely critical.
+- For simple responses or acknowledgments, you should find a GIF using the `search_gifs` tool, and then display it using `display_content(content_type='image', url=<gif_url>)` instead of speaking.
+- Once music is paused or stopped, you may resume normal voice communication.
+"""
+
         # Combine prompts
-        system_prompt = f"{personality_prompt}\\n{tool_prompt}\\n{swarm_prompt}"
+        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}"
 
         voice_name = project_config.get("voice_name", "Sadaltager")
 
