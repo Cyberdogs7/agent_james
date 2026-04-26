@@ -11,6 +11,7 @@ import uvicorn
 from backend.fleet_manager import FleetManager
 from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -59,7 +60,16 @@ except ImportError:
 
 # Create a Socket.IO server
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await startup_event()
+    yield
+    # Shutdown
+    # Assuming no shutdown event logic right now
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -231,7 +241,6 @@ authenticator = None
 kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 # tool_permissions is now SETTINGS["tool_permissions"]
 
-@app.on_event("startup")
 async def startup_event():
     init_db()
     global slack_agent, scraper_agent, log_monitor
@@ -1863,7 +1872,7 @@ async def get_accounts(sid):
     except Exception as e:
         await sio.emit('account_error', {'message': f"Failed to fetch accounts: {str(e)}"}, to=sid)
 
-@sio.event('add_account')
+@sio.on('add_account')
 async def add_account_event(sid, data):
     try:
         api_key = data.get('api_key')
@@ -1884,7 +1893,7 @@ async def add_account_event(sid, data):
     except Exception as e:
         await sio.emit('account_error', {'message': f"Failed to add account: {str(e)}"}, to=sid)
 
-@sio.event('update_account')
+@sio.on('update_account')
 async def update_account_event(sid, data):
     try:
         account_id = data.get('id')
@@ -1903,7 +1912,7 @@ async def update_account_event(sid, data):
     except Exception as e:
         await sio.emit('account_error', {'message': f"Failed to update account: {str(e)}"}, to=sid)
 
-@sio.event('delete_account')
+@sio.on('delete_account')
 async def delete_account_event(sid, data):
     try:
         account_id = data.get('id')
