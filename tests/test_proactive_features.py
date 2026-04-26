@@ -30,7 +30,7 @@ async def test_check_clipboard_link(proactive_agent):
 
         # First check
         suggestion = await proactive_agent._check_clipboard()
-        assert suggestion == "I noticed you copied a link. Should I open it or summarize it?"
+        assert suggestion == "I noticed you copied a link: https://github.com/example/repo\n\nShould I open it or summarize it?"
 
         # Second check (same content) should return None
         suggestion = await proactive_agent._check_clipboard()
@@ -42,7 +42,7 @@ async def test_check_clipboard_code(proactive_agent):
         mock_paste.return_value = "def hello():\n    print('world')"
 
         suggestion = await proactive_agent._check_clipboard()
-        assert suggestion == "I noticed you copied some code. Should I explain it or create a file?"
+        assert suggestion == "I noticed you copied some code:\n\n```\ndef hello():\n    print('world')\n```\n\nShould I explain it or create a file?"
 
 @pytest.mark.asyncio
 async def test_check_clipboard_error(proactive_agent):
@@ -50,7 +50,7 @@ async def test_check_clipboard_error(proactive_agent):
         mock_paste.return_value = "RuntimeError: Something went wrong"
 
         suggestion = await proactive_agent._check_clipboard()
-        assert suggestion == "I noticed an error message. Should I help debug it?"
+        assert suggestion == "I noticed an error message:\n\n```\nRuntimeError: Something went wrong\n```\n\nShould I help debug it?"
 
 @pytest.mark.asyncio
 async def test_check_context_switch_with_git_suggestion(proactive_agent):

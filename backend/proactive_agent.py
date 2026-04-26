@@ -21,7 +21,13 @@ class ProactiveAgent:
         self.genai_client = genai_client
         self.last_suggestion_time = 0
         self.last_vision_check_time = 0
-        self.last_clipboard_content = ""
+
+        # Initialize with current clipboard content to avoid triggering on startup
+        try:
+            self.last_clipboard_content = pyperclip.paste().strip()
+        except Exception:
+            self.last_clipboard_content = ""
+
         self.last_analyzed_project = None
         self.clipboard_failure_count = 0
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
@@ -57,17 +63,17 @@ class ProactiveAgent:
 
             # Simple Heuristics
             if content.startswith("http://") or content.startswith("https://"):
-                return "I noticed you copied a link. Should I open it or summarize it?"
+                return f"I noticed you copied a link: {content}\n\nShould I open it or summarize it?"
 
             # Check for code-like patterns
             if any(k in content for k in ["def ", "class ", "import ", "function ", "const ", "var ", "let "]):
                 # Only if it's multi-line or long enough to be interesting
                 if len(content.split('\n')) > 1 or len(content) > 40:
-                    return "I noticed you copied some code. Should I explain it or create a file?"
+                    return f"I noticed you copied some code:\n\n```\n{content}\n```\n\nShould I explain it or create a file?"
 
             # Check for errors
             if "error" in content.lower() or "exception" in content.lower() or "traceback" in content.lower():
-                return "I noticed an error message. Should I help debug it?"
+                return f"I noticed an error message:\n\n```\n{content}\n```\n\nShould I help debug it?"
 
             return None
 
