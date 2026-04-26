@@ -265,10 +265,46 @@ class AudioLoop:
             print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
         self._reconnect_needed.set()
 
-    async def _handle_jules_status_change(self, title, new_state):
-        """Handles UI and voice notifications for Jules session status changes."""
+    async def _handle_jules_status_change(self, session_id, title, new_state):
+        """Handles UI and voice notifications for Jules session status changes and syncs fleet."""
         notification_text = f"Jules task '{title}' has moved to {new_state}."
         self.notify_user(notification_text, duration=20000)
+
+        # Try to sync this state change with the fleet manager
+        try:
+            from backend.server import fleet_manager, sio, check_and_start_next_task, fleet_account_active_sessions, get_all_accounts
+
+            agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+            if agent_id and repo_name and task_id:
+                # Map Jules state to fleet state where possible
+                # The fleet manager queue tracks "status": pending, in_progress, completed, failed
+                # The agent tracks "status": idle, working, stuck, error
+
+                if new_state == "COMPLETED":
+                    fleet_manager.update_task_status(repo_name, task_id, "completed")
+                    fleet_manager.update_agent_session(agent_id, None, "idle")
+                elif new_state == "FAILED":
+                    fleet_manager.update_task_status(repo_name, task_id, "failed")
+                    fleet_manager.update_agent_session(agent_id, None, "error")
+                elif new_state in ["QUEUED", "PLANNING", "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "IN_PROGRESS"]:
+                    fleet_manager.update_task_status(repo_name, task_id, "in_progress")
+                    fleet_manager.update_agent_session(agent_id, session_id, "working")
+                elif new_state == "PAUSED":
+                    fleet_manager.update_task_status(repo_name, task_id, "in_progress")
+                    fleet_manager.update_agent_session(agent_id, session_id, "stuck")
+
+                # Emit update
+                await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+                # If finished, optionally trigger next task if the agent is now idle
+                if new_state in ["COMPLETED", "FAILED"]:
+                    # Wait a tiny bit to let _on_jules_finished handle it if it hasn't already
+                    await asyncio.sleep(1)
+                    await check_and_start_next_task(repo_name, agent_id)
+
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to sync fleet status for {session_id}: {e}")
 
     async def _handle_jules_triage(self, session_id, message_content):
         """

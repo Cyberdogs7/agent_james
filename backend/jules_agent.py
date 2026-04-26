@@ -387,7 +387,7 @@ class JulesAgent:
                                 if previous_state != current_state:
                                     self._log(f"[JULES_AGENT] Status change for {session_id}: {previous_state} -> {current_state}")
                                     if status_change_callback:
-                                        asyncio.create_task(status_change_callback(title, current_state))
+                                        asyncio.create_task(status_change_callback(session_id, title, current_state))
                                 del self.monitored_sessions[session_id]
                             continue
 
@@ -400,7 +400,7 @@ class JulesAgent:
                             self._log(f"[JULES_AGENT] Status change for {session_id}: {previous_state} -> {current_state}")
                             self.monitored_sessions[session_id] = current_state
                             if status_change_callback:
-                                asyncio.create_task(status_change_callback(title, current_state))
+                                asyncio.create_task(status_change_callback(session_id, title, current_state))
 
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Error in monitoring loop: {e}")

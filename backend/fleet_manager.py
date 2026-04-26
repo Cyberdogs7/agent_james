@@ -90,6 +90,16 @@ class FleetManager:
             self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t.get("status") != "completed"]
             self.save_state()
 
+    def get_by_session(self, session_id):
+        for agent_id, agent in self.agents.items():
+            if agent.get("current_session") == session_id:
+                repo_name = agent.get("current_repo")
+                if repo_name in self.repos:
+                    for task in self.repos[repo_name]["queue"]:
+                        if task.get("agent_id") == agent_id and task.get("status") not in ["completed", "failed"]:
+                            return agent_id, repo_name, task["id"]
+        return None, None, None
+
     def assign_agent(self, agent_id, repo_name):
         if agent_id in self.agents:
             self.ensure_repo(repo_name)
