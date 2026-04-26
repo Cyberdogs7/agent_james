@@ -192,6 +192,8 @@ class MusicAgent:
                 '-reconnect', '1',
                 '-reconnect_streamed', '1',
                 '-reconnect_delay_max', '5',
+                '-rw_timeout', '10000000', # 10 seconds in microseconds to prevent indefinite hangs
+                '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', # Masquerade as a browser
                 '-i', stream_url,
                 '-f', 's16le',
                 '-acodec', 'pcm_s16le',
@@ -232,7 +234,7 @@ class MusicAgent:
 
     async def _ffmpeg_reader(self):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
-        chunk_size = 8192
+        chunk_size = 131072
         while self.is_playing and self.ffmpeg_process:
             if self.ffmpeg_process.returncode is not None:
                 break
@@ -289,34 +291,24 @@ class MusicAgent:
                 import array
                 import sys
                 import time
+                import audioop
 
                 # Ensure data length is even for 16-bit PCM
                 if len(data) % 2 != 0:
                     data = data[:-1]
 
-                arr = array.array('h', data)
-
                 # Apply volume scaling
                 if self.volume != 1.0:
-                    # Ensure little-endian byte order matches struct behavior
-                    if sys.byteorder != 'little':
-                        arr.byteswap()
+                    data = audioop.mul(data, 2, self.volume)
 
-                    vol_int = int(self.volume * 256)
-                    for i in range(len(arr)):
-                        arr[i] = max(-32768, min(32767, (arr[i] * vol_int) >> 8))
-
-                    if sys.byteorder != 'little':
-                        arr.byteswap()
-
-                    data = arr.tobytes()
+                arr = array.array('h', data)
 
                 # Visualization logic
                 if self.sio:
                     try:
                         current_time = time.time()
-                        # Rate limit visualizer emission to approx 30 fps (33ms) to avoid flooding the socket
-                        if not hasattr(self, '_last_vis_emit') or (current_time - self._last_vis_emit) >= 0.033:
+                        # Rate limit visualizer emission to approx 15 fps (66ms) to avoid flooding the socket
+                        if not hasattr(self, '_last_vis_emit') or (current_time - self._last_vis_emit) >= 0.066:
                             self._last_vis_emit = current_time
                             # Extract real amplitude chunks for the visualizer
                             step = max(1, len(arr) // 64)
@@ -333,7 +325,13 @@ class MusicAgent:
                                 vis_data.append(val)
 
                             # Async emit to avoid blocking audio loop
-                            asyncio.create_task(self.sio.emit('music_vis_data', {"data": vis_data}))
+                            async def safe_emit():
+                                try:
+                                    await self.sio.emit('music_vis_data', {"data": vis_data})
+                                except Exception as emit_err:
+                                    self.logger.debug(f"Emit error: {emit_err}")
+
+                            asyncio.create_task(safe_emit())
                     except Exception as e:
                         self.logger.debug(f"Vis error: {e}")
 
