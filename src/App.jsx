@@ -424,47 +424,6 @@ function App() {
     selectedMicId,
   ]);
 
-  useEffect(() => {
-    // Socket IO Setup
-    socket.on("connect", () => {
-      setStatus("Connected");
-      setSocketConnected(true);
-      socket.emit("get_settings");
-    });
-    socket.on("disconnect", () => {
-      setStatus("Disconnected");
-      setSocketConnected(false);
-    });
-    socket.on("status", (data) => {
-      addMessage("System", data.msg);
-      // Update status bar based on backend messages
-      if (data.msg === "A.D.A Started") {
-        setStatus("Model Connected");
-      } else if (data.msg === "A.D.A Stopped") {
-        setStatus("Connected");
-      }
-    });
-    socket.on("audio_data", (data) => {
-      const rawData = data.data;
-      const history = audioHistoryRef.current;
-      const smoothingWindow = 3; // Averaging window
-
-      history.push(rawData);
-      if (history.length > smoothingWindow) {
-        history.shift();
-      }
-
-      if (history.length > 0) {
-        const smoothedData = new Array(rawData.length).fill(0);
-        for (let i = 0; i < rawData.length; i++) {
-          let sum = 0;
-          for (let j = 0; j < history.length; j++) {
-            sum += history[j][i] || 0;
-          }
-          smoothedData[i] = sum / history.length;
-        }
-    }, [isConnected, isAuthenticated, socketConnected, micDevices, selectedMicId]);
-
     useEffect(() => {
         // Socket IO Setup
         socket.on('connect', () => {
@@ -703,18 +662,6 @@ function App() {
             }));
         });
 
-        // Threshold to force silence
-        const silenceThreshold = 5;
-        const isSilent = smoothedData.every((val) => val < silenceThreshold);
-        if (isSilent) {
-          setAiAudioData(new Array(rawData.length).fill(0));
-        } else {
-          setAiAudioData(smoothedData);
-        }
-      } else {
-        setAiAudioData(rawData);
-      }
-    });
     socket.on("auth_status", (data) => {
       console.log("Auth Status:", data);
       setIsAuthenticated(data.authenticated);
