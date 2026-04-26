@@ -319,7 +319,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         variants={itemVariants}
                         className="col-span-3 row-span-6 bg-black/40 border border-gold9/20 rounded-xl p-4 flex flex-col relative overflow-hidden group hover:border-gold9/40 transition-colors"
                     >
-                        <div className="absolute top-0 right-0 p-2 opacity-50">
+                        <div className="absolute top-0 right-0 p-2 opacity-50 pointer-events-none">
                             <Layers className="w-24 h-24 text-gold9/5" />
                         </div>
 

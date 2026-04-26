@@ -41,6 +41,11 @@ class MusicAgent:
         self._stop_event.set()
         await self._kill_ffmpeg()
         self.is_playing = False
+        if self.sio:
+             await self.sio.emit('music_status', {
+                "status": "stopped",
+                "track": None
+            })
         self.logger.info("MusicAgent stopped.")
 
     async def _kill_ffmpeg(self):
