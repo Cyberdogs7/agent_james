@@ -1467,6 +1467,24 @@ async def delete_task(sid, data):
              await sio.emit('error', {'msg': 'Task not found'})
 
 @sio.event
+async def delete_trello_card(sid, data):
+    card_id = data.get('id')
+    print(f"[SERVER] Delete Trello Card: {card_id}")
+    if audio_loop and getattr(audio_loop, 'trello_agent', None):
+        try:
+            await audio_loop.trello_agent.delete_card(card_id)
+            await sio.emit('status', {'msg': 'Trello card deleted'})
+            # Force update
+            if dashboard_task:
+                data = await audio_loop.get_dashboard_data()
+                await sio.emit('dashboard_update', data)
+        except Exception as e:
+             print(f"[SERVER] Error deleting Trello card: {e}")
+             await sio.emit('error', {'msg': f'Error deleting Trello card: {e}'})
+    else:
+        await sio.emit('error', {'msg': 'Trello Agent not ready'})
+
+@sio.event
 async def apply_task_fix(sid, data):
     task_id = data.get('id')
     print(f"[SERVER] Apply Task Fix: {task_id}")

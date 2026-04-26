@@ -134,6 +134,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         if (socket) socket.emit('delete_task', { id });
     };
 
+    const handleDeleteObjective = (id) => {
+        if (socket) socket.emit('delete_trello_card', { id });
+    };
+
     const handleRunTask = (id) => {
         if (socket) socket.emit('run_task', { id });
     };
@@ -413,10 +417,15 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                     <div className="text-center text-gold9/40 py-10 italic">No active objectives detected.</div>
                                 ) : (
                                     trello.map((card, i) => (
-                                        <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors">
-                                            <div className="text-xs text-gold9/50 mb-1 flex justify-between">
-                                                <span>{card.listName || 'PENDING'}</span>
-                                                <span>#{card.idShort}</span>
+                                        <div key={i} className="bg-gold9/5 border border-gold9/10 p-3 rounded hover:bg-gold9/10 transition-colors group/item">
+                                            <div className="text-xs text-gold9/50 mb-1 flex justify-between items-center">
+                                                <div className="flex justify-between flex-1">
+                                                    <span>{card.listName || 'PENDING'}</span>
+                                                    <span className="mr-2">#{card.idShort}</span>
+                                                </div>
+                                                <button onClick={() => handleDeleteObjective(card.id)} className="text-gold9/20 hover:text-red-500 transition-colors">
+                                                    <Trash2 size={12} />
+                                                </button>
                                             </div>
                                             <div className="font-medium text-sm text-gray-200">{card.name}</div>
                                         </div>
