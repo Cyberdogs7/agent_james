@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import shutil
 import subprocess
 import threading
 import time
@@ -51,6 +52,12 @@ class MusicAgent:
     async def play(self, query):
         """Searches for a query and streams it."""
         self.logger.info(f"Searching for: {query}")
+
+        if not shutil.which('ffmpeg'):
+            err_msg = "Failed to play music: ffmpeg is not installed or not found in system PATH. Please install ffmpeg to enable music playback."
+            self.logger.error(err_msg)
+            return err_msg
+
         try:
             # 1. Search
             # Run in thread to avoid blocking
