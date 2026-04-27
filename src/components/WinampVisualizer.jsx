@@ -10,6 +10,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
   const dataRef = useRef(new Array(64).fill(0));
   const smoothDataRef = useRef(new Array(64).fill(0));
   const containerRef = useRef(null);
+  const lyricsRef = useRef(null);
 
   useEffect(() => {
     if (!socket) return;
@@ -126,6 +127,25 @@ const WinampVisualizer = ({ socket, onClose }) => {
     };
   }, [mode]);
 
+  useEffect(() => {
+    if (lyricsRef.current && status.track?.progress !== undefined && status.track?.duration) {
+      const progress = status.track.progress;
+      const duration = status.track.duration;
+      const percent = Math.min(1, Math.max(0, progress / duration));
+
+      const el = lyricsRef.current;
+      const maxScrollTop = el.scrollHeight - el.clientHeight;
+
+      if (maxScrollTop > 0) {
+        // Smooth scroll by setting scrollTop
+        el.scrollTo({
+          top: percent * maxScrollTop,
+          behavior: "smooth"
+        });
+      }
+    }
+  }, [status.track?.progress, status.track?.duration]);
+
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] text-[#00FF00] font-mono text-xs select-none pb-1">
       {/* Header / Title Bar */}
@@ -186,7 +206,11 @@ const WinampVisualizer = ({ socket, onClose }) => {
 
         {/* Lyrics Display */}
         {status.track && status.track.lyrics && (
-          <div className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/70 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto" style={{ textShadow: "1px 1px 0 #000" }}>
+          <div
+            ref={lyricsRef}
+            className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/70 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto"
+            style={{ textShadow: "1px 1px 0 #000" }}
+          >
             {status.track.lyrics}
           </div>
         )}
