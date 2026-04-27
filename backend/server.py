@@ -116,6 +116,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 # Global state
 audio_loop = None
 loop_task = None
+server_loop = None
 dashboard_task = None # Task for streaming dashboard updates
 authenticator = None
 kasa_agent = KasaAgent()

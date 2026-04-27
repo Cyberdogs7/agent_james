@@ -258,7 +258,15 @@ class AudioLoop:
     def stop(self):
         self.stop_event.set()
         if self.music_agent:
-            asyncio.create_task(self.music_agent.stop())
+            try:
+                # If we are in the main thread (shutdown), we shouldn't create a task in the main loop for a sub-loop
+                asyncio.create_task(self.music_agent.stop())
+            except RuntimeError:
+                pass
+
+        # If we have a running task in another loop, we need to cancel it
+        if hasattr(self, '_main_task') and self._main_task and not self._main_task.done():
+            self._main_task.get_loop().call_soon_threadsafe(self._main_task.cancel)
 
     def reconnect(self):
         """Signals the main loop to reconnect."""
@@ -1882,26 +1890,19 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 
                 # Mixing
                 mixed_data = None
+                import audioop
                 if voice_data and music_data:
-                    import array
-                    # Match lengths (they should be roughly similar chunks)
                     min_len = min(len(voice_data), len(music_data))
                     min_len = (min_len // 2) * 2 # Ensure even number of bytes for 16-bit PCM
 
-                    v_arr = array.array('h', voice_data[:min_len])
-                    m_arr = array.array('h', music_data[:min_len])
-                    mixed = array.array('h', v_arr)
+                    v_chunk = voice_data[:min_len]
+                    m_chunk = music_data[:min_len]
 
                     if should_duck:
-                        DUCK_FACTOR = int(DUCK_VOLUME * 256)
-                        for i in range(len(mixed)):
-                            m = (m_arr[i] * DUCK_FACTOR) >> 8
-                            mixed[i] = max(-32768, min(32767, mixed[i] + m))
-                    else:
-                        for i in range(len(mixed)):
-                            mixed[i] = max(-32768, min(32767, mixed[i] + m_arr[i]))
+                        m_chunk = audioop.mul(m_chunk, 2, DUCK_VOLUME)
 
-                    mixed_data = mixed.tobytes()
+                    mixed_chunk = audioop.add(v_chunk, m_chunk, 2)
+                    mixed_data = mixed_chunk
 
                     # If one buffer had remainder, append it (mostly edge cases)
                     if len(voice_data) > min_len:
@@ -1911,14 +1912,11 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                          m_rem_len = (len(m_rem) // 2) * 2
                          m_rem = m_rem[:m_rem_len]
                          if should_duck and m_rem_len > 0:
-                             import array
-                             rem_arr = array.array('h', m_rem)
-                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
-                             for i in range(len(rem_arr)):
-                                 rem_arr[i] = max(-32768, min(32767, (rem_arr[i] * DUCK_FACTOR) >> 8))
-                             mixed_data += rem_arr.tobytes()
+                             mixed_data += audioop.mul(m_rem, 2, DUCK_VOLUME)
+                             if len(music_data[min_len:]) > m_rem_len:
+                                 mixed_data += music_data[min_len + m_rem_len:]
                          else:
-                             mixed_data += m_rem
+                             mixed_data += music_data[min_len:]
 
                 elif voice_data:
                     mixed_data = voice_data
@@ -1926,12 +1924,8 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     if should_duck:
                          m_len = (len(music_data) // 2) * 2
                          if m_len > 0:
-                             import array
-                             m_arr = array.array('h', music_data[:m_len])
-                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
-                             for i in range(len(m_arr)):
-                                 m_arr[i] = max(-32768, min(32767, (m_arr[i] * DUCK_FACTOR) >> 8))
-                             mixed_data = m_arr.tobytes()
+                             m_chunk = music_data[:m_len]
+                             mixed_data = audioop.mul(m_chunk, 2, DUCK_VOLUME)
                              if len(music_data) > m_len:
                                  mixed_data += music_data[m_len:]
                          else:
@@ -2267,6 +2261,8 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         return False
 
     async def run(self, start_message=None):
+        self._main_task = asyncio.current_task()
+        self._main_task = asyncio.current_task()
         retry_delay = 1
         is_reconnect = False
 
