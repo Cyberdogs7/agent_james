@@ -52,9 +52,20 @@ class FleetManager:
             "repos": list(self.repos.values())
         }
 
+
+    def set_repo_active(self, repo_name, active):
+        self.ensure_repo(repo_name)
+        self.repos[repo_name]["is_active"] = active
+        if not active:
+            # When moving repo out, agents go back to pool but continue if busy
+            for agent_id, agent in self.agents.items():
+                if agent.get("current_repo") == repo_name:
+                    # Just remove them from the repo visually, they keep working
+                    agent["current_repo"] = None
+        self.save_state()
     def ensure_repo(self, repo_name):
         if repo_name not in self.repos:
-            self.repos[repo_name] = {"name": repo_name, "queue": []}
+            self.repos[repo_name] = {"name": repo_name, "queue": [], "is_active": False}
             self.save_state()
 
     def add_task_to_queue(self, repo_name, prompt, depends_on=None):
@@ -93,9 +104,8 @@ class FleetManager:
     def get_by_session(self, session_id):
         for agent_id, agent in self.agents.items():
             if agent.get("current_session") == session_id:
-                repo_name = agent.get("current_repo")
-                if repo_name in self.repos:
-                    for task in self.repos[repo_name]["queue"]:
+                for repo_name, repo_data in self.repos.items():
+                    for task in repo_data["queue"]:
                         if task.get("agent_id") == agent_id and task.get("status") not in ["completed", "failed"]:
                             return agent_id, repo_name, task["id"]
         return None, None, None

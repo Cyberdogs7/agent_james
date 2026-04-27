@@ -160,6 +160,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         }
     };
 
+    const handleRepoDragStart = (e, repoName) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/repo', repoName);
+    };
+
     const handleSyncFleet = () => {
         if (socket) {
             socket.emit('sync_fleet');
@@ -324,6 +329,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
                             onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
+                            onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
                         />
                     </div>
 
@@ -369,8 +375,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                     fleetStatus.map((repo, i) => (
                                         <div
                                             key={i}
+                                            draggable
+                                            onDragStart={(e) => handleRepoDragStart(e, repo.name)}
                                             onClick={() => setSelectedRepo(repo)}
-                                            className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer"
+                                            className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer active:cursor-grabbing hover:border-gold9/30"
                                         >
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>

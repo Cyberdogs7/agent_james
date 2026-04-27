@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox } from 'lucide-react';
+import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
     fleetStatus.forEach(repo => {
-        allReposMap.set(repo.name, { ...repo, queue: [] });
+        allReposMap.set(repo.name, { ...repo, queue: [], is_active: false });
     });
     stateRepos.forEach(repo => {
         if (allReposMap.has(repo.name)) {
             allReposMap.get(repo.name).queue = repo.queue || [];
+            allReposMap.get(repo.name).is_active = repo.is_active || false;
         } else {
-            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [] });
+            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [], is_active: repo.is_active || false });
         }
     });
     const repos = Array.from(allReposMap.values());
+    const activeRepos = repos.filter(r => r.is_active);
+    const inactiveRepos = repos.filter(r => !r.is_active);
 
     // Derived state
     const unassignedAgents = agents.filter(a => !a.current_repo);
@@ -26,11 +29,18 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
     // Drag and Drop State
     const [draggedAgentId, setDraggedAgentId] = useState(null);
+    const [draggedRepoName, setDraggedRepoName] = useState(null);
 
     const handleDragStart = (e, agentId) => {
         setDraggedAgentId(agentId);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', agentId);
+    };
+
+    const handleRepoDragStart = (e, repoName) => {
+        setDraggedRepoName(repoName);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/repo', repoName);
     };
 
     const handleDragOver = (e) => {
@@ -45,6 +55,14 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
             onAssign(agentId, repoName);
         }
         setDraggedAgentId(null);
+    };
+
+    const handleMainAreaDrop = (e) => {
+        e.preventDefault();
+        const repoName = e.dataTransfer.getData('application/repo');
+        if (repoName && onToggleRepoActive) {
+            onToggleRepoActive(repoName, true);
+        }
     };
 
     const handleUnassignDrop = (e) => {
@@ -126,7 +144,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-                    <div className="text-xs font-bold text-gold9/40 mb-3 tracking-widest">UNASSIGNED</div>
+                    <div className="text-xs font-bold text-gold9/40 mt-2 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
                     {unassignedAgents.map(agent => (
                         <AgentPill key={agent.id} agent={agent} />
                     ))}
@@ -139,7 +157,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
             </div>
 
             {/* Main Area: Repository Rooms */}
-            <div className="flex-1 overflow-y-auto p-6 bg-transparent">
+            <div
+                className="flex-1 overflow-y-auto p-6 bg-transparent"
+                onDragOver={handleDragOver}
+                onDrop={handleMainAreaDrop}
+            >
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight text-white font-mono">KINETIC COMMAND</h1>
@@ -149,7 +171,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {repos.map(repo => {
+                    {activeRepos.map(repo => {
                         const repoAgents = agents.filter(a => a.current_repo === repo.name);
 
                         return (
@@ -164,10 +186,15 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 <div className="p-4 bg-gold9/5 border-b border-gold9/10 flex justify-between items-center">
                                     <h3 className="font-bold text-gold9 font-mono flex items-center gap-2">
                                         <Server size={16} />
-                                        {repo.name}
+                                        <span className="truncate max-w-[200px]" title={repo.name}>{repo.name}</span>
                                     </h3>
-                                    <div className="text-xs text-gold9/60 font-mono">
-                                        {repoAgents.length} AGENTS
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-xs text-gold9/60 font-mono">
+                                            {repoAgents.length} AGENTS
+                                        </div>
+                                        <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, false)} className="text-gold9/40 hover:text-red-500 transition-colors p-1" title="Deactivate Repo">
+                                            <X size={14} />
+                                        </button>
                                     </div>
                                 </div>
 

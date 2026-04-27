@@ -163,6 +163,7 @@ function App() {
     music: { w: 300, h: 200 },
   });
   const [activeDragElement, setActiveDragElement] = useState(null);
+  const musicWindowRef = useRef(null);
 
   // Z-Index Stacking Order (last element = highest z-index)
   const [zIndexOrder, setZIndexOrder] = useState([
@@ -334,6 +335,32 @@ function App() {
     window.addEventListener("resize", centerElements);
     return () => window.removeEventListener("resize", centerElements);
   }, []);
+
+
+  // Sync music window size from native resize
+  useEffect(() => {
+    const el = musicWindowRef.current;
+    if (!el) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        if (entry.target === el) {
+          const { width, height } = entry.contentRect;
+          // Only update if it actually changed to avoid loop
+          setElementSizes(prev => {
+            if (prev.music && Math.abs(prev.music.w - width) < 2 && Math.abs(prev.music.h - height) < 2) {
+              return prev;
+            }
+            return {
+              ...prev,
+              music: { w: width, h: height }
+            };
+          });
+        }
+      }
+    });
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, [showMusicPlayer]);
 
   // Utility: Clamp position to viewport so component stays fully visible
   const clampToViewport = (pos, size) => {
@@ -2271,6 +2298,7 @@ function App() {
         {showMusicPlayer && (
           <div
             id="music"
+            ref={musicWindowRef}
             className={`absolute flex flex-col ${activeDragElement === "music" ? "" : "transition-all duration-200"}
                         backdrop-blur-xl shadow-2xl overflow-hidden rounded-md
                         ${activeDragElement === "music" ? "ring-2 ring-green-500" : ""}
@@ -2283,6 +2311,8 @@ function App() {
               height: `${elementSizes.music.h}px`,
               pointerEvents: "auto",
               zIndex: getZIndex("music"),
+              resize: "both",
+              overflow: "hidden",
             }}
             onMouseDown={(e) => handleMouseDown(e, "music")}
           >
