@@ -1,4 +1,5 @@
 import asyncio
+import queue
 import base64
 import json
 import os
@@ -1612,7 +1613,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                                         self.chat_buffer["text"] += text_content
 
                                 if hasattr(part, 'inline_data') and part.inline_data:
-                                    self.audio_in_queue.put_nowait(part.inline_data.data)
+                                    self.audio_in_queue.put(part.inline_data.data)
 
                                 if hasattr(part, 'call') and part.call:
                                     if INCLUDE_RAW_LOGS:
@@ -1826,12 +1827,11 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
             # CRITICAL: Re-raise to crash the TaskGroup and trigger outer loop reconnect
             raise e
 
-    async def play_audio(self):
+    def play_audio(self):
         stream = None
         if pya:
             try:
-                stream = await asyncio.to_thread(
-                    pya.open,
+                stream = pya.open(
                     format=FORMAT,
                     channels=CHANNELS,
                     rate=RECEIVE_SAMPLE_RATE,
@@ -1851,7 +1851,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         DUCK_DURATION = 1.0 # Keep ducking for 1 sec after voice stops
         DUCK_VOLUME = 0.15 # 85% reduction
 
-        while True:
+        while not self.stop_event.is_set():
             try:
                 voice_data = None
                 music_data = None
@@ -1862,32 +1862,26 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 # Fetch whatever is currently available immediately
                 try:
                     voice_data = self.audio_in_queue.get_nowait()
-                except asyncio.QueueEmpty:
+                except queue.Empty:
                     pass
 
                 try:
                     music_data = self.music_queue.get_nowait()
-                except asyncio.QueueEmpty:
+                except queue.Empty:
                     pass
 
                 # If both are empty, block and wait for the first one to emit data
                 if not voice_data and not music_data:
-                    voice_task = asyncio.create_task(self.audio_in_queue.get())
-                    music_task = asyncio.create_task(self.music_queue.get())
-
-                    done, pending = await asyncio.wait(
-                        [voice_task, music_task],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
-
-                    for t in pending:
-                        t.cancel()
-
-                    for t in done:
-                        if t == voice_task:
-                            voice_data = t.result()
-                        elif t == music_task:
-                            music_data = t.result()
+                    # Wait for either with a short timeout to prevent busy looping
+                    try:
+                        voice_data = self.audio_in_queue.get(timeout=0.05)
+                    except queue.Empty:
+                        pass
+                    if not voice_data:
+                        try:
+                            music_data = self.music_queue.get(timeout=0.05)
+                        except queue.Empty:
+                            pass
 
                 if music_data and getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
                     # Discard music data if paused (to prevent buffer buildup)
@@ -1966,7 +1960,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 
                     # Play locally if stream is available
                     if stream:
-                        await asyncio.to_thread(stream.write, mixed_data)
+                        stream.write(mixed_data)
 
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
@@ -2139,8 +2133,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     self.timer_agent.session = session
                     self.proactive_agent.session = session
 
-                    self.audio_in_queue = asyncio.Queue()
-                    self.music_queue = asyncio.Queue()
+                    import queue
+                    self.audio_in_queue = queue.Queue()
+                    self.music_queue = queue.Queue()
                     self.out_queue = asyncio.Queue(maxsize=10)
 
                     # Wire MusicAgent to the dedicated music queue
@@ -2157,7 +2152,8 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     tasks.append(asyncio.create_task(self.video_loop()))
 
                     tasks.append(asyncio.create_task(self.receive_audio()))
-                    tasks.append(asyncio.create_task(self.play_audio()))
+                    import threading
+                    threading.Thread(target=self.play_audio, daemon=True).start()
                     tasks.append(asyncio.create_task(self.proactive_agent.run()))
 
                     # Start the Jules session monitoring task
