@@ -2,8 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted }) => {
-    const { agents = [], repos = [] } = fleetState || {};
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted }) => {
+    const { agents = [], repos: stateRepos = [] } = fleetState || {};
+
+    const allReposMap = new Map();
+    fleetStatus.forEach(repo => {
+        allReposMap.set(repo.name, { ...repo, queue: [] });
+    });
+    stateRepos.forEach(repo => {
+        if (allReposMap.has(repo.name)) {
+            allReposMap.get(repo.name).queue = repo.queue || [];
+        } else {
+            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [] });
+        }
+    });
+    const repos = Array.from(allReposMap.values());
 
     // Derived state
     const unassignedAgents = agents.filter(a => !a.current_repo);
