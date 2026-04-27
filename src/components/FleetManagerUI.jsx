@@ -50,6 +50,14 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         setDraggedAgentId(null);
     };
 
+    const handleMainAreaDrop = (e) => {
+        e.preventDefault();
+        const repoName = e.dataTransfer.getData('application/repo');
+        if (repoName && onToggleRepoActive) {
+            onToggleRepoActive(repoName, true);
+        }
+    };
+
     const handleUnassignDrop = (e) => {
         e.preventDefault();
         const agentId = e.dataTransfer.getData('text/plain');
@@ -129,22 +137,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-                    <div className="text-xs font-bold text-gold9/40 mb-3 tracking-widest">AVAILABLE REPOS</div>
-                    {inactiveRepos.map(repo => (
-                        <div key={repo.name} className="flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 transition-colors">
-                            <span className="text-sm font-mono text-gray-100 truncate flex-1" title={repo.name}>{repo.name}</span>
-                            <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, true)} className="text-gold9/60 hover:text-gold9 ml-2 p-1">
-                                <Plus size={14} />
-                            </button>
-                        </div>
-                    ))}
-                    {inactiveRepos.length === 0 && (
-                        <div className="text-center text-sm text-gold9/40 py-4 font-mono italic">
-                            No inactive repos.
-                        </div>
-                    )}
-
-                    <div className="text-xs font-bold text-gold9/40 mt-6 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
+                    <div className="text-xs font-bold text-gold9/40 mt-2 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
                     {unassignedAgents.map(agent => (
                         <AgentPill key={agent.id} agent={agent} />
                     ))}
@@ -157,7 +150,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
             </div>
 
             {/* Main Area: Repository Rooms */}
-            <div className="flex-1 overflow-y-auto p-6 bg-transparent">
+            <div
+                className="flex-1 overflow-y-auto p-6 bg-transparent"
+                onDragOver={handleDragOver}
+                onDrop={handleMainAreaDrop}
+            >
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight text-white font-mono">KINETIC COMMAND</h1>
