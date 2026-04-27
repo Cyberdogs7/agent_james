@@ -273,8 +273,24 @@ async def initial_fleet_sync():
     except Exception as e:
         print(f"[SERVER] Error during initial fleet sync: {e}")
 
+def sync_fleet_agent_pool():
+    accounts = get_all_accounts()
+    total_max = 0
+    if not accounts:
+        total_max = 15
+    else:
+        for account in accounts:
+            limit = account.get("concurrent_sessions_limit")
+            if limit is None:
+                total_max += 15 # Default for unlimited/unspecified
+            else:
+                total_max += limit
+
+    fleet_manager.update_max_agents(total_max)
+
 async def startup_event():
     init_db()
+    sync_fleet_agent_pool()
     global server_loop
     server_loop = asyncio.get_running_loop()
     global slack_agent, scraper_agent, log_monitor
@@ -2060,8 +2076,10 @@ async def add_account_event(sid, data):
         if account_id is None:
              await sio.emit('account_error', {'message': "API Key already exists."}, to=sid)
         else:
+             sync_fleet_agent_pool()
              accounts = get_all_accounts()
              await sio.emit('accounts_update', accounts)
+             await sio.emit('fleet_state_update', fleet_manager.get_state())
     except Exception as e:
         await sio.emit('account_error', {'message': f"Failed to add account: {str(e)}"}, to=sid)
 
@@ -2079,8 +2097,10 @@ async def update_account_event(sid, data):
              return
 
         update_account(account_id, api_key, name, concurrent, total)
+        sync_fleet_agent_pool()
         accounts = get_all_accounts()
         await sio.emit('accounts_update', accounts)
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
     except Exception as e:
         await sio.emit('account_error', {'message': f"Failed to update account: {str(e)}"}, to=sid)
 
@@ -2093,8 +2113,10 @@ async def delete_account_event(sid, data):
             return
 
         delete_account(account_id)
+        sync_fleet_agent_pool()
         accounts = get_all_accounts()
         await sio.emit('accounts_update', accounts)
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
     except Exception as e:
         await sio.emit('account_error', {'message': f"Failed to delete account: {str(e)}"}, to=sid)
 

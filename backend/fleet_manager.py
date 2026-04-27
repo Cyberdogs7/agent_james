@@ -14,10 +14,21 @@ class FleetManager:
         self.load_state()
         self._ensure_agents()
 
+    def update_max_agents(self, new_max):
+        self.max_agents = new_max
+        self._ensure_agents()
+        self.save_state()
+
     def _ensure_agents(self):
-        # Make sure we have exactly max_agents available
-        current_agent_ids = list(self.agents.keys())
-        for i in range(1, self.max_agents + 1):
+        # Determine the maximum required agent ID by looking at existing IDs
+        existing_numbers = [int(a_id.split('_')[1]) for a_id in self.agents.keys() if a_id.startswith('agent_')]
+        highest_existing = max(existing_numbers) if existing_numbers else 0
+
+        # We need at least max_agents, but maybe more if we haven't been able to downscale yet
+        target_max_id = max(self.max_agents, highest_existing)
+
+        # Fill in any gaps up to target_max_id
+        for i in range(1, target_max_id + 1):
             agent_id = f"agent_{i}"
             if agent_id not in self.agents:
                 self.agents[agent_id] = {
@@ -28,6 +39,17 @@ class FleetManager:
                     "last_active": time.time(),
                     "error": None
                 }
+
+        # If we have too many agents, try to remove unassigned idle ones from the top
+        if len(self.agents) > self.max_agents:
+            agent_ids = sorted(list(self.agents.keys()), key=lambda x: int(x.split('_')[1]), reverse=True)
+            for agent_id in agent_ids:
+                # We only want to remove agents that are above max_agents to preserve order if possible
+                num = int(agent_id.split('_')[1])
+                if num > self.max_agents:
+                    agent = self.agents[agent_id]
+                    if agent["status"] == "idle" and agent["current_repo"] is None:
+                        del self.agents[agent_id]
 
     def load_state(self):
         if self.data_file.exists():
