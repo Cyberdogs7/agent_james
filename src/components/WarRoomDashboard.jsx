@@ -324,6 +324,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
                             onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
+                            onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
                         />
                     </div>
 

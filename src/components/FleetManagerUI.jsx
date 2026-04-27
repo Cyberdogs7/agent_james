@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox } from 'lucide-react';
+import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
     fleetStatus.forEach(repo => {
-        allReposMap.set(repo.name, { ...repo, queue: [] });
+        allReposMap.set(repo.name, { ...repo, queue: [], is_active: false });
     });
     stateRepos.forEach(repo => {
         if (allReposMap.has(repo.name)) {
             allReposMap.get(repo.name).queue = repo.queue || [];
+            allReposMap.get(repo.name).is_active = repo.is_active || false;
         } else {
-            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [] });
+            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [], is_active: repo.is_active || false });
         }
     });
     const repos = Array.from(allReposMap.values());
+    const activeRepos = repos.filter(r => r.is_active);
+    const inactiveRepos = repos.filter(r => !r.is_active);
 
     // Derived state
     const unassignedAgents = agents.filter(a => !a.current_repo);
@@ -126,7 +129,22 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-                    <div className="text-xs font-bold text-gold9/40 mb-3 tracking-widest">UNASSIGNED</div>
+                    <div className="text-xs font-bold text-gold9/40 mb-3 tracking-widest">AVAILABLE REPOS</div>
+                    {inactiveRepos.map(repo => (
+                        <div key={repo.name} className="flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 transition-colors">
+                            <span className="text-sm font-mono text-gray-100 truncate flex-1" title={repo.name}>{repo.name}</span>
+                            <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, true)} className="text-gold9/60 hover:text-gold9 ml-2 p-1">
+                                <Plus size={14} />
+                            </button>
+                        </div>
+                    ))}
+                    {inactiveRepos.length === 0 && (
+                        <div className="text-center text-sm text-gold9/40 py-4 font-mono italic">
+                            No inactive repos.
+                        </div>
+                    )}
+
+                    <div className="text-xs font-bold text-gold9/40 mt-6 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
                     {unassignedAgents.map(agent => (
                         <AgentPill key={agent.id} agent={agent} />
                     ))}
@@ -149,7 +167,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {repos.map(repo => {
+                    {activeRepos.map(repo => {
                         const repoAgents = agents.filter(a => a.current_repo === repo.name);
 
                         return (
@@ -164,10 +182,15 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 <div className="p-4 bg-gold9/5 border-b border-gold9/10 flex justify-between items-center">
                                     <h3 className="font-bold text-gold9 font-mono flex items-center gap-2">
                                         <Server size={16} />
-                                        {repo.name}
+                                        <span className="truncate max-w-[200px]" title={repo.name}>{repo.name}</span>
                                     </h3>
-                                    <div className="text-xs text-gold9/60 font-mono">
-                                        {repoAgents.length} AGENTS
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-xs text-gold9/60 font-mono">
+                                            {repoAgents.length} AGENTS
+                                        </div>
+                                        <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, false)} className="text-gold9/40 hover:text-red-500 transition-colors p-1" title="Deactivate Repo">
+                                            <X size={14} />
+                                        </button>
                                     </div>
                                 </div>
 
