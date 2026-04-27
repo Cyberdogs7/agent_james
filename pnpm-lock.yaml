@@ -76,7 +76,7 @@ importers:
         specifier: ^7.0.3
         version: 7.0.3
       electron:
-        specifier: ^28.2.0
+        specifier: ^28.3.3
         version: 28.3.3
       postcss:
         specifier: ^8.4.35
