@@ -5,8 +5,6 @@ import threading
 import logging
 import random
 import subprocess
-import threading
-import time
 import shutil
 from ytmusicapi import YTMusic
 import yt_dlp
@@ -325,7 +323,6 @@ class MusicAgent:
             if self._audio_queue:
                 import array
                 import sys
-                import time
                 import audioop
 
                 # Ensure data length is even for 16-bit PCM
