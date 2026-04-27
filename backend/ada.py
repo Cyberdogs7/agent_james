@@ -2286,6 +2286,8 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 
         # Start background tasks safely when event loop is running
         self.giphy_agent.start_precaching_task()
+        if self.music_agent:
+            await self.music_agent.start()
 
         while not self.stop_event.is_set():
             if INCLUDE_RAW_LOGS:
