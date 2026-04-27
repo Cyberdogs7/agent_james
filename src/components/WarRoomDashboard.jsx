@@ -1163,19 +1163,19 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
     const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [reviewBranch, setReviewBranch] = useState(null);
-    const [autoMergeDisabled, setAutoMergeDisabled] = useState(repo.auto_merge_disabled || false);
+    const [autoMergeEnabled, setAutoMergeEnabled] = useState(repo.auto_merge_enabled || false);
 
     useEffect(() => {
-        setAutoMergeDisabled(repo.auto_merge_disabled || false);
+        setAutoMergeEnabled(repo.auto_merge_enabled || false);
     }, [repo]);
 
     const handleAutoMergeToggle = () => {
-        const newValue = !autoMergeDisabled;
-        setAutoMergeDisabled(newValue);
+        const newValue = !autoMergeEnabled;
+        setAutoMergeEnabled(newValue);
         if (socket) {
             socket.emit('update_repo_config', {
                 repo: repo.name,
-                config: { auto_merge_disabled: newValue }
+                config: { auto_merge_enabled: newValue }
             });
         }
     };
@@ -1225,7 +1225,7 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
                     <label className="flex items-center gap-2 cursor-pointer">
                         <input
                             type="checkbox"
-                            checked={!autoMergeDisabled}
+                            checked={autoMergeEnabled}
                             onChange={handleAutoMergeToggle}
                             className="accent-gold9 bg-black border-gold9"
                         />
