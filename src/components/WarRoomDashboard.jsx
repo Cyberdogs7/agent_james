@@ -317,6 +317,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                     <div className="col-span-9 row-span-6 bg-black/40 border border-gold9/20 rounded-xl overflow-hidden flex flex-col">
                         <FleetManagerUI
                             fleetState={fleetState}
+                            fleetStatus={fleetStatus}
                             julesSessions={jules}
                             onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
                             onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}

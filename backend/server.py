@@ -20,6 +20,7 @@ import asyncio
 import threading
 import sys
 import os
+import time
 import json
 import copy
 from datetime import datetime
@@ -1513,16 +1514,17 @@ async def get_fleet_status(sid):
         fleet = audio_loop.project_manager.load_fleet()
         token = audio_loop.project_manager.get_github_token()
 
+        # Emit basic status immediately so UI has *something* fast
+        basic_fleet = [{
+            "name": f"{r['owner']}/{r['name']}",
+            "branch": "unknown",
+            "status": "Remote (Loading...)" if token else "Remote (No Auth)",
+            "last_commit": None,
+            "auto_merge_disabled": r.get('auto_merge_disabled', False)
+        } for r in fleet]
+        await sio.emit('fleet_status_update', basic_fleet, to=sid)
+
         if not token:
-            # Emit basic status so UI has *something*
-            basic_fleet = [{
-                "name": f"{r['owner']}/{r['name']}",
-                "branch": "unknown",
-                "status": "Remote (No Auth)",
-                "last_commit": None,
-                "auto_merge_disabled": r.get('auto_merge_disabled', False)
-            } for r in fleet]
-            await sio.emit('fleet_status_update', basic_fleet, to=sid)
             await sio.emit('error', {'msg': "No GitHub Token found. Please Authenticate.", 'code': 'AUTH_REQUIRED'})
             return
 
@@ -1562,10 +1564,33 @@ async def get_fleet_status(sid):
                 "auto_merge_disabled": repo.get('auto_merge_disabled', False)
             }
 
-        tasks = [fetch_repo_status(repo) for repo in fleet]
-        fleet_status = await asyncio.gather(*tasks)
+        # Background task to fetch detailed status without blocking the event loop
+        async def fetch_all_and_emit():
+            # Use a semaphore to allow some concurrency without overwhelming the event loop
+            sem = asyncio.Semaphore(5)
 
-        await sio.emit('fleet_status_update', list(fleet_status), to=sid)
+            # We'll update the fleet list in place and emit incrementally
+            # basic_fleet is already structured
+            updated_fleet = list(basic_fleet)
+
+            async def fetch_and_update(idx, repo):
+                async with sem:
+                    # Yield before starting the network request
+                    await asyncio.sleep(0)
+                    status = await fetch_repo_status(repo)
+                    updated_fleet[idx] = status
+                    # Emit partial update so UI doesn't hang forever
+                    await sio.emit('fleet_status_update', updated_fleet, to=sid)
+                    # Yield after request to ensure audio thread runs
+                    await asyncio.sleep(0.01)
+
+            tasks = [asyncio.create_task(fetch_and_update(i, repo)) for i, repo in enumerate(fleet)]
+
+            # Wait for all background fetches to complete
+            await asyncio.gather(*tasks)
+
+        # Fire and forget the background fetch
+        asyncio.create_task(fetch_all_and_emit())
 
 @sio.event
 async def get_repo_branches(sid, data):
@@ -1770,13 +1795,47 @@ async def run_task(sid, data):
             await sio.emit('status', {'msg': f"Jules Agent: {result}"})
 
         elif act_type == 'run_script':
-            # Placeholder for running a script
-            await sio.emit('status', {'msg': f"Simulated script execution: {act_value}"})
+            script_path = act_value
+            # If relative, resolve to project path
+            target_path = Path(audio_loop.project_manager.get_current_project_path())
+            if not os.path.isabs(script_path):
+                script_path = str(target_path / script_path)
+
+            print(f"[SERVER] ACTION: Run Script - {script_path}")
+
+            if not os.path.exists(script_path):
+                await sio.emit('error', {'msg': f"Script not found: {script_path}"})
+            else:
+                # Determine runner based on extension
+                if script_path.endswith('.py'):
+                    cmd = ["python", script_path]
+                elif script_path.endswith('.sh'):
+                    cmd = ["bash", script_path]
+                elif script_path.endswith('.js'):
+                    cmd = ["node", script_path]
+                else:
+                    cmd = [script_path]
+
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+
+                if process.returncode != 0:
+                    error_log = stderr.decode().strip() or stdout.decode().strip() or "Unknown Error"
+                    await sio.emit('error', {'msg': f"Script failed with code {process.returncode}:\n{error_log}"})
+                else:
+                    out_text = stdout.decode().strip()
+                    msg = f"Script Success: {out_text[:100]}..." if out_text else "Script executed successfully."
+                    await sio.emit('status', {'msg': msg})
 
         # Update last run time
-        # We need a method in TaskManager to update specific fields or just reload/save
-        # For simplicity, we just set it here if we had a method, but TaskManager.update_task_status only does status.
-        # Let's assume successful trigger is enough feedback for now.
+        if act_type == 'run_script':
+            updates = {"last_run": time.time()}
+            audio_loop.task_manager.update_task(task['id'], updates)
+
 
     except Exception as e:
         print(f"Error executing task: {e}")
