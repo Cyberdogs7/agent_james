@@ -20,6 +20,7 @@ import asyncio
 import threading
 import sys
 import os
+import time
 import json
 import copy
 from datetime import datetime
@@ -1767,13 +1768,47 @@ async def run_task(sid, data):
             await sio.emit('status', {'msg': f"Jules Agent: {result}"})
 
         elif act_type == 'run_script':
-            # Placeholder for running a script
-            await sio.emit('status', {'msg': f"Simulated script execution: {act_value}"})
+            script_path = act_value
+            # If relative, resolve to project path
+            target_path = Path(audio_loop.project_manager.get_current_project_path())
+            if not os.path.isabs(script_path):
+                script_path = str(target_path / script_path)
+
+            print(f"[SERVER] ACTION: Run Script - {script_path}")
+
+            if not os.path.exists(script_path):
+                await sio.emit('error', {'msg': f"Script not found: {script_path}"})
+            else:
+                # Determine runner based on extension
+                if script_path.endswith('.py'):
+                    cmd = ["python", script_path]
+                elif script_path.endswith('.sh'):
+                    cmd = ["bash", script_path]
+                elif script_path.endswith('.js'):
+                    cmd = ["node", script_path]
+                else:
+                    cmd = [script_path]
+
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+
+                if process.returncode != 0:
+                    error_log = stderr.decode().strip() or stdout.decode().strip() or "Unknown Error"
+                    await sio.emit('error', {'msg': f"Script failed with code {process.returncode}:\n{error_log}"})
+                else:
+                    out_text = stdout.decode().strip()
+                    msg = f"Script Success: {out_text[:100]}..." if out_text else "Script executed successfully."
+                    await sio.emit('status', {'msg': msg})
 
         # Update last run time
-        # We need a method in TaskManager to update specific fields or just reload/save
-        # For simplicity, we just set it here if we had a method, but TaskManager.update_task_status only does status.
-        # Let's assume successful trigger is enough feedback for now.
+        if act_type == 'run_script':
+            updates = {"last_run": time.time()}
+            audio_loop.task_manager.update_task(task['id'], updates)
+
 
     except Exception as e:
         print(f"Error executing task: {e}")
