@@ -37,7 +37,7 @@ async def test_create_session_success(jules_agent):
         mock_request.assert_called_once()
         call_args = mock_request.call_args.kwargs
         assert call_args["json"]["prompt"] == prompt
-        assert call_args["json"]["sourceContext"]["source"] == f"sources/github/{source}"
+        assert call_args["json"]["sourceContext"]["source"] == f"sources/github/test/repo"
         assert call_args["json"]["sourceContext"]["githubRepoContext"]["startingBranch"] == "master"
 
 
