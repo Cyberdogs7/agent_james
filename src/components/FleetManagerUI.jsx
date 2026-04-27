@@ -63,7 +63,6 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         if (repoName && onToggleRepoActive) {
             onToggleRepoActive(repoName, true);
         }
-        setDraggedRepoName(null);
     };
 
     const handleUnassignDrop = (e) => {

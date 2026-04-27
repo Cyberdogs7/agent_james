@@ -155,6 +155,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         }
     };
 
+    const handleRepoDragStart = (e, repoName) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/repo', repoName);
+    };
+
     const handleSyncFleet = () => {
         if (socket) {
             socket.emit('sync_fleet');
@@ -358,8 +363,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                     fleetStatus.map((repo, i) => (
                                         <div
                                             key={i}
+                                            draggable
+                                            onDragStart={(e) => handleRepoDragStart(e, repo.name)}
                                             onClick={() => setSelectedRepo(repo)}
-                                            className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer"
+                                            className="bg-gold9/5 border border-gold9/10 rounded p-3 relative hover:bg-gold9/10 transition-colors cursor-pointer active:cursor-grabbing hover:border-gold9/30"
                                         >
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
