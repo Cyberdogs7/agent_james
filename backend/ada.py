@@ -258,7 +258,15 @@ class AudioLoop:
     def stop(self):
         self.stop_event.set()
         if self.music_agent:
-            asyncio.create_task(self.music_agent.stop())
+            try:
+                # If we are in the main thread (shutdown), we shouldn't create a task in the main loop for a sub-loop
+                asyncio.create_task(self.music_agent.stop())
+            except RuntimeError:
+                pass
+
+        # If we have a running task in another loop, we need to cancel it
+        if hasattr(self, '_main_task') and self._main_task and not self._main_task.done():
+            self._main_task.get_loop().call_soon_threadsafe(self._main_task.cancel)
 
     def reconnect(self):
         """Signals the main loop to reconnect."""
@@ -1837,107 +1845,83 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         DUCK_DURATION = 1.0 # Keep ducking for 1 sec after voice stops
         DUCK_VOLUME = 0.15 # 85% reduction
 
+        v_buffer = bytearray()
+        m_buffer = bytearray()
+        import audioop
+        import time
+
         while not self.stop_event.is_set():
             try:
-                voice_data = None
-                music_data = None
-
-                # We wait for either queue to have data using a timeout mechanism
-                # to avoid blocking indefinitely if only one stream is active.
-
-                # Fetch whatever is currently available immediately
+                # 1. Fill buffers from queues
                 try:
-                    voice_data = self.audio_in_queue.get_nowait()
+                    while True:
+                        v_buffer.extend(self.audio_in_queue.get_nowait())
                 except queue.Empty:
                     pass
 
                 try:
-                    music_data = self.music_queue.get_nowait()
+                    while True:
+                        m_data = self.music_queue.get_nowait()
+                        if getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
+                            continue # Discard if paused
+                        m_buffer.extend(m_data)
                 except queue.Empty:
                     pass
 
-                # If both are empty, block and wait for the first one to emit data
-                if not voice_data and not music_data:
-                    # Wait for either with a short timeout to prevent busy looping
+                # If both buffers are empty, wait a bit
+                if not v_buffer and not m_buffer:
                     try:
-                        voice_data = self.audio_in_queue.get(timeout=0.05)
+                        v_data = self.audio_in_queue.get(timeout=0.05)
+                        v_buffer.extend(v_data)
                     except queue.Empty:
-                        pass
-                    if not voice_data:
                         try:
-                            music_data = self.music_queue.get(timeout=0.05)
+                            m_data = self.music_queue.get(timeout=0.05)
+                            if not (getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)):
+                                m_buffer.extend(m_data)
                         except queue.Empty:
                             pass
 
-                if music_data and getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
-                    # Discard music data if paused (to prevent buffer buildup)
-                    music_data = None
-
                 now = time.time()
-                if voice_data:
+                if v_buffer:
                     last_voice_time = now
 
-                # Ducking logic
                 should_duck = (now - last_voice_time) < DUCK_DURATION
 
-                # Mixing
-                mixed_data = None
-                if voice_data and music_data:
-                    import array
-                    # Match lengths (they should be roughly similar chunks)
-                    min_len = min(len(voice_data), len(music_data))
-                    min_len = (min_len // 2) * 2 # Ensure even number of bytes for 16-bit PCM
+                # 2. Mix and flush buffers
+                mixed_data = b""
 
-                    v_arr = array.array('h', voice_data[:min_len])
-                    m_arr = array.array('h', music_data[:min_len])
-                    mixed = array.array('h', v_arr)
+                if v_buffer and m_buffer:
+                    min_len = min(len(v_buffer), len(m_buffer))
+                    min_len = (min_len // 2) * 2 # 16-bit align
 
-                    if should_duck:
-                        DUCK_FACTOR = int(DUCK_VOLUME * 256)
-                        for i in range(len(mixed)):
-                            m = (m_arr[i] * DUCK_FACTOR) >> 8
-                            mixed[i] = max(-32768, min(32767, mixed[i] + m))
-                    else:
-                        for i in range(len(mixed)):
-                            mixed[i] = max(-32768, min(32767, mixed[i] + m_arr[i]))
+                    if min_len > 0:
+                        v_chunk = bytes(v_buffer[:min_len])
+                        m_chunk = bytes(m_buffer[:min_len])
 
-                    mixed_data = mixed.tobytes()
+                        # Remove processed data from buffers
+                        del v_buffer[:min_len]
+                        del m_buffer[:min_len]
 
-                    # If one buffer had remainder, append it (mostly edge cases)
-                    if len(voice_data) > min_len:
-                         mixed_data += voice_data[min_len:]
-                    elif len(music_data) > min_len:
-                         m_rem = music_data[min_len:]
-                         m_rem_len = (len(m_rem) // 2) * 2
-                         m_rem = m_rem[:m_rem_len]
-                         if should_duck and m_rem_len > 0:
-                             import array
-                             rem_arr = array.array('h', m_rem)
-                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
-                             for i in range(len(rem_arr)):
-                                 rem_arr[i] = max(-32768, min(32767, (rem_arr[i] * DUCK_FACTOR) >> 8))
-                             mixed_data += rem_arr.tobytes()
-                         else:
-                             mixed_data += m_rem
+                        if should_duck:
+                            m_chunk = audioop.mul(m_chunk, 2, DUCK_VOLUME)
 
-                elif voice_data:
-                    mixed_data = voice_data
-                elif music_data:
-                    if should_duck:
-                         m_len = (len(music_data) // 2) * 2
-                         if m_len > 0:
-                             import array
-                             m_arr = array.array('h', music_data[:m_len])
-                             DUCK_FACTOR = int(DUCK_VOLUME * 256)
-                             for i in range(len(m_arr)):
-                                 m_arr[i] = max(-32768, min(32767, (m_arr[i] * DUCK_FACTOR) >> 8))
-                             mixed_data = m_arr.tobytes()
-                             if len(music_data) > m_len:
-                                 mixed_data += music_data[m_len:]
-                         else:
-                             mixed_data = music_data
-                    else:
-                         mixed_data = music_data
+                        mixed_data = audioop.add(v_chunk, m_chunk, 2)
+
+                elif v_buffer:
+                    v_len = (len(v_buffer) // 2) * 2
+                    if v_len > 0:
+                        mixed_data = bytes(v_buffer[:v_len])
+                        del v_buffer[:v_len]
+                elif m_buffer:
+                    m_len = (len(m_buffer) // 2) * 2
+                    if m_len > 0:
+                        m_chunk = bytes(m_buffer[:m_len])
+                        del m_buffer[:m_len]
+
+                        if should_duck:
+                            mixed_data = audioop.mul(m_chunk, 2, DUCK_VOLUME)
+                        else:
+                            mixed_data = m_chunk
 
                 if mixed_data:
                     # Always send to frontend
@@ -2267,6 +2251,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         return False
 
     async def run(self, start_message=None):
+        self._main_task = asyncio.current_task()
         retry_delay = 1
         is_reconnect = False
 
