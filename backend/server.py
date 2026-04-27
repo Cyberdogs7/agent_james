@@ -2144,7 +2144,10 @@ async def check_and_start_next_task(repo_name, agent_id=None):
             state = fleet_manager.get_state()
             idle_agent = next((a for a in state["agents"] if a["current_repo"] == repo_name and a["status"] == "idle"), None)
             if not idle_agent:
-                break
+                # If no assigned agents are idle, look for a temp worker from the unassigned pool
+                idle_agent = next((a for a in state["agents"] if a["current_repo"] is None and a["status"] == "idle"), None)
+                if not idle_agent:
+                    break
             current_agent_id = idle_agent["id"]
 
         # We only use the passed agent_id for the first iteration
