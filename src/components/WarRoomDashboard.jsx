@@ -22,6 +22,7 @@ import {
     CheckCircle,
     List,
     X,
+    Server,
     GitBranch,
     GitMerge
 } from 'lucide-react';
@@ -39,6 +40,8 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [selectedRepo, setSelectedRepo] = useState(null);
     const [swarms, setSwarms] = useState([]);
+    const [selectedFleetAgent, setSelectedFleetAgent] = useState(null);
+    const [selectedTask, setSelectedTask] = useState(null);
         const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
 
     // Add effect for fleet state
@@ -318,6 +321,8 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
                             onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
+                            onAgentClick={setSelectedFleetAgent}
+                            onTaskClick={(task, repoName) => setSelectedTask({...task, repoName})}
                         />
                     </div>
 
@@ -446,6 +451,98 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         socket={socket}
                         onClose={() => setShowEditor(false)}
                     />
+                )}
+
+
+                {/* FLEET AGENT DETAIL MODAL */}
+                {selectedFleetAgent && (
+                    <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
+                        <div className="bg-[#111] border border-gold9/30 rounded-xl w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.1)] flex flex-col max-h-full">
+                            <div className="p-4 border-b border-gold9/20 flex justify-between items-center bg-gold9/5">
+                                <h2 className="text-lg font-bold text-gold9 font-mono flex items-center gap-2">
+                                    <Server size={18} />
+                                    AGENT {selectedFleetAgent.id}
+                                </h2>
+                                <button onClick={() => setSelectedFleetAgent(null)} className="text-gray-400 hover:text-white transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4 font-mono text-sm">
+                                <div>
+                                    <span className="text-gold9/40 block text-xs mb-1">STATUS</span>
+                                    <span className={`px-2 py-1 rounded text-xs ${
+                                        selectedFleetAgent.status === 'working' ? 'bg-green-500/20 text-green-400' :
+                                        selectedFleetAgent.status === 'stuck' || selectedFleetAgent.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                                        'bg-gray-500/20 text-gray-300'
+                                    }`}>
+                                        {selectedFleetAgent.status.toUpperCase()}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-gold9/40 block text-xs mb-1">CURRENT REPO</span>
+                                    <span className="text-gray-200">{selectedFleetAgent.current_repo || 'Unassigned'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gold9/40 block text-xs mb-1">LAST ACTIVE</span>
+                                    <span className="text-gray-200">{new Date(selectedFleetAgent.last_active * 1000).toLocaleString()}</span>
+                                </div>
+                                {selectedFleetAgent.current_task && (
+                                     <div>
+                                        <span className="text-gold9/40 block text-xs mb-1">CURRENT TASK</span>
+                                        <span className="text-gray-200">{selectedFleetAgent.current_task}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* TASK DETAIL MODAL */}
+                {selectedTask && (
+                    <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
+                        <div className="bg-[#111] border border-gold9/30 rounded-xl w-full max-w-lg shadow-[0_0_50px_rgba(255,215,0,0.1)] flex flex-col max-h-full">
+                            <div className="p-4 border-b border-gold9/20 flex justify-between items-center bg-gold9/5">
+                                <h2 className="text-lg font-bold text-gold9 font-mono flex items-center gap-2">
+                                    <Activity size={18} />
+                                    TASK DETAILS
+                                </h2>
+                                <button onClick={() => setSelectedTask(null)} className="text-gray-400 hover:text-white transition-colors">
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto">
+                                <div>
+                                    <span className="text-gold9/40 block text-xs mb-1">PROMPT</span>
+                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap">{selectedTask.prompt}</div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <span className="text-gold9/40 block text-xs mb-1">STATUS</span>
+                                        <span className={`px-2 py-1 rounded text-xs ${
+                                            selectedTask.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                            selectedTask.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                            selectedTask.status === 'in_progress' ? 'bg-gold9/20 text-gold9' :
+                                            'bg-gray-500/20 text-gray-300'
+                                        }`}>
+                                            {selectedTask.status.toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gold9/40 block text-xs mb-1">REPO</span>
+                                        <span className="text-gray-200">{selectedTask.repoName}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gold9/40 block text-xs mb-1">ASSIGNED AGENT</span>
+                                        <span className="text-gray-200">{selectedTask.agent_id || 'None'}</span>
+                                    </div>
+                                     <div>
+                                        <span className="text-gold9/40 block text-xs mb-1">DEPENDS ON</span>
+                                        <span className="text-gray-200">{selectedTask.depends_on || 'None'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
                 {/* AUTH MODAL */}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
@@ -154,7 +154,8 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 key={agent.id}
                                 draggable={true}
                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 cursor-grab active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
+                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 hover:bg-gold9/10 cursor-pointer active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
+                                onClick={() => onAgentClick && onAgentClick(agent)}
                             >
                                 <div className="flex items-center gap-2">
                                     <div className={`w-2 h-2 rounded-full ${statusColor} ${statusGlow}`} />
@@ -225,7 +226,8 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 key={agent.id}
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex items-center gap-2 text-xs font-mono cursor-grab hover:border-gold9 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : ''}`}
+                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex items-center gap-2 text-xs font-mono cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : ''}`}
+                                                onClick={() => onAgentClick && onAgentClick(agent)}
                                             >
                                                 <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-gold9 animate-pulse' : (agent.status === 'stuck' ? 'bg-red-500' : 'bg-gray-500')}`} />
                                                 <span>{agent.id.replace('agent_', 'A-')}</span>
@@ -321,7 +323,12 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             }
 
                                             return (
-                                                <div key={task.id} className={`group flex justify-between items-start p-2 rounded ${taskBg} border ${taskBorder} hover:border-gold9/10 transition-colors`}>
+                                                <div key={task.id} className={`group flex justify-between items-start p-2 rounded ${taskBg} border ${taskBorder} hover:border-gold9/30 hover:bg-gold9/10 cursor-pointer transition-all`}
+                                                    onClick={(e) => {
+                                                        // Prevent click if clicking the remove button
+                                                        if (e.target.closest('button')) return;
+                                                        if (onTaskClick) onTaskClick(task, repo.name);
+                                                    }}>
                                                     <div className="flex items-start gap-2 flex-1">
                                                         <div className="text-gold9/40 font-mono text-[10px] mt-0.5 w-4">{i+1}.</div>
                                                         <div className="flex flex-col">
