@@ -95,34 +95,6 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         return `${Math.floor(diff/3600)}h ${Math.floor((diff%3600)/60)}m`;
     };
 
-    const AgentPill = ({ agent, draggable = true }) => {
-        let statusColor = 'bg-gray-500';
-        let statusGlow = '';
-        if (agent.status === 'working') {
-            statusColor = 'bg-green-500';
-            statusGlow = 'animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]';
-        } else if (agent.status === 'stuck' || agent.status === 'error') {
-            statusColor = 'bg-red-500';
-            statusGlow = 'shadow-[0_0_10px_rgba(239,68,68,0.5)]';
-        }
-
-        return (
-            <div
-                draggable={draggable}
-                onDragStart={(e) => draggable && handleDragStart(e, agent.id)}
-                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 cursor-grab active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
-            >
-                <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${statusColor} ${statusGlow}`} />
-                    <span className="text-sm font-mono text-gray-100">{agent.id.replace('agent_', 'A-')}</span>
-                </div>
-                <div className="text-[10px] text-gray-300 font-mono">
-                    {agent.status.toUpperCase()}
-                </div>
-            </div>
-        );
-    };
-
     return (
         <div className="flex h-full w-full bg-transparent text-gray-100 font-sans">
 
@@ -167,9 +139,34 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                     )}
 
                     <div className="text-xs font-bold text-gold9/40 mt-6 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
-                    {unassignedAgents.map(agent => (
-                        <AgentPill key={agent.id} agent={agent} />
-                    ))}
+                    {unassignedAgents.map(agent => {
+                        let statusColor = 'bg-gray-500';
+                        let statusGlow = '';
+                        if (agent.status === 'working') {
+                            statusColor = 'bg-green-500';
+                            statusGlow = 'animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]';
+                        } else if (agent.status === 'stuck' || agent.status === 'error') {
+                            statusColor = 'bg-red-500';
+                            statusGlow = 'shadow-[0_0_10px_rgba(239,68,68,0.5)]';
+                        }
+
+                        return (
+                            <div
+                                key={agent.id}
+                                draggable={true}
+                                onDragStart={(e) => handleDragStart(e, agent.id)}
+                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 cursor-grab active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${statusColor} ${statusGlow}`} />
+                                    <span className="text-sm font-mono text-gray-100">{agent.id.replace('agent_', 'A-')}</span>
+                                </div>
+                                <div className="text-[10px] text-gray-300 font-mono">
+                                    {agent.status.toUpperCase()}
+                                </div>
+                            </div>
+                        );
+                    })}
                     {unassignedAgents.length === 0 && (
                         <div className="text-center text-sm text-gold9/40 py-10 font-mono italic">
                             All agents assigned.

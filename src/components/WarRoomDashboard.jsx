@@ -27,10 +27,10 @@ import {
 } from 'lucide-react';
 import AutomationEditor from './AutomationEditor';
 import FleetManagerUI from './FleetManagerUI';
+import ClockDisplay from './ClockDisplay';
 
 
 const WarRoomDashboard = ({ data, socket, onClose }) => {
-    const [time, setTime] = useState(new Date());
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
         const [selectedSession, setSelectedSession] = useState(null);
@@ -92,11 +92,6 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
             };
         }
     }, [socket]);
-
-    useEffect(() => {
-        const timer = setInterval(() => setTime(new Date()), 1000);
-        return () => clearInterval(timer);
-    }, []);
 
     // Destructure data with defaults
     const {
@@ -293,14 +288,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             <Terminal size={14} />
                             COMMAND
                         </button>
-                        <div className="text-right hidden md:block">
-                            <div className="text-2xl font-bold tracking-widest">
-                                {time.toLocaleTimeString([], { hour12: false })}
-                            </div>
-                            <div className="text-xs text-gold9/60 tracking-[0.2em]">
-                                {time.toLocaleDateString().toUpperCase()}
-                            </div>
-                        </div>
+                        <ClockDisplay />
                         <button
                             onClick={onClose}
                             className="px-4 py-2 border border-gold9/30 hover:bg-gold9/10 hover:border-gold9 rounded text-xs tracking-widest transition-all"
