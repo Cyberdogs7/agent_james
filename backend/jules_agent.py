@@ -98,8 +98,8 @@ class JulesAgent:
                 source_context["githubRepoContext"] = {"startingBranch": "master"}
             else:
                 # If it doesn't look like a resource name, assume it's a repo reference
+                source_context["source"] = f"sources/github/{source}"
                 source_context["githubRepoContext"] = {
-                    "repo": source,
                     "startingBranch": "master"
                 }
         
