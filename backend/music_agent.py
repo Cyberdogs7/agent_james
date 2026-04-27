@@ -192,6 +192,22 @@ class MusicAgent:
             if duration_string:
                 self.current_track['time'] = duration_string
 
+            # Fetch lyrics
+            try:
+                watch = await asyncio.to_thread(self.yt.get_watch_playlist, videoId=video_id)
+                lyrics_id = watch.get("lyrics")
+                if lyrics_id:
+                    lyrics_data = await asyncio.to_thread(self.yt.get_lyrics, lyrics_id)
+                    if lyrics_data and 'lyrics' in lyrics_data:
+                        self.current_track['lyrics'] = lyrics_data['lyrics']
+                    else:
+                        self.current_track['lyrics'] = None
+                else:
+                    self.current_track['lyrics'] = None
+            except Exception as e:
+                self.logger.error(f"Failed to fetch lyrics: {e}")
+                self.current_track['lyrics'] = None
+
             # Start Streaming via FFmpeg
             await self._kill_ffmpeg()
 
