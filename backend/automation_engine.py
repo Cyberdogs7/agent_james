@@ -100,7 +100,7 @@ class AutomationEngine:
                 pass # Timeout means 60s passed, continue loop
 
     async def _monitor_git_loop(self):
-        """Background task to monitor git repos for new commits."""
+        """Background task to monitor git repos for new commits and PRs."""
         print("[AutomationEngine] Starting Git monitor loop...")
         while not self.stop_event.is_set():
             try:
@@ -112,6 +112,27 @@ class AutomationEngine:
                         # Also announce via Ada if available
                         if self.ada:
                              await self.ada.handle_external_event(event)
+
+                pr_events = await self.project_manager.monitor_git_prs()
+                if pr_events:
+                    try:
+                        from backend.server import fleet_manager
+                    except ImportError:
+                        fleet_manager = None
+
+                    for pr_event in pr_events:
+                        if pr_event['type'] == 'git_pr':
+                            # Check if repo is active in the war room command section
+                            repo_name = pr_event.get('repo')
+                            is_active = False
+                            if fleet_manager and repo_name in fleet_manager.repos:
+                                is_active = fleet_manager.repos[repo_name].get('is_active', False)
+
+                            if is_active:
+                                print(f"[AutomationEngine] Detected new active PR: {repo_name} - {pr_event.get('title')}")
+                                if self.ada:
+                                    await self.ada.handle_external_event(pr_event)
+
             except Exception as e:
                 print(f"[AutomationEngine] Git Monitor Error: {e}")
 
