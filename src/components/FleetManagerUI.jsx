@@ -29,11 +29,18 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
     // Drag and Drop State
     const [draggedAgentId, setDraggedAgentId] = useState(null);
+    const [draggedRepoName, setDraggedRepoName] = useState(null);
 
     const handleDragStart = (e, agentId) => {
         setDraggedAgentId(agentId);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', agentId);
+    };
+
+    const handleRepoDragStart = (e, repoName) => {
+        setDraggedRepoName(repoName);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/repo', repoName);
     };
 
     const handleDragOver = (e) => {
