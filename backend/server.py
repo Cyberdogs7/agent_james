@@ -2177,6 +2177,8 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     await check_and_start_next_task(repo_name, current_agent_id)
                 elif "Error polling" in message or "failed" in message.lower() and ("Task Execution Failed" in message or "Exception" in message):
                     print(f"[SERVER] Jules session failed for task {current_task['id']}")
+                    if audio_loop:
+                        audio_loop.notify_user(f"Jules task in {repo_name} failed.")
                     if selected_api_key and selected_api_key in fleet_account_active_sessions:
                         fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
@@ -2221,12 +2223,16 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     else:
                         if selected_api_key and selected_api_key in fleet_account_active_sessions:
                             fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
+                        if audio_loop:
+                            audio_loop.notify_user(f"Jules task in {repo_name} failed to start.")
                         fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
                         fleet_manager.update_agent_session(current_agent_id, None, "error")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                 except Exception as e:
                     if selected_api_key and selected_api_key in fleet_account_active_sessions:
                         fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
+                    if audio_loop:
+                        audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {e}")
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
                     fleet_manager.update_agent_session(current_agent_id, None, "error")
                     await sio.emit('error', {'msg': f"Failed to start task for {current_agent_id}: {e}"})
