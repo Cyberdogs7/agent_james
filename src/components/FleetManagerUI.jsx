@@ -63,7 +63,6 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         if (repoName && onToggleRepoActive) {
             onToggleRepoActive(repoName, true);
         }
-        setDraggedRepoName(null);
     };
 
     const handleUnassignDrop = (e) => {
@@ -145,28 +144,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-                    <div className="text-xs font-bold text-gold9/40 mb-3 tracking-widest">AVAILABLE REPOS</div>
-                    {inactiveRepos.map(repo => (
-                        <div
-                            key={repo.name}
-                            draggable
-                            onDragStart={(e) => handleRepoDragStart(e, repo.name)}
-                            onDragEnd={() => setDraggedRepoName(null)}
-                            className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 cursor-grab active:cursor-grabbing transition-colors ${draggedRepoName === repo.name ? 'opacity-50' : ''}`}
-                        >
-                            <span className="text-sm font-mono text-gray-100 truncate flex-1" title={repo.name}>{repo.name}</span>
-                            <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, true)} className="text-gold9/60 hover:text-gold9 ml-2 p-1">
-                                <Plus size={14} />
-                            </button>
-                        </div>
-                    ))}
-                    {inactiveRepos.length === 0 && (
-                        <div className="text-center text-sm text-gold9/40 py-4 font-mono italic">
-                            No inactive repos.
-                        </div>
-                    )}
-
-                    <div className="text-xs font-bold text-gold9/40 mt-6 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
+                    <div className="text-xs font-bold text-gold9/40 mt-2 mb-3 tracking-widest">UNASSIGNED AGENTS</div>
                     {unassignedAgents.map(agent => (
                         <AgentPill key={agent.id} agent={agent} />
                     ))}
