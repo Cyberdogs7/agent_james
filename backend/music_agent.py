@@ -194,7 +194,12 @@ class MusicAgent:
             # Start Streaming via FFmpeg
             await self._kill_ffmpeg()
 
-            ffmpeg_path = shutil.which("ffmpeg")
+            try:
+                import imageio_ffmpeg
+                ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            except ImportError:
+                ffmpeg_path = shutil.which("ffmpeg")
+
             if not ffmpeg_path:
                 raise Exception("ffmpeg is not installed on the system.")
 
