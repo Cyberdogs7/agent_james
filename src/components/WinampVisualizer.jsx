@@ -183,6 +183,13 @@ const WinampVisualizer = ({ socket, onClose }) => {
         <div className="absolute bottom-1 right-1 text-[#00FF00] bg-black/50 px-1">
           {status.status === "playing" ? "128 kbps" : ""}
         </div>
+
+        {/* Lyrics Display */}
+        {status.track && status.track.lyrics && (
+          <div className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/70 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto" style={{ textShadow: "1px 1px 0 #000" }}>
+            {status.track.lyrics}
+          </div>
+        )}
       </div>
     </div>
   );
