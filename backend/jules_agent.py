@@ -90,6 +90,9 @@ class JulesAgent:
         """Creates a new session in the Jules API."""
         source_context = {}
         if source:
+            if source.startswith("github.com/"):
+                source = source.replace("github.com/", "", 1)
+
             if source.startswith("sources/"):
                 source_context["source"] = source
                 source_context["githubRepoContext"] = {"startingBranch": "master"}
