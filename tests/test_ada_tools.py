@@ -272,9 +272,10 @@ class TestJulesNotifications:
         audio_loop.session.send = AsyncMock()
 
         # Call the handler
+        session_id = "test-session"
         title = "Fix Login Bug"
         new_state = "IN_PROGRESS"
-        await audio_loop._handle_jules_status_change(title, new_state)
+        await audio_loop._handle_jules_status_change(session_id, title, new_state)
 
         # 1. Verify UI Notification
         audio_loop.on_display_content.assert_called_once()

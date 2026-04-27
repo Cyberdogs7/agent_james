@@ -1703,20 +1703,6 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                                     # Only send if there's new text
                                     if delta:
                                         spoken_response_for_slack += delta
-                                        # Send to frontend (Streaming)
-                                        if self.on_transcription:
-                                             self.on_transcription({"sender": "ADA", "text": delta})
-                                        
-                                        # Buffer for Logging
-                                        if self.chat_buffer["sender"] != "ADA":
-                                            # Flush previous
-                                            if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
-                                                self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
-                                            # Start new
-                                            self.chat_buffer = {"sender": "ADA", "text": delta}
-                                        else:
-                                            # Append
-                                            self.chat_buffer["text"] += delta
                         
                         # Flush buffer on turn completion if needed, 
                         # but usually better to wait for sender switch or explicit end.
