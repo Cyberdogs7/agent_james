@@ -510,7 +510,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto">
+                            <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto scrollbar-hide">
                                 <div>
                                     <span className="text-gold9/40 block text-xs mb-1">PROMPT</span>
                                     <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap">{selectedTask.prompt}</div>
@@ -1369,7 +1369,7 @@ const BranchReviewView = ({ repo, branch, socket, onBack, onClose }) => {
                          <div className="p-2 border-b border-white/10 text-xs font-bold text-gray-400 flex justify-between">
                             <span>{selectedFile ? selectedFile.filename : 'No file selected'}</span>
                          </div>
-                         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 font-mono text-xs text-gray-300">
+                         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 font-mono text-xs text-gray-300 scrollbar-hide">
                             {selectedFile && selectedFile.patch ? (
                                 <pre className="whitespace-pre">{selectedFile.patch}</pre>
                             ) : (
