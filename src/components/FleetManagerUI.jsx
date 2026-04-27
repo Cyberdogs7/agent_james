@@ -156,7 +156,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
             {/* Main Area: Repository Rooms */}
             <div
-                className="flex-1 overflow-y-auto p-6 bg-transparent"
+                className="flex-1 overflow-y-auto p-6 bg-transparent scrollbar-hide"
                 onDragOver={handleDragOver}
                 onDrop={handleMainAreaDrop}
             >
@@ -258,7 +258,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             <select
                                                 value={newTaskDependencies[repo.name] || ''}
                                                 onChange={(e) => setNewTaskDependencies({...newTaskDependencies, [repo.name]: e.target.value})}
-                                                className="bg-transparent text-xs font-mono text-gold9/60 border border-gold9/20 rounded p-1 outline-none"
+                                                className="bg-[#111111] text-xs font-mono text-gold9/60 border border-gold9/20 rounded p-1 outline-none scrollbar-hide"
                                             >
                                                 <option value="">No dependencies</option>
                                                 {repo.queue.map(t => (
