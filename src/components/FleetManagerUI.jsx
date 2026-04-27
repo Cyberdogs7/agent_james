@@ -29,11 +29,18 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
     // Drag and Drop State
     const [draggedAgentId, setDraggedAgentId] = useState(null);
+    const [draggedRepoName, setDraggedRepoName] = useState(null);
 
     const handleDragStart = (e, agentId) => {
         setDraggedAgentId(agentId);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', agentId);
+    };
+
+    const handleRepoDragStart = (e, repoName) => {
+        setDraggedRepoName(repoName);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/repo', repoName);
     };
 
     const handleDragOver = (e) => {
@@ -48,6 +55,15 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
             onAssign(agentId, repoName);
         }
         setDraggedAgentId(null);
+    };
+
+    const handleMainAreaDrop = (e) => {
+        e.preventDefault();
+        const repoName = e.dataTransfer.getData('application/repo');
+        if (repoName && onToggleRepoActive) {
+            onToggleRepoActive(repoName, true);
+        }
+        setDraggedRepoName(null);
     };
 
     const handleUnassignDrop = (e) => {
@@ -131,7 +147,13 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
                     <div className="text-xs font-bold text-gold9/40 mb-3 tracking-widest">AVAILABLE REPOS</div>
                     {inactiveRepos.map(repo => (
-                        <div key={repo.name} className="flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 transition-colors">
+                        <div
+                            key={repo.name}
+                            draggable
+                            onDragStart={(e) => handleRepoDragStart(e, repo.name)}
+                            onDragEnd={() => setDraggedRepoName(null)}
+                            className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 cursor-grab active:cursor-grabbing transition-colors ${draggedRepoName === repo.name ? 'opacity-50' : ''}`}
+                        >
                             <span className="text-sm font-mono text-gray-100 truncate flex-1" title={repo.name}>{repo.name}</span>
                             <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, true)} className="text-gold9/60 hover:text-gold9 ml-2 p-1">
                                 <Plus size={14} />
@@ -157,7 +179,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
             </div>
 
             {/* Main Area: Repository Rooms */}
-            <div className="flex-1 overflow-y-auto p-6 bg-transparent">
+            <div
+                className="flex-1 overflow-y-auto p-6 bg-transparent"
+                onDragOver={handleDragOver}
+                onDrop={handleMainAreaDrop}
+            >
                 <div className="flex justify-between items-center mb-6">
                     <div>
                         <h1 className="text-2xl font-black tracking-tight text-white font-mono">KINETIC COMMAND</h1>
