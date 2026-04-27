@@ -410,7 +410,7 @@ async def start_audio(sid, data=None):
     print(f"Using input device: Name='{device_name}', Index={device_index}")
     
     if audio_loop:
-        if loop_task and (loop_task.done() or loop_task.cancelled()):
+        if loop_task and not loop_task.is_alive():
              print("Audio loop task appeared finished/cancelled. Clearing and restarting...")
              audio_loop = None
              loop_task = None
@@ -431,23 +431,31 @@ async def start_audio(sid, data=None):
     def on_cad_data(data):
         info = f"{len(data.get('vertices', []))} vertices" if 'vertices' in data else f"{len(data.get('data', ''))} bytes (STL)"
         print(f"Sending CAD data to frontend: {info}")
-        asyncio.create_task(sio.emit('cad_data', data))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('cad_data', data), server_loop)
 
     # Callback to send Browser data to frontend
     def on_web_data(data):
         print(f"Sending Browser data to frontend: {len(data.get('log', ''))} chars logs")
-        asyncio.create_task(sio.emit('browser_frame', data))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('browser_frame', data), server_loop)
         
     # Callback to send Transcription data to frontend
     def on_transcription(data):
         # data = {"sender": "User"|"ADA", "text": "..."}
-        asyncio.create_task(sio.emit('transcription', data))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('transcription', data), server_loop)
 
     # Callback to send Confirmation Request to frontend
     def on_tool_confirmation(data):
         # data = {"id": "uuid", "tool": "tool_name", "args": {...}}
         print(f"Requesting confirmation for tool: {data.get('tool')}")
-        asyncio.create_task(sio.emit('tool_confirmation_request', data))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('tool_confirmation_request', data), server_loop)
 
     # Callback to send CAD status to frontend
     def on_cad_status(status):
@@ -456,38 +464,54 @@ async def start_audio(sid, data=None):
         # - a dict with {status, attempt, max_attempts, error} (from CadAgent)
         if isinstance(status, dict):
             print(f"Sending CAD Status: {status.get('status')} (attempt {status.get('attempt')}/{status.get('max_attempts')})")
-            asyncio.create_task(sio.emit('cad_status', status))
+            if server_loop:
+
+                asyncio.run_coroutine_threadsafe(sio.emit('cad_status', status), server_loop)
         else:
             # Legacy: simple string
             print(f"Sending CAD Status: {status}")
-            asyncio.create_task(sio.emit('cad_status', {'status': status}))
+            if server_loop:
+
+                asyncio.run_coroutine_threadsafe(sio.emit('cad_status', {'status': status}), server_loop)
 
     # Callback to send CAD thoughts to frontend (streaming)
     def on_cad_thought(thought_text):
-        asyncio.create_task(sio.emit('cad_thought', {'text': thought_text}))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('cad_thought', {'text': thought_text}), server_loop)
 
     # Callback to send Project Update to frontend
     def on_project_update(project_name):
         print(f"Sending Project Update: {project_name}")
-        asyncio.create_task(sio.emit('project_update', {'project': project_name}))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('project_update', {'project': project_name}), server_loop)
 
     # Callback to send Device Update to frontend
     def on_device_update(devices):
         # devices is a list of dicts
         print(f"Sending Kasa Device Update: {len(devices)} devices")
-        asyncio.create_task(sio.emit('kasa_devices', devices))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('kasa_devices', devices), server_loop)
 
     # Callback to send Error to frontend
     def on_error(msg):
         print(f"Sending Error to frontend: {msg}")
-        asyncio.create_task(sio.emit('error', {'msg': msg}))
+        if server_loop:
+
+            asyncio.run_coroutine_threadsafe(sio.emit('error', {'msg': msg}), server_loop)
 
     def on_display_content(data):
         print(f"Sending display content to frontend: {data}")
         if data.get("content_type") == "suggestion":
-            asyncio.create_task(sio.emit('proactive_suggestion', {"suggestion": data.get("suggestion")}))
+            if server_loop:
+
+                asyncio.run_coroutine_threadsafe(sio.emit('proactive_suggestion', {"suggestion": data.get("suggestion")}), server_loop)
         else:
-            asyncio.create_task(sio.emit('display_content', data))
+            if server_loop:
+
+                asyncio.run_coroutine_threadsafe(sio.emit('display_content', data), server_loop)
 
     # Initialize ADA
     try:
@@ -525,19 +549,17 @@ async def start_audio(sid, data=None):
             audio_loop.set_paused(True)
 
         print("Creating asyncio task for AudioLoop.run()")
-        loop_task = asyncio.create_task(audio_loop.run())
-        
-        # Add a done callback to catch silent failures in the loop
-        def handle_loop_exit(task):
+        def run_audio_loop_in_thread(loop_instance):
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
             try:
-                task.result()
-            except asyncio.CancelledError:
-                print("Audio Loop Cancelled")
-            except Exception as e:
-                print(f"Audio Loop Crashed: {e}")
-                # You could emit 'error' here if you have context
-        
-        loop_task.add_done_callback(handle_loop_exit)
+                new_loop.run_until_complete(loop_instance.run())
+            finally:
+                new_loop.close()
+
+        loop_task = threading.Thread(target=run_audio_loop_in_thread, args=(audio_loop,), daemon=True)
+        loop_task.start()
+
         
         audio_loop.update_agent.sio = sio
 
@@ -685,9 +707,9 @@ async def shutdown(sid, data=None):
         audio_loop = None
 
     # Cancel the loop task if running
-    if loop_task and not loop_task.done():
-        print("[SERVER] Cancelling loop task...")
-        loop_task.cancel()
+    if loop_task and loop_task.is_alive():
+        print("[SERVER] Joining loop task...")
+        await asyncio.to_thread(loop_task.join, 2.0)
         loop_task = None
 
     # Stop authenticator if running
