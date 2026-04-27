@@ -1510,16 +1510,17 @@ async def get_fleet_status(sid):
         fleet = audio_loop.project_manager.load_fleet()
         token = audio_loop.project_manager.get_github_token()
 
+        # Emit basic status immediately so UI has *something* fast
+        basic_fleet = [{
+            "name": f"{r['owner']}/{r['name']}",
+            "branch": "unknown",
+            "status": "Remote (Loading...)" if token else "Remote (No Auth)",
+            "last_commit": None,
+            "auto_merge_disabled": r.get('auto_merge_disabled', False)
+        } for r in fleet]
+        await sio.emit('fleet_status_update', basic_fleet, to=sid)
+
         if not token:
-            # Emit basic status so UI has *something*
-            basic_fleet = [{
-                "name": f"{r['owner']}/{r['name']}",
-                "branch": "unknown",
-                "status": "Remote (No Auth)",
-                "last_commit": None,
-                "auto_merge_disabled": r.get('auto_merge_disabled', False)
-            } for r in fleet]
-            await sio.emit('fleet_status_update', basic_fleet, to=sid)
             await sio.emit('error', {'msg': "No GitHub Token found. Please Authenticate.", 'code': 'AUTH_REQUIRED'})
             return
 
@@ -1559,10 +1560,33 @@ async def get_fleet_status(sid):
                 "auto_merge_disabled": repo.get('auto_merge_disabled', False)
             }
 
-        tasks = [fetch_repo_status(repo) for repo in fleet]
-        fleet_status = await asyncio.gather(*tasks)
+        # Background task to fetch detailed status without blocking the event loop
+        async def fetch_all_and_emit():
+            # Use a semaphore to allow some concurrency without overwhelming the event loop
+            sem = asyncio.Semaphore(5)
 
-        await sio.emit('fleet_status_update', list(fleet_status), to=sid)
+            # We'll update the fleet list in place and emit incrementally
+            # basic_fleet is already structured
+            updated_fleet = list(basic_fleet)
+
+            async def fetch_and_update(idx, repo):
+                async with sem:
+                    # Yield before starting the network request
+                    await asyncio.sleep(0)
+                    status = await fetch_repo_status(repo)
+                    updated_fleet[idx] = status
+                    # Emit partial update so UI doesn't hang forever
+                    await sio.emit('fleet_status_update', updated_fleet, to=sid)
+                    # Yield after request to ensure audio thread runs
+                    await asyncio.sleep(0.01)
+
+            tasks = [asyncio.create_task(fetch_and_update(i, repo)) for i, repo in enumerate(fleet)]
+
+            # Wait for all background fetches to complete
+            await asyncio.gather(*tasks)
+
+        # Fire and forget the background fetch
+        asyncio.create_task(fetch_all_and_emit())
 
 @sio.event
 async def get_repo_branches(sid, data):
