@@ -273,6 +273,8 @@ async def initial_fleet_sync():
 
 async def startup_event():
     init_db()
+    global server_loop
+    server_loop = asyncio.get_running_loop()
     global slack_agent, scraper_agent, log_monitor
     import sys
     print(f"[SERVER DEBUG] Startup Event Triggered")
@@ -419,9 +421,10 @@ async def start_audio(sid, data=None):
 
     # Callback to send audio data to frontend
     def on_audio_data(data_bytes):
-        # We need to schedule this on the event loop
-        # This is high frequency, so we might want to downsample or batch if it's too much
-        asyncio.create_task(sio.emit('audio_data', {'data': data_bytes}))
+        # Schedule on the main server event loop since this is called from the audio thread
+        global server_loop
+        if server_loop:
+            asyncio.run_coroutine_threadsafe(sio.emit('audio_data', {'data': data_bytes}), server_loop)
 
     # Callback to send CAL data to frontend
     def on_cad_data(data):

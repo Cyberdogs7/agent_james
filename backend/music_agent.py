@@ -1,4 +1,7 @@
 import asyncio
+import queue
+import time
+import threading
 import logging
 import random
 import subprocess
@@ -18,9 +21,10 @@ class MusicAgent:
         self.logger.setLevel(logging.INFO)
 
         self.ffmpeg_process = None
-        self._stop_event = asyncio.Event()
+        self._stop_event = threading.Event()
+        self.main_loop = None
         self._audio_queue = None # Set by ada.py if pushing to global mix
-        self.internal_queue = asyncio.Queue(maxsize=2000) # Pre-buffer up to ~5.5 minutes of audio
+        self.internal_queue = queue.Queue(maxsize=2000) # Pre-buffer up to ~5.5 minutes of audio
         self._download_task = None
 
         # Internal state
@@ -36,6 +40,7 @@ class MusicAgent:
 
     async def start(self):
         """No-op for API version, but kept for compatibility."""
+        self.main_loop = asyncio.get_running_loop()
         self.logger.info("MusicAgent (API) ready.")
 
     async def stop(self):
@@ -59,38 +64,28 @@ class MusicAgent:
         while not self.internal_queue.empty():
             try:
                 self.internal_queue.get_nowait()
-            except asyncio.QueueEmpty:
+            except queue.Empty:
                 break
 
         # Send EOF to unblock the _stream_reader task
         try:
             self.internal_queue.put_nowait(None)
-        except asyncio.QueueFull:
+        except queue.Full:
             pass
 
         # Immediately replace the queue so new streams start fresh
-        self.internal_queue = asyncio.Queue(maxsize=2000)
+        self.internal_queue = queue.Queue(maxsize=2000)
 
         if self.ffmpeg_process:
             try:
                 self.ffmpeg_process.terminate()
-                await asyncio.wait_for(self.ffmpeg_process.wait(), timeout=2.0)
+                self.ffmpeg_process.wait(timeout=2.0)
             except Exception:
                 try:
                     self.ffmpeg_process.kill()
-                    await asyncio.wait_for(self.ffmpeg_process.wait(), timeout=2.0)
+                    self.ffmpeg_process.wait(timeout=2.0)
                 except Exception:
                     pass
-
-            # Extra cleanup to prevent ProactorEventLoop warnings on Windows
-            import sys
-            if sys.platform == 'win32' and hasattr(self.ffmpeg_process, '_transport'):
-                try:
-                    if self.ffmpeg_process._transport:
-                        self.ffmpeg_process._transport.close()
-                except Exception:
-                    pass
-
             self.ffmpeg_process = None
 
     async def play(self, query):
@@ -220,19 +215,18 @@ class MusicAgent:
                 '-' # Output to pipe
             ]
 
-            self.ffmpeg_process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-                limit=1024 * 64
+            self.ffmpeg_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL
             )
 
             self.is_playing = True
             self.paused = False
 
             # Start reading from stdout
-            self._download_task = asyncio.create_task(self._ffmpeg_reader())
-            asyncio.create_task(self._stream_reader())
+            threading.Thread(target=self._ffmpeg_reader_sync, daemon=True).start()
+            threading.Thread(target=self._stream_reader_sync, daemon=True).start()
 
             if self.sio:
                 await self.sio.emit('music_status', {
@@ -248,59 +242,76 @@ class MusicAgent:
             await asyncio.sleep(1) # Backoff
             asyncio.create_task(self._play_current_track())
 
-    async def _ffmpeg_reader(self):
+    def _ffmpeg_reader_sync(self):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
         chunk_size = 131072
         while self.is_playing and self.ffmpeg_process:
-            if self.ffmpeg_process.returncode is not None:
+            if self.ffmpeg_process.poll() is not None:
                 break
 
-            data = await self.ffmpeg_process.stdout.read(chunk_size)
+            data = self.ffmpeg_process.stdout.read(chunk_size)
             if not data:
                 break
 
-            await self.internal_queue.put(data)
+            self.internal_queue.put(data)
 
         # Put None to signal EOF to the playback task
-        await self.internal_queue.put(None)
+        self.internal_queue.put(None)
 
-    async def _stream_reader(self):
+    def _stream_reader_sync(self):
         """Reads from internal queue and pushes to audio queue at playback speed."""
-        start_time = asyncio.get_event_loop().time()
+        start_time = time.time()
         last_emit_time = start_time
 
         # For 24kHz, 1 channel, 16-bit PCM: 48000 bytes/sec.
         bytes_per_sec = 24000 * 1 * 2
         total_bytes_played = 0
 
+        # Buffer for smaller chunks
+        small_chunk_buffer = b""
+        SMALL_CHUNK_SIZE = 4096
+
         while self.is_playing:
             if self.paused:
-                await asyncio.sleep(0.1)
+                time.sleep(0.1)
                 # Adjust start time to account for pause duration
                 start_time += 0.1
                 last_emit_time += 0.1
                 continue
 
-            current_time = asyncio.get_event_loop().time()
+            current_time = time.time()
             elapsed = current_time - start_time
             self.current_track['progress'] = elapsed
 
             # Emit progress periodically (e.g., every 1 second)
             if current_time - last_emit_time >= 1.0:
-                if self.sio:
-                    asyncio.create_task(self.sio.emit('music_status', {
-                        "status": "playing",
-                        "track": self.current_track
-                    }))
+                if self.sio and self.main_loop:
+                    asyncio.run_coroutine_threadsafe(
+                        self.sio.emit('music_status', {
+                            "status": "playing",
+                            "track": self.current_track
+                        }),
+                        self.main_loop
+                    )
                 last_emit_time = current_time
 
-            # Read chunk directly from internal cache queue
-            data = await self.internal_queue.get()
+            if len(small_chunk_buffer) < SMALL_CHUNK_SIZE:
+                # Read chunk directly from internal cache queue
+                data = self.internal_queue.get()
 
-            if not data:
-                self.logger.info("Internal audio queue finished.")
-                self.is_playing = False
-                break
+                if not data:
+                    self.logger.info("Internal audio queue finished.")
+                    self.is_playing = False
+                    break
+
+                small_chunk_buffer += data
+
+            if len(small_chunk_buffer) >= SMALL_CHUNK_SIZE:
+                process_data = small_chunk_buffer[:SMALL_CHUNK_SIZE]
+                small_chunk_buffer = small_chunk_buffer[SMALL_CHUNK_SIZE:]
+            else:
+                process_data = small_chunk_buffer
+                small_chunk_buffer = b""
 
             # Push to ADA's queue if available
             if self._audio_queue:
@@ -310,17 +321,17 @@ class MusicAgent:
                 import audioop
 
                 # Ensure data length is even for 16-bit PCM
-                if len(data) % 2 != 0:
-                    data = data[:-1]
+                if len(process_data) % 2 != 0:
+                    process_data = process_data[:-1]
 
                 # Apply volume scaling
                 if self.volume != 1.0:
-                    data = audioop.mul(data, 2, self.volume)
+                    process_data = audioop.mul(process_data, 2, self.volume)
 
-                arr = array.array('h', data)
+                arr = array.array('h', process_data)
 
                 # Visualization logic
-                if self.sio:
+                if self.sio and self.main_loop:
                     try:
                         current_time = time.time()
                         # Rate limit visualizer emission to approx 15 fps (66ms) to avoid flooding the socket
@@ -347,34 +358,38 @@ class MusicAgent:
                                 except Exception as emit_err:
                                     self.logger.debug(f"Emit error: {emit_err}")
 
-                            asyncio.create_task(safe_emit())
+                            asyncio.run_coroutine_threadsafe(safe_emit(), self.main_loop)
                     except Exception as e:
                         self.logger.debug(f"Vis error: {e}")
 
-                await self._audio_queue.put(data)
+                try:
+                    self._audio_queue.put_nowait(process_data)
+                except queue.Full:
+                    pass
 
             # Manual rate-limiting to simulate real-time playback and handle drift
-            total_bytes_played += len(data)
+            total_bytes_played += len(process_data)
             expected_time = total_bytes_played / bytes_per_sec
 
             # calculate actual elapsed time
-            actual_elapsed = asyncio.get_event_loop().time() - start_time
+            actual_elapsed = time.time() - start_time
             sleep_delay = expected_time - actual_elapsed
 
             if sleep_delay > 0:
-                await asyncio.sleep(sleep_delay)
+                time.sleep(sleep_delay)
 
         if not self._stop_event.is_set():
              # Natural end of track, go to next
              self.current_track_index += 1
-             asyncio.create_task(self._play_current_track())
+             if self.main_loop:
+                 asyncio.run_coroutine_threadsafe(self._play_current_track(), self.main_loop)
         else:
              self.is_playing = False
-             if self.sio:
-                 await self.sio.emit('music_status', {
+             if self.sio and self.main_loop:
+                 asyncio.run_coroutine_threadsafe(self.sio.emit('music_status', {
                     "status": "stopped",
                     "track": None
-                })
+                }), self.main_loop)
 
     async def control(self, action):
         """Controls playback."""
