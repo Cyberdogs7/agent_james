@@ -1845,93 +1845,83 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         DUCK_DURATION = 1.0 # Keep ducking for 1 sec after voice stops
         DUCK_VOLUME = 0.15 # 85% reduction
 
+        v_buffer = bytearray()
+        m_buffer = bytearray()
+        import audioop
+        import time
+
         while not self.stop_event.is_set():
             try:
-                voice_data = None
-                music_data = None
-
-                # We wait for either queue to have data using a timeout mechanism
-                # to avoid blocking indefinitely if only one stream is active.
-
-                # Fetch whatever is currently available immediately
+                # 1. Fill buffers from queues
                 try:
-                    voice_data = self.audio_in_queue.get_nowait()
+                    while True:
+                        v_buffer.extend(self.audio_in_queue.get_nowait())
                 except queue.Empty:
                     pass
 
                 try:
-                    music_data = self.music_queue.get_nowait()
+                    while True:
+                        m_data = self.music_queue.get_nowait()
+                        if getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
+                            continue # Discard if paused
+                        m_buffer.extend(m_data)
                 except queue.Empty:
                     pass
 
-                # If both are empty, block and wait for the first one to emit data
-                if not voice_data and not music_data:
-                    # Wait for either with a short timeout to prevent busy looping
+                # If both buffers are empty, wait a bit
+                if not v_buffer and not m_buffer:
                     try:
-                        voice_data = self.audio_in_queue.get(timeout=0.05)
+                        v_data = self.audio_in_queue.get(timeout=0.05)
+                        v_buffer.extend(v_data)
                     except queue.Empty:
-                        pass
-                    if not voice_data:
                         try:
-                            music_data = self.music_queue.get(timeout=0.05)
+                            m_data = self.music_queue.get(timeout=0.05)
+                            if not (getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)):
+                                m_buffer.extend(m_data)
                         except queue.Empty:
                             pass
 
-                if music_data and getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
-                    # Discard music data if paused (to prevent buffer buildup)
-                    music_data = None
-
                 now = time.time()
-                if voice_data:
+                if v_buffer:
                     last_voice_time = now
 
-                # Ducking logic
                 should_duck = (now - last_voice_time) < DUCK_DURATION
 
-                # Mixing
-                mixed_data = None
-                import audioop
-                if voice_data and music_data:
-                    min_len = min(len(voice_data), len(music_data))
-                    min_len = (min_len // 2) * 2 # Ensure even number of bytes for 16-bit PCM
+                # 2. Mix and flush buffers
+                mixed_data = b""
 
-                    v_chunk = voice_data[:min_len]
-                    m_chunk = music_data[:min_len]
+                if v_buffer and m_buffer:
+                    min_len = min(len(v_buffer), len(m_buffer))
+                    min_len = (min_len // 2) * 2 # 16-bit align
 
-                    if should_duck:
-                        m_chunk = audioop.mul(m_chunk, 2, DUCK_VOLUME)
+                    if min_len > 0:
+                        v_chunk = bytes(v_buffer[:min_len])
+                        m_chunk = bytes(m_buffer[:min_len])
 
-                    mixed_chunk = audioop.add(v_chunk, m_chunk, 2)
-                    mixed_data = mixed_chunk
+                        # Remove processed data from buffers
+                        del v_buffer[:min_len]
+                        del m_buffer[:min_len]
 
-                    # If one buffer had remainder, append it (mostly edge cases)
-                    if len(voice_data) > min_len:
-                         mixed_data += voice_data[min_len:]
-                    elif len(music_data) > min_len:
-                         m_rem = music_data[min_len:]
-                         m_rem_len = (len(m_rem) // 2) * 2
-                         m_rem = m_rem[:m_rem_len]
-                         if should_duck and m_rem_len > 0:
-                             mixed_data += audioop.mul(m_rem, 2, DUCK_VOLUME)
-                             if len(music_data[min_len:]) > m_rem_len:
-                                 mixed_data += music_data[min_len + m_rem_len:]
-                         else:
-                             mixed_data += music_data[min_len:]
+                        if should_duck:
+                            m_chunk = audioop.mul(m_chunk, 2, DUCK_VOLUME)
 
-                elif voice_data:
-                    mixed_data = voice_data
-                elif music_data:
-                    if should_duck:
-                         m_len = (len(music_data) // 2) * 2
-                         if m_len > 0:
-                             m_chunk = music_data[:m_len]
-                             mixed_data = audioop.mul(m_chunk, 2, DUCK_VOLUME)
-                             if len(music_data) > m_len:
-                                 mixed_data += music_data[m_len:]
-                         else:
-                             mixed_data = music_data
-                    else:
-                         mixed_data = music_data
+                        mixed_data = audioop.add(v_chunk, m_chunk, 2)
+
+                elif v_buffer:
+                    v_len = (len(v_buffer) // 2) * 2
+                    if v_len > 0:
+                        mixed_data = bytes(v_buffer[:v_len])
+                        del v_buffer[:v_len]
+                elif m_buffer:
+                    m_len = (len(m_buffer) // 2) * 2
+                    if m_len > 0:
+                        m_chunk = bytes(m_buffer[:m_len])
+                        del m_buffer[:m_len]
+
+                        if should_duck:
+                            mixed_data = audioop.mul(m_chunk, 2, DUCK_VOLUME)
+                        else:
+                            mixed_data = m_chunk
 
                 if mixed_data:
                     # Always send to frontend
@@ -2261,7 +2251,6 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         return False
 
     async def run(self, start_message=None):
-        self._main_task = asyncio.current_task()
         self._main_task = asyncio.current_task()
         retry_delay = 1
         is_reconnect = False
