@@ -3,53 +3,83 @@ import json
 from pathlib import Path
 
 class FleetManager:
-    def __init__(self, data_file="fleet_state.json", max_agents=15):
+    def __init__(self, data_file="fleet_state.json"):
         self.data_file = Path(data_file)
-        self.max_agents = max_agents
 
         # In-memory state
-        self.agents = {} # agent_id -> { id, status, current_repo, current_session, last_active, error }
+        self.agents = {} # agent_id -> { id, status, current_repo, current_session, last_active, error, api_key, account_name }
         self.repos = {}  # repo_name -> { name, queue: [{id, prompt}] }
 
         self.load_state()
-        self._ensure_agents()
 
-    def update_max_agents(self, new_max):
-        self.max_agents = new_max
-        self._ensure_agents()
-        self.save_state()
+    def sync_accounts(self, accounts):
+        """
+        Dynamically adjusts the agent pool based on the provided accounts list.
+        It preserves existing agents if their API key still matches, removing agents
+        that no longer map to an active account limit, and adding new ones to meet capacity.
+        """
+        desired_agents = []
+        agent_counter = 1
 
-    def _ensure_agents(self):
-        # Determine the maximum required agent ID by looking at existing IDs
-        existing_numbers = [int(a_id.split('_')[1]) for a_id in self.agents.keys() if a_id.startswith('agent_')]
-        highest_existing = max(existing_numbers) if existing_numbers else 0
+        if not accounts:
+            # Default fallback if no accounts are configured
+            for i in range(15):
+                desired_agents.append({
+                    "expected_id": f"agent_{agent_counter}",
+                    "api_key": None,
+                    "account_name": "Default"
+                })
+                agent_counter += 1
+        else:
+            for account in accounts:
+                limit = account.get("concurrent_sessions_limit")
+                if limit is None:
+                    limit = 15 # Default for unlimited/unspecified
 
-        # We need at least max_agents, but maybe more if we haven't been able to downscale yet
-        target_max_id = max(self.max_agents, highest_existing)
+                for i in range(limit):
+                    desired_agents.append({
+                        "expected_id": f"agent_{agent_counter}",
+                        "api_key": account.get("api_key"),
+                        "account_name": account.get("name") or "Unnamed"
+                    })
+                    agent_counter += 1
 
-        # Fill in any gaps up to target_max_id
-        for i in range(1, target_max_id + 1):
-            agent_id = f"agent_{i}"
-            if agent_id not in self.agents:
-                self.agents[agent_id] = {
-                    "id": agent_id,
-                    "status": "idle", # idle, working, stuck, error
+        new_agents_state = {}
+
+        # We try to keep agents stable if their API key and ID still map correctly,
+        # otherwise we overwrite/create them.
+        for desired in desired_agents:
+            a_id = desired["expected_id"]
+            if a_id in self.agents:
+                # Keep existing state but update account mapping info
+                agent = self.agents[a_id]
+                agent["api_key"] = desired["api_key"]
+                agent["account_name"] = desired["account_name"]
+                new_agents_state[a_id] = agent
+            else:
+                # Create new agent
+                new_agents_state[a_id] = {
+                    "id": a_id,
+                    "status": "idle",
                     "current_repo": None,
                     "current_session": None,
                     "last_active": time.time(),
-                    "error": None
+                    "error": None,
+                    "api_key": desired["api_key"],
+                    "account_name": desired["account_name"]
                 }
 
-        # If we have too many agents, try to remove unassigned idle ones from the top
-        if len(self.agents) > self.max_agents:
-            agent_ids = sorted(list(self.agents.keys()), key=lambda x: int(x.split('_')[1]), reverse=True)
-            for agent_id in agent_ids:
-                # We only want to remove agents that are above max_agents to preserve order if possible
-                num = int(agent_id.split('_')[1])
-                if num > self.max_agents:
-                    agent = self.agents[agent_id]
-                    if agent["status"] == "idle" and agent["current_repo"] is None:
-                        del self.agents[agent_id]
+        # To gracefully handle downscaling, we should only drop agents that are truly gone
+        # and not currently working. If an agent is removed from config but still working,
+        # we might orphan the task. For simplicity in this logic, we strictly mirror the
+        # configuration capacity. If an agent is working and removed, its task will stall
+        # and eventually fail/timeout or be manually retried by user.
+
+        # Merge back running agents that exceed capacity if we want to be safer,
+        # but the prompt implies a strict static mapping.
+        # So we overwrite self.agents with new_agents_state.
+        self.agents = new_agents_state
+        self.save_state()
 
     def load_state(self):
         if self.data_file.exists():

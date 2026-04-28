@@ -275,18 +275,7 @@ async def initial_fleet_sync():
 
 def sync_fleet_agent_pool():
     accounts = get_all_accounts()
-    total_max = 0
-    if not accounts:
-        total_max = 15
-    else:
-        for account in accounts:
-            limit = account.get("concurrent_sessions_limit")
-            if limit is None:
-                total_max += 15 # Default for unlimited/unspecified
-            else:
-                total_max += limit
-
-    fleet_manager.update_max_agents(total_max)
+    fleet_manager.sync_accounts(accounts)
 
 async def startup_event():
     init_db()
@@ -2122,8 +2111,6 @@ async def delete_account_event(sid, data):
 
 # --- Fleet Manager Socket.IO Events ---
 
-fleet_account_active_sessions = {} # api_key -> count
-
 @sio.event
 async def get_fleet_state(sid):
     state = fleet_manager.get_state()
@@ -2163,16 +2150,12 @@ async def check_and_start_next_task(repo_name, agent_id=None):
 
         # We need to capture variables for the closure, so we create a factory function
         def create_spawn_task(current_task, current_agent_id, current_prompt, current_source):
-            selected_api_key = None
-
             async def _on_jules_finished(message):
                 # Callback wrapper that looks for completion/failure signals
                 # JulesAgent sends generic messages through callback
                 # NOTE: We look for exact specific signal strings that JulesAgent emits
                 if "Jules has completed the session" in message or "Session Completed." in message:
                     print(f"[SERVER] Jules session completed for task {current_task['id']}")
-                    if selected_api_key and selected_api_key in fleet_account_active_sessions:
-                        fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
                     fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
                     fleet_manager.update_agent_session(current_agent_id, None, "idle")
                     await sio.emit('fleet_state_update', fleet_manager.get_state())
@@ -2182,8 +2165,6 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     print(f"[SERVER] Jules session failed for task {current_task['id']}")
                     if audio_loop:
                         audio_loop.notify_user(f"Jules task in {repo_name} failed.")
-                    if selected_api_key and selected_api_key in fleet_account_active_sessions:
-                        fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
                     fleet_manager.update_agent_session(current_agent_id, None, "idle")
                     await sio.emit('fleet_state_update', fleet_manager.get_state())
@@ -2191,25 +2172,17 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     await check_and_start_next_task(repo_name, current_agent_id)
 
             async def run_spawn():
-                nonlocal selected_api_key
                 try:
-                    # Pick a fleet account that has available capacity
-                    accounts = get_all_accounts()
-                    agent_instance = None
-                    if accounts:
-                        for account in accounts:
-                            api_key = account.get("api_key")
-                            limit = account.get("concurrent_sessions_limit")
-                            current_active = fleet_account_active_sessions.get(api_key, 0)
-                            if limit is None or current_active < limit:
-                                selected_api_key = api_key
-                                fleet_account_active_sessions[selected_api_key] = current_active + 1
-                                print(f"[SERVER] Spawning task using Fleet Account: {account.get('name', 'Unnamed')} (Active: {fleet_account_active_sessions[selected_api_key]}/{limit if limit else '∞'})")
-                                agent_instance = JulesAgent(api_key=selected_api_key, project_manager=audio_loop.project_manager)
-                                break
+                    # Retrieve the mapped API key directly from the assigned agent's state
+                    state = fleet_manager.get_state()
+                    agent_info = next((a for a in state["agents"] if a["id"] == current_agent_id), None)
+                    selected_api_key = agent_info.get("api_key") if agent_info else None
+                    account_name = agent_info.get("account_name") if agent_info else "Unnamed"
 
-                    if not agent_instance:
-                        # Fallback to default agent if no fleet accounts have capacity or none exist
+                    if selected_api_key:
+                        print(f"[SERVER] Spawning task using mapped Fleet Account: {account_name}")
+                        agent_instance = JulesAgent(api_key=selected_api_key, project_manager=audio_loop.project_manager)
+                    else:
                         print("[SERVER] Falling back to default environment API key for task.")
                         agent_instance = audio_loop.jules_agent
 
@@ -2224,16 +2197,12 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         fleet_manager.update_agent_session(current_agent_id, session_id, "working")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                     else:
-                        if selected_api_key and selected_api_key in fleet_account_active_sessions:
-                            fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
                         if audio_loop:
                             audio_loop.notify_user(f"Jules task in {repo_name} failed to start.")
                         fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
                         fleet_manager.update_agent_session(current_agent_id, None, "error")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                 except Exception as e:
-                    if selected_api_key and selected_api_key in fleet_account_active_sessions:
-                        fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
                     if audio_loop:
                         audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {e}")
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
