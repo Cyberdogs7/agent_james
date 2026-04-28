@@ -63,7 +63,7 @@ const WeatherWidget = ({ data }) => {
 
 
   return (
-    <div className="bg-black/50 backdrop-blur-md text-white p-4 rounded-lg shadow-lg w-full max-w-2xl">
+    <div className="bg-black/80  text-white p-4 rounded-lg shadow-lg w-full max-w-2xl">
       <div className="flex justify-between space-x-2">
         {data.slice(0, 7).map((day, index) => (
           <div key={index} className="flex flex-col items-center p-2 rounded-lg flex-1">

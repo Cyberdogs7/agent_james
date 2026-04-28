@@ -103,7 +103,7 @@ const FleetSettingsWindow = ({ socket, onClose }) => {
     const showForm = isAdding || editingId !== null;
 
     return (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/95 border border-gold9/50 rounded-xl z-50 w-[800px] h-[600px] flex flex-col backdrop-blur-2xl shadow-[0_0_50px_rgba(255,215,0,0.15)] overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/95 border border-gold9/50 rounded-xl z-50 w-[800px] h-[600px] flex flex-col  shadow-[0_0_50px_rgba(255,215,0,0.15)] overflow-hidden">
             {/* Header */}
             <div className="flex-none p-4 border-b border-gold9/30 bg-gradient-to-r from-gray-900/50 to-black/50 flex justify-between items-center">
                 <div className="flex items-center gap-2">
@@ -164,7 +164,7 @@ const FleetSettingsWindow = ({ socket, onClose }) => {
                 </div>
 
                 {/* Right Side: Form */}
-                <div className="w-1/2 p-6 bg-black/40 overflow-y-auto">
+                <div className="w-1/2 p-6 bg-black/80 overflow-y-auto">
                     {showForm ? (
                         <div className="space-y-5 animate-fadeIn">
                             <h3 className="text-white font-medium border-b border-gold9/20 pb-2 mb-4">

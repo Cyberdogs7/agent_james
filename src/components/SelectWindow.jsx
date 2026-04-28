@@ -2,7 +2,7 @@ import React from 'react';
 
 const SelectWindow = ({ options, onSelect, socket }) => {
     return (
-        <div className="bg-black/80 backdrop-blur-md text-white p-6 rounded-lg shadow-2xl border border-gold9/30 w-full max-w-md pointer-events-auto">
+        <div className="bg-black/80  text-white p-6 rounded-lg shadow-2xl border border-gold9/30 w-full max-w-md pointer-events-auto">
             <h2 className="text-xl font-bold text-gold9 mb-4 tracking-widest text-center">SELECT OPTION</h2>
             <div className="flex flex-col gap-3">
                 {(options || []).map((option, index) => (

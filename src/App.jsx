@@ -1751,14 +1751,13 @@ function App() {
         className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900 via-black to-black z-0 pointer-events-none"
         style={{ opacity: 0.6 }}
       ></div>
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0 pointer-events-none mix-blend-overlay"></div>
 
       {/* Ambient Glow (Fixed: Static) */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gold-900/10 rounded-full blur-[120px] pointer-events-none" />
 
       {/* Top Bar (Draggable) */}
       <div
-        className="z-50 flex items-center justify-between p-2 border-b border-gold9/20 bg-black/40 backdrop-blur-md select-none sticky top-0"
+        className="z-50 flex items-center justify-between p-2 border-b border-gold9/20 bg-black/80  select-none sticky top-0"
         style={{ WebkitAppRegion: "drag" }}
       >
         <div className="flex items-center gap-4 pl-2">
@@ -1840,7 +1839,7 @@ function App() {
         <div
           id="visualizer"
           className={`absolute flex items-center justify-center ${activeDragElement === "visualizer" ? "" : "transition-all duration-200"}
-                        backdrop-blur-xl bg-black/30 border border-white/10 shadow-2xl overflow-visible
+                         bg-black/80 border border-white/10 shadow-2xl overflow-visible
                         ${isModularMode ? (activeDragElement === "visualizer" ? "ring-2 ring-green-500 bg-green-500/10" : "ring-1 ring-yellow-500/30 bg-yellow-500/5") + " rounded-2xl pointer-events-auto" : "rounded-2xl pointer-events-none"}
                     `}
           style={{
@@ -1852,7 +1851,6 @@ function App() {
           }}
           onMouseDown={(e) => handleMouseDown(e, "visualizer")}
         >
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay z-10"></div>
           <div className="relative z-20 w-full h-full">
             <DisplayArea
               socket={socket}
@@ -1875,7 +1873,7 @@ function App() {
 
         {/* Video Feed Overlay */}
         {/* Floating Project Label */}
-        <div className="absolute top-[70px] left-1/2 -translate-x-1/2 text-gold9 text-xs font-sans tracking-widest pointer-events-none z-50 bg-black/50 px-2 py-1 rounded backdrop-blur-sm border border-gold9/20">
+        <div className="absolute top-[70px] left-1/2 -translate-x-1/2 text-gold9 text-xs font-sans tracking-widest pointer-events-none z-50 bg-black/80 px-2 py-1 rounded  border border-gold9/20">
           PROJECT: {currentProject?.toUpperCase()}
         </div>
 
@@ -1883,11 +1881,10 @@ function App() {
           id="video"
           className={`fixed bottom-4 right-4 ${activeDragElement === "video" ? "" : "transition-all duration-200"}
                         ${isVideoOn ? "opacity-100" : "opacity-0 pointer-events-none"}
-                        backdrop-blur-md bg-black/40 border border-white/10 shadow-xl rounded-xl
+                         bg-black/80 border border-white/10 shadow-xl rounded-xl
                     `}
           style={{ zIndex: 20 }}
         >
-          <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none mix-blend-overlay"></div>
           {/* Compact Display Container (1080p Source) */}
           <div className="relative border border-gold9/30 rounded-lg overflow-hidden shadow-[0_0_20px_rgba(255,215,0,0.1)] w-80 aspect-video bg-black/80">
             {/* Hidden Video Element (Source) */}
@@ -1898,7 +1895,7 @@ function App() {
               className="absolute inset-0 w-full h-full object-cover opacity-0"
             />
 
-            <div className="absolute top-2 left-2 text-[10px] text-gold9 bg-black/60 backdrop-blur px-2 py-0.5 rounded border border-gold9/20 z-10 font-bold tracking-wider">
+            <div className="absolute top-2 left-2 text-[10px] text-gold9 bg-black/80  px-2 py-0.5 rounded border border-gold9/20 z-10 font-bold tracking-wider">
               CAM_01
             </div>
 
@@ -1946,7 +1943,7 @@ function App() {
           <div
             id="cad"
             className={`absolute flex flex-col ${activeDragElement === "cad" ? "" : "transition-all duration-200"}
-                        backdrop-blur-xl bg-black/40 border border-white/10 shadow-2xl overflow-hidden rounded-2xl
+                         bg-black/80 border border-white/10 shadow-2xl overflow-hidden rounded-2xl
                         ${activeDragElement === "cad" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
             style={{
@@ -1975,7 +1972,6 @@ function App() {
                 ✕
               </button>
             </div>
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay z-10"></div>
             <div className="relative z-20 flex-1 min-h-0">
               <CadWindow
                 data={cadData}
@@ -1993,7 +1989,7 @@ function App() {
           <div
             id="browser"
             className={`absolute flex flex-col ${activeDragElement === "browser" ? "" : "transition-all duration-200"}
-                        backdrop-blur-xl bg-black/40 border border-white/10 shadow-2xl overflow-hidden rounded-lg
+                         bg-black/80 border border-white/10 shadow-2xl overflow-hidden rounded-lg
                         ${activeDragElement === "browser" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
             style={{
@@ -2007,7 +2003,6 @@ function App() {
             }}
             onMouseDown={(e) => handleMouseDown(e, "browser")}
           >
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay z-10"></div>
             <div className="relative z-20 w-full h-full">
               <BrowserWindow
                 imageSrc={browserData.image}
@@ -2119,7 +2114,7 @@ function App() {
             id="music"
             ref={musicWindowRef}
             className={`absolute flex flex-col ${activeDragElement === "music" ? "" : "transition-all duration-200"}
-                        backdrop-blur-xl shadow-2xl overflow-hidden rounded-md
+                         shadow-2xl overflow-hidden rounded-md
                         ${activeDragElement === "music" ? "ring-2 ring-green-500" : ""}
                     `}
             style={{

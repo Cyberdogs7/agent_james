@@ -312,14 +312,14 @@ const WinampVisualizer = ({ socket, onClose }) => {
         />
 
         {/* Track Info Overlay */}
-        <div className="absolute top-1 left-1 text-[#00FF00] bg-black/50 px-1">
+        <div className="absolute top-1 left-1 text-[#00FF00] bg-black/80 px-1">
           {status.track
             ? `${status.track.title} (${status.status})`
             : "No Track Loaded"}
         </div>
 
         {/* Bitrate / Time placeholder */}
-        <div className="absolute bottom-1 right-1 text-[#00FF00] bg-black/50 px-1">
+        <div className="absolute bottom-1 right-1 text-[#00FF00] bg-black/80 px-1">
           {status.status === "playing" ? "128 kbps" : ""}
         </div>
 
@@ -327,7 +327,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
         {status.track && status.track.lyrics && (
           <div
             ref={lyricsRef}
-            className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/70 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto"
+            className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/80 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto"
             style={{ textShadow: "1px 1px 0 #000" }}
           >
             {lyricLines.map((line, idx) => (

@@ -117,7 +117,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
             <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                 <button
                     onClick={() => setIsIterating(true)}
-                    className="bg-gold9/20 hover:bg-gold9/50 text-gold9 text-xs px-2 py-1 rounded border border-gold9/30 backdrop-blur-sm"
+                    className="bg-gold9/20 hover:bg-gold9/50 text-gold9 text-xs px-2 py-1 rounded border border-gold9/30 "
                 >
                     ITERATE
                 </button>
@@ -129,7 +129,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
                         // Best approach: Open Printer Window + Auto-populate / Trigger
                         if (socket) socket.emit('request_print_window');
                     }}
-                    className="bg-green-500/20 hover:bg-green-500/50 text-green-400 text-xs px-2 py-1 rounded border border-green-500/30 backdrop-blur-sm flex items-center gap-1"
+                    className="bg-green-500/20 hover:bg-green-500/50 text-green-400 text-xs px-2 py-1 rounded border border-green-500/30  flex items-center gap-1"
                 >
                     <Printer size={12} /> PRINT
                 </button>
@@ -198,7 +198,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
 
             {/* Streaming Thoughts Panel */}
             {data?.format === 'loading' && (
-                <div className="absolute inset-y-0 right-0 w-2/5 p-4 bg-black/70 backdrop-blur-sm border-l border-green-500/30 overflow-hidden flex flex-col">
+                <div className="absolute inset-y-0 right-0 w-2/5 p-4 bg-black/80  border-l border-green-500/30 overflow-hidden flex flex-col">
                     <div className="flex items-center justify-between mb-2">
                         <h4 className="text-green-400 text-xs font-mono tracking-widest uppercase flex items-center gap-2">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>

@@ -89,7 +89,7 @@ const PrinterWindow = ({
                 width: '380px',
                 zIndex: zIndex
             }}
-            className={`pointer-events-auto backdrop-blur-xl bg-black/80 border border-gold9/20 rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.1)] overflow-hidden flex flex-col ${activeDragElement === "printer" ? "" : "transition-all duration-200"}`}
+            className={`pointer-events-auto  bg-black/80 border border-gold9/20 rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.1)] overflow-hidden flex flex-col ${activeDragElement === "printer" ? "" : "transition-all duration-200"}`}
         >
             {/* Header */}
             <div data-drag-handle className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5 cursor-grab active:cursor-grabbing">
@@ -124,14 +124,14 @@ const PrinterWindow = ({
                             id="printer-name-input"
                             type="text"
                             placeholder="Printer Name (e.g. Creality K1)"
-                            className="w-full bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gold9 focus:border-gold9/50 outline-none placeholder:text-white/20"
+                            className="w-full bg-black/80 border border-white/10 rounded px-2 py-1 text-xs text-gold9 focus:border-gold9/50 outline-none placeholder:text-white/20"
                         />
                         <div className="flex gap-2">
                             <input
                                 id="printer-ip-input"
                                 type="text"
                                 placeholder="IP Address (e.g. 192.168.1.50)"
-                                className="flex-1 bg-black/50 border border-white/10 rounded px-2 py-1 text-xs text-gold9 focus:border-gold9/50 outline-none placeholder:text-white/20"
+                                className="flex-1 bg-black/80 border border-white/10 rounded px-2 py-1 text-xs text-gold9 focus:border-gold9/50 outline-none placeholder:text-white/20"
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         const ip = e.target.value.trim();

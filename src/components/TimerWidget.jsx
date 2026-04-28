@@ -45,7 +45,7 @@ const TimerWidget = ({ timer, onDismiss }) => {
   }
 
   return (
-    <div className={`bg-black/60 backdrop-blur-md text-white p-4 rounded-lg shadow-lg w-full max-w-xs flex flex-col ${animationClass}`}>
+    <div className={`bg-black/80  text-white p-4 rounded-lg shadow-lg w-full max-w-xs flex flex-col ${animationClass}`}>
       <div className="flex justify-between items-start">
         <h3 className="font-bold text-lg mb-2">{timer.name}</h3>
         <button onClick={() => onDismiss(timer.name)} className="text-gray-400 hover:text-white">
