@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, Paperclip } from 'lucide-react';
+import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw, Paperclip } from 'lucide-react';
 
 const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
