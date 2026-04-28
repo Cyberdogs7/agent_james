@@ -88,6 +88,26 @@ class FleetManager:
                     data = json.load(f)
                     self.agents = data.get("agents", {})
                     self.repos = data.get("repos", {})
+
+                    modified = False
+                    # Reset any agents stuck in "working" state from a previous run
+                    for agent in self.agents.values():
+                        if agent.get("status") == "working":
+                            agent["status"] = "idle"
+                            agent["current_session"] = None
+                            modified = True
+
+                    # Reset any tasks stuck in "in_progress" state from a previous run
+                    for repo in self.repos.values():
+                        for task in repo.get("queue", []):
+                            if task.get("status") == "in_progress":
+                                task["status"] = "pending"
+                                task["agent_id"] = None
+                                modified = True
+
+                    if modified:
+                        self.save_state()
+
             except Exception as e:
                 print(f"[FleetManager] Error loading state: {e}")
 
