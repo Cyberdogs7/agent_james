@@ -617,6 +617,17 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                                         </div>
                                     </div>
                                 )}
+                                <div className="mt-6 flex justify-end">
+                                    <button
+                                        onClick={() => {
+                                            socket.emit('remove_task_from_queue', { repo_name: selectedTask.repoName, task_id: selectedTask.id });
+                                            setSelectedTask(null);
+                                        }}
+                                        className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 rounded transition-colors text-xs font-bold"
+                                    >
+                                        CANCEL TASK
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
