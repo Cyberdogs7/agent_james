@@ -45,7 +45,7 @@ class OpenHandsAgent:
                     print(f"HTTP error occurred: {e}")
                     return None
             except Exception as e:
-                print(f"An error occurred during request for {tool_name}: {e}")
+                print(f"An error occurred during request for {tool_name}: {repr(e)}")
                 return None
         print(f"[OPENHANDS_AGENT] Request failed for {tool_name} after {max_retries} retries.")
         return None
