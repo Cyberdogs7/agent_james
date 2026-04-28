@@ -54,6 +54,9 @@ class MusicAgent:
         self.logger.info("MusicAgent stopped.")
 
     async def _kill_ffmpeg(self):
+        self.is_playing = False
+        self.paused = False
+
         if self._download_task:
             self._download_task.cancel()
             self._download_task = None
@@ -78,6 +81,18 @@ class MusicAgent:
             self.internal_queue.put_nowait(None)
         except queue.Full:
             pass
+
+        # Wait for threads to exit cleanly
+        if hasattr(self, '_ffmpeg_thread') and self._ffmpeg_thread and self._ffmpeg_thread.is_alive() and self._ffmpeg_thread != threading.current_thread():
+            try:
+                await asyncio.to_thread(self._ffmpeg_thread.join, 2.0)
+            except Exception as e:
+                self.logger.debug(f"Error joining ffmpeg thread: {e}")
+        if hasattr(self, '_stream_thread') and self._stream_thread and self._stream_thread.is_alive() and self._stream_thread != threading.current_thread():
+            try:
+                await asyncio.to_thread(self._stream_thread.join, 2.0)
+            except Exception as e:
+                self.logger.debug(f"Error joining stream thread: {e}")
 
         # Immediately replace the queue so new streams start fresh
         self.internal_queue = queue.Queue(maxsize=2000)
@@ -359,8 +374,10 @@ class MusicAgent:
             # Start reading from stdout
             q = self.internal_queue
             p = self.ffmpeg_process
-            threading.Thread(target=self._ffmpeg_reader_sync, args=(q, p), daemon=True).start()
-            threading.Thread(target=self._stream_reader_sync, args=(q,), daemon=True).start()
+            self._ffmpeg_thread = threading.Thread(target=self._ffmpeg_reader_sync, args=(q, p), daemon=True)
+            self._stream_thread = threading.Thread(target=self._stream_reader_sync, args=(q,), daemon=True)
+            self._ffmpeg_thread.start()
+            self._stream_thread.start()
 
             if self.sio:
                 await self.sio.emit('music_status', {
@@ -376,23 +393,23 @@ class MusicAgent:
             await asyncio.sleep(1) # Backoff
             asyncio.create_task(self._play_current_track())
 
-    def _ffmpeg_reader_sync(self, q, p):
+    def _ffmpeg_reader_sync(self, internal_queue, ffmpeg_process):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
         chunk_size = 131072
-        while self.is_playing and p:
-            if p.poll() is not None:
+        while self.is_playing and ffmpeg_process:
+            if ffmpeg_process.poll() is not None:
                 break
 
-            data = p.stdout.read(chunk_size)
+            data = ffmpeg_process.stdout.read(chunk_size)
             if not data:
                 break
 
-            q.put(data)
+            internal_queue.put(data)
 
         # Put None to signal EOF to the playback task
-        q.put(None)
+        internal_queue.put(None)
 
-    def _stream_reader_sync(self, q):
+    def _stream_reader_sync(self, internal_queue):
         """Reads from internal queue and pushes to audio queue at playback speed."""
         start_time = time.time()
         last_emit_time = start_time
@@ -431,7 +448,7 @@ class MusicAgent:
 
             if len(small_chunk_buffer) < SMALL_CHUNK_SIZE:
                 # Read chunk directly from internal cache queue
-                data = q.get()
+                data = internal_queue.get()
 
                 if not data:
                     self.logger.info("Internal audio queue finished.")
