@@ -160,6 +160,9 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                         if (agent.status === 'working') {
                             statusColor = 'bg-green-500';
                             statusGlow = 'animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]';
+                        } else if (agent.status === 'needing_feedback') {
+                            statusColor = 'bg-yellow-500';
+                            statusGlow = 'animate-pulse shadow-[0_0_10px_rgba(234,179,8,0.5)]';
                         } else if (agent.status === 'stuck' || agent.status === 'error') {
                             statusColor = 'bg-red-500';
                             statusGlow = 'shadow-[0_0_10px_rgba(239,68,68,0.5)]';
@@ -255,13 +258,13 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 key={agent.id}
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex flex-col cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : ''}`}
+                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex flex-col cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : (agent.status === 'needing_feedback' ? 'shadow-[0_0_8px_rgba(234,179,8,0.15)] border-yellow-500/30' : '')}`}
                                                 onClick={() => onAgentClick && onAgentClick(agent)}
                                             >
                                                 <div className="flex items-center gap-2 text-xs font-mono">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-gold9 animate-pulse' : (agent.status === 'stuck' ? 'bg-red-500' : 'bg-gray-500')}`} />
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-gold9 animate-pulse' : (agent.status === 'needing_feedback' ? 'bg-yellow-500 animate-pulse' : (agent.status === 'stuck' ? 'bg-red-500' : 'bg-gray-500'))}`} />
                                                     <span>{agent.id.replace('agent_', 'A-')}</span>
-                                                    {agent.status === 'working' && (
+                                                    {(agent.status === 'working' || agent.status === 'needing_feedback') && (
                                                         <span className="text-[9px] text-gold9 ml-1">{formatTime(agent.last_active)}</span>
                                                     )}
                                                 </div>
@@ -372,6 +375,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 taskBg = 'bg-cyan-500/5';
                                                 statusText = `IN PROGRESS (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
                                                 statusTextColor = 'text-cyan-400';
+                                            } else if (task.status === 'needing_feedback') {
+                                                taskBorder = 'border-yellow-500/50';
+                                                taskBg = 'bg-yellow-500/10';
+                                                statusText = `NEEDS FEEDBACK (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusTextColor = 'text-yellow-400 animate-pulse font-bold';
                                             } else if (task.status === 'completed') {
                                                 taskBorder = 'border-green-500/30';
                                                 taskBg = 'bg-green-500/5';
