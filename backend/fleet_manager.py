@@ -134,13 +134,17 @@ class FleetManager:
         self.save_state()
         return task_id
 
-    def update_task_status(self, repo_name, task_id, status, agent_id=None):
+    def update_task_status(self, repo_name, task_id, status, agent_id=None, error_message=None):
         if repo_name in self.repos:
             for task in self.repos[repo_name]["queue"]:
                 if task["id"] == task_id:
                     task["status"] = status
                     if agent_id is not None:
                         task["agent_id"] = agent_id
+                    if status == "failed" and error_message is not None:
+                        task["error_message"] = error_message
+                    elif status != "failed" and "error_message" in task:
+                        del task["error_message"]
                     break
             self.save_state()
 
@@ -155,6 +159,8 @@ class FleetManager:
                 if task["id"] == task_id:
                     task["status"] = "pending"
                     task["agent_id"] = None
+                    if "error_message" in task:
+                        del task["error_message"]
                     break
             self.save_state()
 
