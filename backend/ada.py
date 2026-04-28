@@ -293,7 +293,7 @@ class AudioLoop:
                     fleet_manager.update_task_status(repo_name, task_id, "completed")
                     fleet_manager.update_agent_session(agent_id, None, "idle")
                 elif new_state == "FAILED":
-                    fleet_manager.update_task_status(repo_name, task_id, "failed")
+                    fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
                     fleet_manager.update_agent_session(agent_id, None, "error")
                 elif new_state in ["QUEUED", "PLANNING", "IN_PROGRESS"]:
                     fleet_manager.update_task_status(repo_name, task_id, "in_progress")
