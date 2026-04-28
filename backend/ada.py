@@ -1828,13 +1828,14 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 while not self.audio_in_queue.empty():
                     self.audio_in_queue.get_nowait()
         except Exception as e:
-            if "1011" in str(e) or "CANCELLED" in str(e).upper():
+            import websockets.exceptions
+            if "1011" in str(e) or "1008" in str(e) or "CANCELLED" in str(e).upper() or isinstance(e, websockets.exceptions.ConnectionClosedError):
                 if INCLUDE_RAW_LOGS:
                     print(f"[ADA DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
             else:
                 if INCLUDE_RAW_LOGS:
                     print(f"Error in receive_audio: {e}")
-            traceback.print_exc()
+                traceback.print_exc()
             # CRITICAL: Re-raise to crash the TaskGroup and trigger outer loop reconnect
             raise e
 
