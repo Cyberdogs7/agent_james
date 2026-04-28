@@ -295,9 +295,20 @@ class AudioLoop:
                 elif new_state == "FAILED":
                     fleet_manager.update_task_status(repo_name, task_id, "failed")
                     fleet_manager.update_agent_session(agent_id, None, "error")
-                elif new_state in ["QUEUED", "PLANNING", "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "IN_PROGRESS"]:
+                elif new_state in ["QUEUED", "PLANNING", "IN_PROGRESS"]:
                     fleet_manager.update_task_status(repo_name, task_id, "in_progress")
                     fleet_manager.update_agent_session(agent_id, session_id, "working")
+                elif new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
+                    fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
+                    fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
+
+                    if self.session:
+                        try:
+                            message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
+                            asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
+                        except Exception as e:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
                 elif new_state == "PAUSED":
                     fleet_manager.update_task_status(repo_name, task_id, "in_progress")
                     fleet_manager.update_agent_session(agent_id, session_id, "stuck")
