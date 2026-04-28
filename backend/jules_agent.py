@@ -106,6 +106,13 @@ class JulesAgent:
                 source_context["githubRepoContext"] = {}
                 if starting_branch:
                     source_context["githubRepoContext"]["startingBranch"] = starting_branch
+                else:
+                    # Attempt to extract branch from source, e.g. sources/github/owner/repo/branches/master
+                    if "/branches/" in source_context["source"]:
+                        extracted_branch = source_context["source"].split("/branches/")[-1]
+                        source_context["githubRepoContext"]["startingBranch"] = extracted_branch
+                    else:
+                        source_context["githubRepoContext"]["startingBranch"] = "master"
         
         # Sanitize title: remove newlines and limit length
         clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
