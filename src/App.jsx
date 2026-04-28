@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
 
 import DisplayArea from "./components/DisplayArea";
+import NotificationManager from "./components/NotificationManager";
 import TopAudioBar from "./components/TopAudioBar";
 import CadWindow from "./components/CadWindow";
 import BrowserWindow from "./components/BrowserWindow";
@@ -1710,6 +1711,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-gray2 text-gray11 font-sans overflow-hidden flex flex-col relative selection:bg-gold-900/50 selection:text-white">
+      <NotificationManager socket={socket} />
       {/* --- PREMIUM UI LAYER --- */}
 
       {/* --- PREMIUM UI LAYER --- */}
