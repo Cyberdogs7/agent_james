@@ -41,6 +41,7 @@ class ProjectManager:
 
         # State for git monitoring
         self._git_last_state = {}
+        self._git_last_prs = {}
         self.global_fleet_file = self.workspace_root / "fleet.json"
 
         # Initialize Memory Manager
@@ -618,6 +619,75 @@ class ProjectManager:
         except Exception as e:
             print(f"[ProjectManager] Error checking repo {repo.get('owner')}/{repo.get('name')}: {e}")
             return None
+
+    async def _check_prs(self, client, repo):
+        try:
+            owner = repo['owner']
+            name = repo['name']
+            repo_key = f"{owner}/{name}"
+
+            prs = await client.list_pull_requests(owner, name)
+            if prs is None:
+                return []
+
+            events = []
+            current_pr_ids = set()
+
+            for pr in prs:
+                pr_id = pr.get("id")
+                current_pr_ids.add(pr_id)
+
+                # Initialize state for this repo if first time
+                if repo_key not in self._git_last_prs:
+                    self._git_last_prs[repo_key] = set()
+
+                if pr_id not in self._git_last_prs[repo_key]:
+                    # New PR detected
+                    author_name = pr.get("user", {}).get("login", "Unknown User")
+                    events.append({
+                        "type": "git_pr",
+                        "repo": repo_key,
+                        "author": author_name,
+                        "title": pr.get("title", ""),
+                        "url": pr.get("html_url", ""),
+                        "date": pr.get("created_at", "")
+                    })
+                    self._git_last_prs[repo_key].add(pr_id)
+
+            # Clean up closed/merged PRs from memory so we don't leak over time
+            # Only keep IDs of currently open PRs
+            if repo_key in self._git_last_prs:
+                self._git_last_prs[repo_key] = self._git_last_prs[repo_key].intersection(current_pr_ids)
+
+            return events
+        except Exception as e:
+            print(f"[ProjectManager] Error checking PRs for {repo.get('owner')}/{repo.get('name')}: {e}")
+            return []
+
+    async def monitor_git_prs(self):
+        """
+        Scans fleet for new open Pull Requests (via API) since the last check.
+        Returns a list of event dictionaries.
+        """
+        fleet = self.load_fleet()
+        token = self.get_github_token()
+
+        if not token:
+            return []
+
+        client = GitHubClient(token)
+        tasks = [self._check_prs(client, repo) for repo in fleet]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        events = []
+        for res in results:
+            if isinstance(res, Exception):
+                print(f"[ProjectManager] Monitor PRs task failed: {res}")
+                continue
+            if res:
+                events.extend(res)
+
+        return events
 
     async def monitor_git_repos(self):
         """

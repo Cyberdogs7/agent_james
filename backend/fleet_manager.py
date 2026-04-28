@@ -90,7 +90,7 @@ class FleetManager:
             self.repos[repo_name] = {"name": repo_name, "queue": [], "is_active": False}
             self.save_state()
 
-    def add_task_to_queue(self, repo_name, prompt, depends_on=None):
+    def add_task_to_queue(self, repo_name, prompt, depends_on=None, attachments=None):
         self.ensure_repo(repo_name)
         task_id = f"task_{int(time.time()*1000)}"
         self.repos[repo_name]["queue"].append({
@@ -98,7 +98,8 @@ class FleetManager:
             "prompt": prompt,
             "status": "pending", # pending, in_progress, completed, failed
             "depends_on": depends_on,
-            "agent_id": None
+            "agent_id": None,
+            "attachments": attachments or []
         })
         self.save_state()
         return task_id
@@ -116,6 +117,15 @@ class FleetManager:
     def remove_task_from_queue(self, repo_name, task_id):
         if repo_name in self.repos:
             self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t["id"] != task_id]
+            self.save_state()
+
+    def retry_task(self, repo_name, task_id):
+        if repo_name in self.repos:
+            for task in self.repos[repo_name]["queue"]:
+                if task["id"] == task_id:
+                    task["status"] = "pending"
+                    task["agent_id"] = None
+                    break
             self.save_state()
 
     def clear_completed_tasks(self, repo_name):

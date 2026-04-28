@@ -1462,9 +1462,9 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             return f"Assigned {agent_id} to {repo_name}."
         return f"Failed to assign {agent_id}. Agent may not exist."
 
-    async def handle_add_task(self, repo_name, prompt, depends_on=None):
+    async def handle_add_task(self, repo_name, prompt, depends_on=None, attachments=None):
         from backend.server import fleet_manager, sio, check_and_start_next_task
-        task_id = fleet_manager.add_task_to_queue(repo_name, prompt, depends_on)
+        task_id = fleet_manager.add_task_to_queue(repo_name, prompt, depends_on, attachments or [])
         await sio.emit('fleet_state_update', fleet_manager.get_state())
         await check_and_start_next_task(repo_name)
         return f"Task '{task_id}' added to {repo_name} queue."
@@ -2057,6 +2057,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         """Handles external events (like Git commits) triggered by AutomationEngine."""
         if event['type'] == 'git_commit':
             msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
+            self.notify_user(msg)
+        elif event['type'] == 'git_pr':
+            msg = f"New pull request in {event['repo']} by {event['author']}: {event['title']}"
             self.notify_user(msg)
         elif event['type'] == 'trello_move':
             msg = f"New card '{event.get('card_name')}' added to Trello list '{event.get('list_name')}' in board '{event.get('board_name')}'."

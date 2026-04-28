@@ -332,8 +332,9 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             julesSessions={jules}
                             onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
                             onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
-                            onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
+                            onAddTask={(repoName, prompt, dependsOn, attachments) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn, attachments })}
                             onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
+                            onRetryTask={(repoName, taskId) => socket.emit('retry_task', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
                             onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
                             onAgentClick={setSelectedFleetAgent}
@@ -530,10 +531,10 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                     <X size={20} />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto">
+                            <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto scrollbar-hide">
                                 <div>
                                     <span className="text-gold9/40 block text-xs mb-1">PROMPT</span>
-                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap">{selectedTask.prompt}</div>
+                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap select-text">{selectedTask.prompt}</div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -1183,19 +1184,19 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
     const [branches, setBranches] = useState([]);
     const [loading, setLoading] = useState(true);
     const [reviewBranch, setReviewBranch] = useState(null);
-    const [autoMergeDisabled, setAutoMergeDisabled] = useState(repo.auto_merge_disabled || false);
+    const [autoMergeEnabled, setAutoMergeEnabled] = useState(repo.auto_merge_enabled || false);
 
     useEffect(() => {
-        setAutoMergeDisabled(repo.auto_merge_disabled || false);
+        setAutoMergeEnabled(repo.auto_merge_enabled || false);
     }, [repo]);
 
     const handleAutoMergeToggle = () => {
-        const newValue = !autoMergeDisabled;
-        setAutoMergeDisabled(newValue);
+        const newValue = !autoMergeEnabled;
+        setAutoMergeEnabled(newValue);
         if (socket) {
             socket.emit('update_repo_config', {
                 repo: repo.name,
-                config: { auto_merge_disabled: newValue }
+                config: { auto_merge_enabled: newValue }
             });
         }
     };
@@ -1245,7 +1246,7 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
                     <label className="flex items-center gap-2 cursor-pointer">
                         <input
                             type="checkbox"
-                            checked={!autoMergeDisabled}
+                            checked={autoMergeEnabled}
                             onChange={handleAutoMergeToggle}
                             className="accent-gold9 bg-black border-gold9"
                         />
@@ -1389,7 +1390,7 @@ const BranchReviewView = ({ repo, branch, socket, onBack, onClose }) => {
                          <div className="p-2 border-b border-white/10 text-xs font-bold text-gray-400 flex justify-between">
                             <span>{selectedFile ? selectedFile.filename : 'No file selected'}</span>
                          </div>
-                         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 font-mono text-xs text-gray-300">
+                         <div className="flex-1 overflow-y-auto overflow-x-auto p-4 font-mono text-xs text-gray-300 scrollbar-hide">
                             {selectedFile && selectedFile.patch ? (
                                 <pre className="whitespace-pre">{selectedFile.patch}</pre>
                             ) : (

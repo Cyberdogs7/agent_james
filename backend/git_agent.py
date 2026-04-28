@@ -144,33 +144,36 @@ class GitAgent:
 
     async def merge(self, branch_name, repo_name=None):
         path = self._get_repo_path(repo_name)
+        fleet = self.project_manager.load_fleet()
 
-        # Check if local repo exists
+        target_repo = None
+        if repo_name:
+            target_repo = next((r for r in fleet if r['name'] == repo_name or f"{r['owner']}/{r['name']}" == repo_name), None)
+        else:
+            target_repo = next((r for r in fleet if r['name'] == path.name), None)
+
+        auto_merge_enabled = target_repo.get('auto_merge_enabled', False) if target_repo else False
+
+        if auto_merge_enabled:
+            token = self.project_manager.get_github_token()
+            if token and target_repo:
+                client = GitHubClient(token)
+                details = await client.get_repo_details(target_repo['owner'], target_repo['name'])
+                target_branch = details.get('default_branch', 'main') if details else 'main'
+
+                result = await client.merge_branch(target_repo['owner'], target_repo['name'], target_branch, branch_name)
+                if result:
+                    return f"Merged {branch_name} into {target_branch} remotely using GitHub token."
+                else:
+                    return f"Remote merge failed for {branch_name} into {target_branch}."
+            else:
+                return "Auto-merge is enabled, but GitHub token is missing or repository info not found."
+
         if path.exists():
             success, msg = await self.merge_branch_local(path, branch_name)
             return msg
         else:
-            # Attempt Remote Merge
-            token = self.project_manager.get_github_token()
-            if token and repo_name:
-                fleet = self.project_manager.load_fleet()
-                target_repo = next((r for r in fleet if r['name'] == repo_name or f"{r['owner']}/{r['name']}" == repo_name), None)
-
-                if target_repo:
-                    client = GitHubClient(token)
-                    # Fetch default branch
-                    details = await client.get_repo_details(target_repo['owner'], target_repo['name'])
-                    target_branch = details.get('default_branch', 'main') if details else 'main'
-
-                    result = await client.merge_branch(target_repo['owner'], target_repo['name'], target_branch, branch_name)
-                    if result:
-                        return f"Merged {branch_name} into {target_branch} remotely."
-                    else:
-                        return "Remote merge failed."
-                else:
-                    return f"Repository '{repo_name}' not found locally or in fleet config."
-            else:
-                return "Repository path does not exist and no GitHub token available for remote merge."
+            return "Auto-merge is disabled for this repository. Cannot perform remote merge, and local repository not found."
 
     async def list_repos(self):
         repos = self.project_manager.list_git_projects()
