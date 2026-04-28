@@ -376,6 +376,26 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                 # Notify the user
                 self.notify_user(f"Jules task {session_id} escalated: {escalation_reason}", duration=20000)
 
+                # Sync state to fleet manager and notify Ada to unblock
+                try:
+                    from backend.server import fleet_manager, sio
+                    agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+                    if agent_id and repo_name and task_id:
+                        fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
+                        fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
+                        asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to sync fleet status on escalation for {session_id}: {e}")
+
+                if self.session:
+                    try:
+                        message = f"System Notification: Jules session '{session_id}' has been escalated and needs feedback. Reason: {escalation_reason}. Please review the issue and use the 'send_jules_feedback' tool."
+                        asyncio.create_task(self.session.send(input=message, end_of_turn=False))
+                    except Exception as e:
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [ERR] Failed to notify Ada on escalation: {e}")
+
                 # Optionally update UI or slack
                 if self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):
                     self.slack_agent.send_message(f"🚨 *Escalation* for Jules Task `{session_id}`:\n{escalation_reason}")
