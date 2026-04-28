@@ -349,6 +349,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                             onRetryTask={(repoName, taskId) => socket.emit('retry_task', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
                             onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
+                            onReorderRepos={(orderedNames) => socket.emit('reorder_repos', { ordered_names: orderedNames })}
                             onAgentClick={setSelectedFleetAgent}
                             onTaskClick={(task, repoName) => setSelectedTask({...task, repoName})}
                             autoMergeMaster={autoMergeMaster}

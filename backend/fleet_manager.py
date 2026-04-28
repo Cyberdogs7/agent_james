@@ -154,6 +154,21 @@ class FleetManager:
             self.repos[repo_name] = {"name": repo_name, "queue": [], "is_active": False}
             self.save_state()
 
+    def reorder_repos(self, ordered_repo_names):
+        new_repos = {}
+        # First, add the repos in the requested order
+        for name in ordered_repo_names:
+            if name in self.repos:
+                new_repos[name] = self.repos[name]
+
+        # Then, append any remaining repos that weren't in the ordered list
+        for name, data in self.repos.items():
+            if name not in new_repos:
+                new_repos[name] = data
+
+        self.repos = new_repos
+        self.save_state()
+
     def add_task_to_queue(self, repo_name, prompt, depends_on=None, attachments=None):
         self.ensure_repo(repo_name)
         task_id = f"task_{int(time.time()*1000)}"
