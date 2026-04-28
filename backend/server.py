@@ -2258,6 +2258,13 @@ async def set_repo_active_state(sid, data):
         await sio.emit('fleet_state_update', fleet_manager.get_state())
 
 @sio.event
+async def reorder_repos(sid, data):
+    ordered_names = data.get('ordered_names')
+    if ordered_names is not None and isinstance(ordered_names, list):
+        fleet_manager.reorder_repos(ordered_names)
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+@sio.event
 async def assign_agent_to_repo(sid, data):
     agent_id = data.get('agent_id')
     repo_name = data.get('repo_name')
