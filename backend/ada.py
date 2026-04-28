@@ -780,6 +780,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         # Music Agent Tools
         self.tool_registry.register("play_music", self.music_agent.play)
         self.tool_registry.register("control_music", self.music_agent.control)
+        self.tool_registry.register("create_playlist", self.music_agent.create_playlist)
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
     async def handle_cad_request(self, prompt):
