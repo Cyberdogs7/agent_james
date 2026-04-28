@@ -372,8 +372,10 @@ class MusicAgent:
             self.paused = False
 
             # Start reading from stdout
-            self._ffmpeg_thread = threading.Thread(target=self._ffmpeg_reader_sync, daemon=True)
-            self._stream_thread = threading.Thread(target=self._stream_reader_sync, daemon=True)
+            q = self.internal_queue
+            p = self.ffmpeg_process
+            self._ffmpeg_thread = threading.Thread(target=self._ffmpeg_reader_sync, args=(q, p), daemon=True)
+            self._stream_thread = threading.Thread(target=self._stream_reader_sync, args=(q,), daemon=True)
             self._ffmpeg_thread.start()
             self._stream_thread.start()
 
@@ -391,23 +393,23 @@ class MusicAgent:
             await asyncio.sleep(1) # Backoff
             asyncio.create_task(self._play_current_track())
 
-    def _ffmpeg_reader_sync(self):
+    def _ffmpeg_reader_sync(self, internal_queue, ffmpeg_process):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
         chunk_size = 131072
-        while self.is_playing and self.ffmpeg_process:
-            if self.ffmpeg_process.poll() is not None:
+        while self.is_playing and ffmpeg_process:
+            if ffmpeg_process.poll() is not None:
                 break
 
-            data = self.ffmpeg_process.stdout.read(chunk_size)
+            data = ffmpeg_process.stdout.read(chunk_size)
             if not data:
                 break
 
-            self.internal_queue.put(data)
+            internal_queue.put(data)
 
         # Put None to signal EOF to the playback task
-        self.internal_queue.put(None)
+        internal_queue.put(None)
 
-    def _stream_reader_sync(self):
+    def _stream_reader_sync(self, internal_queue):
         """Reads from internal queue and pushes to audio queue at playback speed."""
         start_time = time.time()
         last_emit_time = start_time
@@ -446,7 +448,7 @@ class MusicAgent:
 
             if len(small_chunk_buffer) < SMALL_CHUNK_SIZE:
                 # Read chunk directly from internal cache queue
-                data = self.internal_queue.get()
+                data = internal_queue.get()
 
                 if not data:
                     self.logger.info("Internal audio queue finished.")
