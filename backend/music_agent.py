@@ -70,7 +70,7 @@ class MusicAgent:
             while not self._audio_queue.empty():
                 try:
                     self._audio_queue.get_nowait()
-                except asyncio.QueueEmpty:
+                except (asyncio.QueueEmpty, queue.Empty):
                     break
 
         # Send EOF to unblock the _stream_reader task
@@ -357,8 +357,10 @@ class MusicAgent:
             self.paused = False
 
             # Start reading from stdout
-            threading.Thread(target=self._ffmpeg_reader_sync, daemon=True).start()
-            threading.Thread(target=self._stream_reader_sync, daemon=True).start()
+            q = self.internal_queue
+            p = self.ffmpeg_process
+            threading.Thread(target=self._ffmpeg_reader_sync, args=(q, p), daemon=True).start()
+            threading.Thread(target=self._stream_reader_sync, args=(q,), daemon=True).start()
 
             if self.sio:
                 await self.sio.emit('music_status', {
@@ -374,23 +376,23 @@ class MusicAgent:
             await asyncio.sleep(1) # Backoff
             asyncio.create_task(self._play_current_track())
 
-    def _ffmpeg_reader_sync(self):
+    def _ffmpeg_reader_sync(self, q, p):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
         chunk_size = 131072
-        while self.is_playing and self.ffmpeg_process:
-            if self.ffmpeg_process.poll() is not None:
+        while self.is_playing and p:
+            if p.poll() is not None:
                 break
 
-            data = self.ffmpeg_process.stdout.read(chunk_size)
+            data = p.stdout.read(chunk_size)
             if not data:
                 break
 
-            self.internal_queue.put(data)
+            q.put(data)
 
         # Put None to signal EOF to the playback task
-        self.internal_queue.put(None)
+        q.put(None)
 
-    def _stream_reader_sync(self):
+    def _stream_reader_sync(self, q):
         """Reads from internal queue and pushes to audio queue at playback speed."""
         start_time = time.time()
         last_emit_time = start_time
@@ -429,7 +431,7 @@ class MusicAgent:
 
             if len(small_chunk_buffer) < SMALL_CHUNK_SIZE:
                 # Read chunk directly from internal cache queue
-                data = self.internal_queue.get()
+                data = q.get()
 
                 if not data:
                     self.logger.info("Internal audio queue finished.")
