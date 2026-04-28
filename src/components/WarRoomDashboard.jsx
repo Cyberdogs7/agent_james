@@ -317,7 +317,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             julesSessions={jules}
                             onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
                             onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
-                            onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
+                            onAddTask={(repoName, prompt, dependsOn, attachments) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn, attachments })}
                             onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
                             onRetryTask={(repoName, taskId) => socket.emit('retry_task', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
@@ -514,7 +514,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto scrollbar-hide">
                                 <div>
                                     <span className="text-gold9/40 block text-xs mb-1">PROMPT</span>
-                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap">{selectedTask.prompt}</div>
+                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap select-text">{selectedTask.prompt}</div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>

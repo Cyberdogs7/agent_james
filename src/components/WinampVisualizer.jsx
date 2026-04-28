@@ -1,6 +1,15 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { X } from "lucide-react";
 
+const VISUALIZER_MODES = [
+  "spectrum",
+  "oscilloscope",
+  "bars",
+  "wave",
+  "circular",
+  "mirrored"
+];
+
 const WinampVisualizer = ({ socket, onClose }) => {
   const canvasRef = useRef(null);
   const [visData, setVisData] = useState(new Array(64).fill(0));
@@ -96,8 +105,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
           ctx.fillStyle = "#FFFFFF";
           ctx.fillRect(i * barWidth, h - barHeight - 2, barWidth - 1, 1);
         }
-      } else {
-        // Oscilloscope
+      } else if (mode === "oscilloscope") {
         ctx.beginPath();
         ctx.strokeStyle = "#00FF00";
         ctx.lineWidth = 2;
@@ -115,6 +123,101 @@ const WinampVisualizer = ({ socket, onClose }) => {
           x += sliceWidth;
         }
         ctx.stroke();
+      } else if (mode === "bars") {
+        const barWidth = w / data.length;
+        const gap = 2;
+
+        for (let i = 0; i < data.length; i++) {
+          const value = data[i];
+          const percent = value / 255;
+          const barHeight = percent * h;
+
+          const numBlocks = Math.floor(barHeight / 5);
+          for (let j = 0; j < numBlocks; j++) {
+            let color = "#00FF00";
+            if (j > numBlocks * 0.5) color = "#FFFF00";
+            if (j > numBlocks * 0.8) color = "#FF0000";
+            ctx.fillStyle = color;
+            ctx.fillRect(i * barWidth, h - (j * 5) - 4, barWidth - gap, 4);
+          }
+        }
+      } else if (mode === "wave") {
+        ctx.beginPath();
+        ctx.strokeStyle = "#FFFF00";
+        ctx.lineWidth = 3;
+
+        ctx.moveTo(0, h);
+        const sliceWidth = w / data.length;
+
+        for (let i = 0; i < data.length; i++) {
+          const percent = data[i] / 255;
+          const y = h - (percent * h);
+          const x = i * sliceWidth;
+
+          if (i === 0) ctx.moveTo(x, y);
+          else {
+            const prevX = (i - 1) * sliceWidth;
+            const prevY = h - ((data[i-1] / 255) * h);
+            const cpX = prevX + (x - prevX) / 2;
+            ctx.quadraticCurveTo(cpX, prevY, x, y);
+          }
+        }
+        ctx.stroke();
+      } else if (mode === "circular") {
+        const centerX = w / 2;
+        const centerY = h / 2;
+        const radius = Math.min(centerX, centerY) * 0.4;
+
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = "#444444";
+        ctx.stroke();
+
+        const angleStep = (2 * Math.PI) / data.length;
+
+        for (let i = 0; i < data.length; i++) {
+          const value = data[i];
+          const percent = value / 255;
+          const barHeight = percent * (Math.min(w, h) / 2 - radius);
+
+          const angle = i * angleStep;
+
+          const startX = centerX + Math.cos(angle) * radius;
+          const startY = centerY + Math.sin(angle) * radius;
+
+          const endX = centerX + Math.cos(angle) * (radius + barHeight);
+          const endY = centerY + Math.sin(angle) * (radius + barHeight);
+
+          let color = "#00FF00";
+          if (percent > 0.5) color = "#FFFF00";
+          if (percent > 0.8) color = "#FF0000";
+
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.lineTo(endX, endY);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      } else if (mode === "mirrored") {
+        const barWidth = w / data.length;
+        const centerY = h / 2;
+
+        for (let i = 0; i < data.length; i++) {
+          const value = data[i];
+          const percent = value / 255;
+          const barHeight = percent * (h / 2);
+
+          let color = "#00FF00";
+          if (percent > 0.5) color = "#FFFF00";
+          if (percent > 0.8) color = "#FF0000";
+
+          ctx.fillStyle = color;
+          // Draw top half
+          ctx.fillRect(i * barWidth, centerY - barHeight, barWidth - 1, barHeight);
+          // Draw bottom half
+          ctx.fillRect(i * barWidth, centerY, barWidth - 1, barHeight);
+        }
       }
 
       animationRef.current = requestAnimationFrame(draw);
@@ -170,7 +273,10 @@ const WinampVisualizer = ({ socket, onClose }) => {
         <div className="flex gap-1">
           <button
             onClick={() =>
-              setMode((m) => (m === "spectrum" ? "oscilloscope" : "spectrum"))
+              setMode((m) => {
+                const currentIndex = VISUALIZER_MODES.indexOf(m);
+                return VISUALIZER_MODES[(currentIndex + 1) % VISUALIZER_MODES.length];
+              })
             }
             className="hover:text-white"
             title="Toggle Mode"
@@ -198,7 +304,10 @@ const WinampVisualizer = ({ socket, onClose }) => {
           ref={canvasRef}
           className="w-full h-full"
           onClick={() =>
-            setMode((m) => (m === "spectrum" ? "oscilloscope" : "spectrum"))
+            setMode((m) => {
+              const currentIndex = VISUALIZER_MODES.indexOf(m);
+              return VISUALIZER_MODES[(currentIndex + 1) % VISUALIZER_MODES.length];
+            })
           }
         />
 
