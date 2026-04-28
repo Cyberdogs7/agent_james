@@ -2163,6 +2163,10 @@ function App() {
           data={warRoomData}
           socket={socket}
           onClose={() => setShowWarRoom(false)}
+          messages={messages}
+          inputValue={inputValue}
+          setInputValue={setInputValue}
+          handleSend={handleSend}
         />
       )}
 

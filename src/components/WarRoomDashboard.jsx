@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity,
@@ -31,7 +31,7 @@ import FleetManagerUI from './FleetManagerUI';
 import ClockDisplay from './ClockDisplay';
 
 
-const WarRoomDashboard = ({ data, socket, onClose }) => {
+const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, setInputValue, handleSend }) => {
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
         const [selectedSession, setSelectedSession] = useState(null);
@@ -44,6 +44,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [selectedTask, setSelectedTask] = useState(null);
         const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
     const [autoMergeMaster, setAutoMergeMaster] = useState(false);
+    const messagesEndRef = useRef(null);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
 
     // Add effect for settings fetch
     useEffect(() => {
@@ -434,6 +439,35 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                         </div>
                                     ))
                                 )}
+                            </div>
+                        </motion.div>
+
+                        {/* MINI CHATBOX */}
+                        <motion.div variants={itemVariants} className="h-48 flex flex-col bg-black/40 border border-gold9/20 rounded-xl overflow-hidden relative">
+                            <div className="flex items-center justify-between border-b border-gold9/10 px-4 py-2 bg-gold9/5">
+                                <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest">
+                                    <MessageSquare className="w-4 h-4 text-gold9" />
+                                    <span className="text-gold9">COMM LINK</span>
+                                </h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide mask-image-gradient">
+                                {messages && messages.slice(-10).map((msg, i) => (
+                                    <div key={i} className="text-sm">
+                                        <span className="text-gold8 font-sans text-[10px] opacity-70">[{msg.time}]</span> <span className="font-bold text-gold9 text-xs">{msg.sender}</span>
+                                        <div className="text-gray11 mt-0.5 leading-relaxed text-xs">{msg.text}</div>
+                                    </div>
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </div>
+                            <div className="p-2 border-t border-gold9/10 bg-black/60 backdrop-blur-md">
+                                <input
+                                    type="text"
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onKeyDown={handleSend}
+                                    placeholder="TRANSMIT COMMAND..."
+                                    className="w-full bg-black/40 border border-gold9/30 rounded p-2 text-xs text-gold9 focus:outline-none focus:border-gold9 focus:ring-1 focus:ring-gold9/50 transition-all placeholder-gold9/50"
+                                />
                             </div>
                         </motion.div>
                     </div>
