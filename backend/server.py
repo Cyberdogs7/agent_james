@@ -1559,7 +1559,7 @@ async def get_fleet_status(sid):
             "branch": "unknown",
             "status": "Remote (Loading...)" if token else "Remote (No Auth)",
             "last_commit": None,
-            "auto_merge_disabled": r.get('auto_merge_disabled', False)
+            "auto_merge_enabled": r.get('auto_merge_enabled', False)
         } for r in fleet]
         await sio.emit('fleet_status_update', basic_fleet, to=sid)
 
@@ -1600,7 +1600,7 @@ async def get_fleet_status(sid):
                 "branch": default_branch,
                 "status": "Remote",
                 "last_commit": commit_info,
-                "auto_merge_disabled": repo.get('auto_merge_disabled', False)
+                "auto_merge_enabled": repo.get('auto_merge_enabled', False)
             }
 
         # Background task to fetch detailed status without blocking the event loop
