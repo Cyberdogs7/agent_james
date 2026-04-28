@@ -11,7 +11,7 @@ const NotificationManager = ({ socket }) => {
     const handleDisplayContent = (data) => {
       if (data.content_type === 'notification') {
         const newNotification = {
-          id: Date.now().toString(),
+          id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           text: data.data.text,
           duration: data.duration || 10000,
         };
