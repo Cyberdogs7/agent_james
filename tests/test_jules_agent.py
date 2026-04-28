@@ -38,7 +38,8 @@ async def test_create_session_success(jules_agent):
         call_args = mock_request.call_args.kwargs
         assert call_args["json"]["prompt"] == prompt
         assert call_args["json"]["sourceContext"]["source"] == f"sources/github/test/repo"
-        assert "githubRepoContext" not in call_args["json"]["sourceContext"]
+        assert "githubRepoContext" in call_args["json"]["sourceContext"]
+        assert call_args["json"]["sourceContext"]["githubRepoContext"] == {}
 
 
 @pytest.mark.asyncio
@@ -56,7 +57,8 @@ async def test_create_session_with_github_source_prefix(jules_agent):
 
         call_args = mock_request.call_args.kwargs
         assert call_args["json"]["sourceContext"]["source"] == "sources/github/Cyberdogs7/agent_james"
-        assert "githubRepoContext" not in call_args["json"]["sourceContext"]
+        assert "githubRepoContext" in call_args["json"]["sourceContext"]
+        assert call_args["json"]["sourceContext"]["githubRepoContext"] == {}
 
 
 @pytest.mark.asyncio

@@ -86,7 +86,7 @@ class JulesAgent:
             self._cache.clear()
             self._cache_expiry.clear()
 
-    async def create_session(self, prompt, source, role=None, starting_branch="master"):
+    async def create_session(self, prompt, source, role=None, starting_branch=None):
         """Creates a new session in the Jules API."""
         source_context = {}
         if source:
@@ -103,9 +103,9 @@ class JulesAgent:
 
             # API requires githubRepoContext for github sources
             if "sources/github/" in source_context["source"]:
-                source_context["githubRepoContext"] = {
-                    "startingBranch": starting_branch
-                }
+                source_context["githubRepoContext"] = {}
+                if starting_branch:
+                    source_context["githubRepoContext"]["startingBranch"] = starting_branch
         
         # Sanitize title: remove newlines and limit length
         clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
@@ -132,7 +132,7 @@ class JulesAgent:
 
         return session
 
-    async def spawn_agent(self, prompt, source, role=None, callback=None, starting_branch="master"):
+    async def spawn_agent(self, prompt, source, role=None, callback=None, starting_branch=None):
         """High-level method to create a session and immediately start polling it."""
         session = await self.create_session(prompt, source, role=role, starting_branch=starting_branch)
         if session:
@@ -141,7 +141,7 @@ class JulesAgent:
             return session
         return None
 
-    async def spawn_agent_with_context(self, prompt, source, role=None, callback=None, starting_branch="master"):
+    async def spawn_agent_with_context(self, prompt, source, role=None, callback=None, starting_branch=None):
         """
         Enhances the prompt with architectural memory context (RAG) before spawning.
         """
