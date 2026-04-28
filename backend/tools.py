@@ -1727,7 +1727,28 @@ all_tools_list = [
             "required": ["repo_name"]
         }
     },
-    {
+        {
+        "name": "create_playlist",
+        "description": "Creates a music playlist from a list of song or artist queries and starts playing it.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {
+                    "type": "STRING",
+                    "description": "A name for the playlist."
+                },
+                "queries": {
+                    "type": "ARRAY",
+                    "items": {
+                        "type": "STRING"
+                    },
+                    "description": "A list of queries (e.g. song names, artists) to include in the playlist."
+                }
+            },
+            "required": ["name", "queries"]
+        }
+    },
+{
         "name": "control_music",
         "description": "Controls music playback (pause, resume, next, previous, shuffle, volume).",
         "parameters": {

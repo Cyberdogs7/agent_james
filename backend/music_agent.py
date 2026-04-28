@@ -99,34 +99,97 @@ class MusicAgent:
         self.logger.info(f"Searching for: {query}")
         try:
             # 1. Search
-            # Run in thread to avoid blocking
-            results = await asyncio.to_thread(self.yt.search, query)
+            # We first search with no filter. If no playlist/album is explicitly requested, we just use top result.
+            # However, if query explicitly mentions 'playlist' or 'album', we can try to filter search.
+            is_playlist_query = "playlist" in query.lower()
+            is_album_query = "album" in query.lower()
+
+            filter_type = None
+            if is_playlist_query:
+                filter_type = "playlists"
+            elif is_album_query:
+                filter_type = "albums"
+
+            if filter_type:
+                 results = await asyncio.to_thread(self.yt.search, query, filter=filter_type)
+                 # Fallback if no results with filter
+                 if not results:
+                     results = await asyncio.to_thread(self.yt.search, query)
+            else:
+                 results = await asyncio.to_thread(self.yt.search, query)
+
             if not results:
                 return f"No results found for {query}"
 
             top_result = results[0]
-            video_id = top_result.get('videoId')
-            if not video_id:
-                 # Attempt to find a valid videoId in other results
-                 for r in results:
-                     if r.get('videoId'):
-                         top_result = r
-                         video_id = r.get('videoId')
-                         break
 
-            if not video_id:
-                return f"Could not find a playable video for {query}"
+            # Use fallback for artist types as they are not playable directly like a playlist or video
+            if filter_type is None and top_result.get('resultType') == 'artist':
+                # Attempt to find a valid videoId in other results
+                for r in results:
+                    if r.get('videoId') or r.get('resultType') in ['playlist', 'album']:
+                        top_result = r
+                        break
 
-            # 2. Get Watch Playlist
-            def get_playlist(vid):
-                return self.yt.get_watch_playlist(videoId=vid)
+            # Check if it's a playlist or album
+            result_type = top_result.get('resultType')
+            if result_type in ['playlist', 'album']:
+                browse_id = top_result.get('browseId')
+                if browse_id:
+                    if browse_id.startswith('VL'):
+                        browse_id = browse_id[2:]
 
-            watch_playlist = await asyncio.to_thread(get_playlist, video_id)
-            tracks = watch_playlist.get("tracks", [])
+                    self.logger.info(f"Extracting playlist/album with browseId: {browse_id}")
 
-            if not tracks:
-                 # Fallback to single track
-                 tracks = [top_result]
+                    def get_playlist_tracks(bid):
+                        ydl_opts = {
+                            'extract_flat': True,
+                            'quiet': True,
+                            'ignoreerrors': True,
+                        }
+                        tracks = []
+                        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                            url = f"https://www.youtube.com/playlist?list={bid}"
+                            info = ydl.extract_info(url, download=False)
+                            if info and 'entries' in info:
+                                for entry in info['entries']:
+                                    if entry and entry.get('id'):
+                                        tracks.append({
+                                            'videoId': entry.get('id'),
+                                            'title': entry.get('title', 'Unknown Title'),
+                                            'artists': [{'name': entry.get('channel', 'Unknown Artist')}],
+                                            'duration_seconds': entry.get('duration', 0)
+                                        })
+                        return tracks
+
+                    tracks = await asyncio.to_thread(get_playlist_tracks, browse_id)
+                    if not tracks:
+                        return f"Could not extract tracks from {result_type} '{query}'"
+
+            else:
+                # Standard video logic
+                video_id = top_result.get('videoId')
+                if not video_id:
+                     # Attempt to find a valid videoId in other results
+                     for r in results:
+                         if r.get('videoId'):
+                             top_result = r
+                             video_id = r.get('videoId')
+                             break
+
+                if not video_id:
+                    return f"Could not find a playable video for {query}"
+
+                # 2. Get Watch Playlist
+                def get_playlist(vid):
+                    return self.yt.get_watch_playlist(videoId=vid)
+
+                watch_playlist = await asyncio.to_thread(get_playlist, video_id)
+                tracks = watch_playlist.get("tracks", [])
+
+                if not tracks:
+                     # Fallback to single track
+                     tracks = [top_result]
 
             self.playlist = tracks
             self.current_track_index = 0
@@ -138,13 +201,60 @@ class MusicAgent:
 
             title = tracks[0].get('title', 'Unknown')
             artists = "Unknown"
-            if 'artists' in tracks[0]:
+            if 'artists' in tracks[0] and tracks[0]['artists']:
                 artists = ", ".join([a['name'] for a in tracks[0]['artists']])
             return f"Playing {title} by {artists}"
 
         except Exception as e:
             self.logger.error(f"Play failed: {e}")
             return f"Failed to play music: {e}"
+
+
+    async def create_playlist(self, name, queries):
+        """Creates a playlist from a list of queries and starts playing it."""
+        self.logger.info(f"Creating playlist '{name}' with queries: {queries}")
+
+        if not queries:
+            return "No queries provided for the playlist."
+
+        tracks = []
+
+        for query in queries:
+            try:
+                results = await asyncio.to_thread(self.yt.search, query)
+                if results:
+                    top_result = results[0]
+
+                    # Handle if the top result is an artist - fallback to a playable track
+                    if top_result.get('resultType') == 'artist':
+                        for r in results:
+                            if r.get('videoId'):
+                                top_result = r
+                                break
+
+                    video_id = top_result.get('videoId')
+                    if video_id:
+                        # We just need the basic track info, we won't fetch the full watch playlist for every track
+                        tracks.append(top_result)
+                    else:
+                        self.logger.warning(f"Could not find playable video ID for query: {query}")
+                else:
+                    self.logger.warning(f"No results found for query: {query}")
+            except Exception as e:
+                self.logger.error(f"Error searching for '{query}': {e}")
+
+        if not tracks:
+            return f"Failed to find any playable tracks for the playlist '{name}'."
+
+        self.playlist = tracks
+        self.current_track_index = 0
+
+        # Start playing first track
+        if self._play_task:
+            self._play_task.cancel()
+        self._play_task = asyncio.create_task(self._play_current_track())
+
+        return f"Created playlist '{name}' with {len(tracks)} tracks and started playing."
 
     async def _play_current_track(self):
         """Plays the track at self.current_track_index in self.playlist."""
