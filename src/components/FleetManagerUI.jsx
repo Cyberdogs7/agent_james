@@ -173,7 +173,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 key={agent.id}
                                 draggable={true}
                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 hover:bg-gold9/10 cursor-pointer active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
+                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/80 border border-gold9/20 hover:border-gold9 hover:bg-gold9/10 cursor-pointer active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
                                 onClick={() => onAgentClick && onAgentClick(agent)}
                             >
                                 <div className="flex flex-col">
@@ -209,7 +209,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                         <p className="text-gold9/60 text-sm mt-1">Drag agents from the pool to allocate resources.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-2 cursor-pointer bg-black/40 border border-gold9/20 px-3 py-1.5 rounded-lg hover:border-gold9/50 transition-colors">
+                        <label className="flex items-center gap-2 cursor-pointer bg-black/80 border border-gold9/20 px-3 py-1.5 rounded-lg hover:border-gold9/50 transition-colors">
                             <input
                                 type="checkbox"
                                 checked={autoMergeMaster}
@@ -250,7 +250,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 </div>
 
                                 {/* Active Agents in Repo */}
-                                <div className="p-4 border-b border-gold9/20 min-h-[100px] bg-black/40">
+                                <div className="p-4 border-b border-gold9/20 min-h-[100px] bg-black/80">
                                     <div className="text-[10px] font-bold text-gold9/40 mb-2 tracking-widest">ASSIGNED UNIT</div>
                                     <div className="flex flex-wrap gap-2">
                                         {repoAgents.map(agent => (

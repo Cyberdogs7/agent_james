@@ -118,7 +118,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
     return (
         <div className="fixed inset-0 z-[110] bg-[#0a0a0a] text-gold9 font-mono flex flex-col">
             {/* HEADER */}
-            <div className="h-16 border-b border-gold9/20 flex items-center justify-between px-6 bg-black/50 backdrop-blur">
+            <div className="h-16 border-b border-gold9/20 flex items-center justify-between px-6 bg-black/80 ">
                 <div className="flex items-center gap-4">
                     <div className="bg-gold9/10 p-2 rounded">
                         <Cpu className="text-gold9" />
@@ -140,7 +140,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
 
             <div className="flex-1 flex overflow-hidden">
                 {/* LEFT SIDEBAR: LIST */}
-                <div className="w-64 border-r border-gold9/20 flex flex-col bg-black/30">
+                <div className="w-64 border-r border-gold9/20 flex flex-col bg-black/80">
                     <button
                         onClick={() => setSelectedTaskId(null)}
                         className={`p-4 border-b border-gold9/10 flex items-center gap-2 hover:bg-gold9/10 transition-colors ${!selectedTaskId ? 'bg-gold9/20 text-white' : 'text-gold9/60'}`}
@@ -218,7 +218,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                 </div>
 
                 {/* RIGHT SIDEBAR: INSPECTOR */}
-                <div className="w-80 border-l border-gold9/20 bg-black/50 p-6 overflow-y-auto backdrop-blur-md">
+                <div className="w-80 border-l border-gold9/20 bg-black/80 p-6 overflow-y-auto ">
                     <h2 className="text-xs font-bold text-gold9/40 tracking-[0.2em] mb-6 border-b border-gold9/10 pb-2">PROPERTIES</h2>
 
                     {selectedNode === 'trigger' && draftTask && (
@@ -234,7 +234,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                     <select
                                         value={draftTask.trigger.type}
                                         onChange={(e) => updateDraft('trigger.type', e.target.value)}
-                                        className="w-full bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
+                                        className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                     >
                                         <option value="manual">MANUAL (Button)</option>
                                         <option value="schedule">SCHEDULE (Time/Interval)</option>
@@ -258,7 +258,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                             type="text"
                                             value={draftTask.trigger.value || ''}
                                             onChange={(e) => updateDraft('trigger.value', e.target.value)}
-                                            className="w-full bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
+                                            className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                             placeholder="owner/repo"
                                         />
                                         <div className="text-[10px] text-gold9/40 mt-1">Leave empty to match all monitored repos.</div>
@@ -272,7 +272,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                             type="text"
                                             value={draftTask.trigger.value || ''}
                                             onChange={(e) => updateDraft('trigger.value', e.target.value)}
-                                            className="w-full bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
+                                            className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                             placeholder="Done"
                                         />
                                     </div>
@@ -294,7 +294,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                     <select
                                         value={draftTask.action.type}
                                         onChange={(e) => updateDraft('action.type', e.target.value)}
-                                        className="w-full bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
+                                        className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                     >
                                         <option value="jules_task">JULES AGENT</option>
                                         <option value="notify">NOTIFICATION</option>
@@ -312,7 +312,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                                     const current = typeof draftTask.action.value === 'object' ? draftTask.action.value : { prompt: draftTask.action.value };
                                                     updateDraft('action.value', { ...current, source: e.target.value });
                                                 }}
-                                                className="w-full bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
+                                                className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                             >
                                                 <option value="">-- No Specific Source --</option>
                                                 {availableSources.map((s,i) => <option key={i} value={s}>{s}</option>)}
@@ -326,7 +326,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                                     const current = typeof draftTask.action.value === 'object' ? draftTask.action.value : { source: null };
                                                     updateDraft('action.value', { ...current, prompt: e.target.value });
                                                 }}
-                                                className="w-full h-32 bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none resize-none"
+                                                className="w-full h-32 bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none resize-none"
                                                 placeholder="Describe what Jules should do..."
                                             />
                                         </div>
@@ -340,7 +340,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                             type="text"
                                             value={draftTask.action.value || ''}
                                             onChange={(e) => updateDraft('action.value', e.target.value)}
-                                            className="w-full bg-black/50 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
+                                            className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                             placeholder={draftTask.action.type === 'notify' ? "Message to display" : "Path to script"}
                                         />
                                     </div>

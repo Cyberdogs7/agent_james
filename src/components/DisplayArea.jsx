@@ -127,7 +127,7 @@ const DisplayArea = ({ socket, isListening, audioData, intensity, timers, curren
             {renderContent()}
             <button
               onClick={handleDismiss}
-              className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/80 rounded-full text-white transition-colors z-10"
+              className="absolute top-2 right-2 p-1.5 bg-black/80 hover:bg-black/80 rounded-full text-white transition-colors z-10"
             >
               <X size={18} />
             </button>

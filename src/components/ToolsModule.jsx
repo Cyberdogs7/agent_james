@@ -37,7 +37,7 @@ const ToolsModule = ({
             id="tools"
             onMouseDown={onMouseDown}
             className={`absolute px-6 py-3 ${activeDragElement === "tools" ? "" : "transition-all duration-200"}
-                        backdrop-blur-xl bg-black/40 border border-gold9/20 shadow-2xl rounded-full`}
+                         bg-black/80 border border-gold9/20 shadow-2xl rounded-full`}
             style={{
                 left: position.x,
                 top: position.y,
@@ -45,7 +45,6 @@ const ToolsModule = ({
                 pointerEvents: 'auto'
             }}
         >
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none mix-blend-overlay rounded-full"></div>
 
             <div className="flex justify-center gap-6 relative z-10">
                 {/* Power Button */}
