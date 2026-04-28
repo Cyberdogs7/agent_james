@@ -86,7 +86,7 @@ class JulesAgent:
             self._cache.clear()
             self._cache_expiry.clear()
 
-    async def create_session(self, prompt, source, role=None):
+    async def create_session(self, prompt, source, role=None, starting_branch="master"):
         """Creates a new session in the Jules API."""
         source_context = {}
         if source:
@@ -100,6 +100,12 @@ class JulesAgent:
             else:
                 # If it doesn't look like a resource name, assume it's a repo reference
                 source_context["source"] = f"sources/github/{source}"
+
+            # API requires githubRepoContext for github sources
+            if "sources/github/" in source_context["source"]:
+                source_context["githubRepoContext"] = {
+                    "startingBranch": starting_branch
+                }
         
         # Sanitize title: remove newlines and limit length
         clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
@@ -126,16 +132,16 @@ class JulesAgent:
 
         return session
 
-    async def spawn_agent(self, prompt, source, role=None, callback=None):
+    async def spawn_agent(self, prompt, source, role=None, callback=None, starting_branch="master"):
         """High-level method to create a session and immediately start polling it."""
-        session = await self.create_session(prompt, source, role=role)
+        session = await self.create_session(prompt, source, role=role, starting_branch=starting_branch)
         if session:
             session_id = session['name']
             self.start_polling(session_id, callback)
             return session
         return None
 
-    async def spawn_agent_with_context(self, prompt, source, role=None, callback=None):
+    async def spawn_agent_with_context(self, prompt, source, role=None, callback=None, starting_branch="master"):
         """
         Enhances the prompt with architectural memory context (RAG) before spawning.
         """
@@ -150,7 +156,7 @@ class JulesAgent:
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Memory search failed: {e}")
 
-        return await self.spawn_agent(final_prompt, source, role, callback)
+        return await self.spawn_agent(final_prompt, source, role, callback, starting_branch)
 
     def start_polling(self, session_id, callback=None, interceptor_callback=None):
         """Starts a background task to poll a specific session for updates."""
