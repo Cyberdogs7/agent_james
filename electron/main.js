@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, MenuItem } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -40,6 +40,7 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false, // For simple IPC/Socket.IO usage
+            spellcheck: true,
         },
         backgroundColor: '#000000',
         frame: false, // Frameless for custom UI
@@ -79,6 +80,46 @@ function createWindow() {
     };
 
     loadFrontend();
+
+    mainWindow.webContents.on('context-menu', (event, params) => {
+        const menu = new Menu();
+
+        // Add spelling suggestions if misspelled word exists
+        if (params.misspelledWord) {
+            for (const suggestion of params.dictionarySuggestions) {
+                menu.append(new MenuItem({
+                    label: suggestion,
+                    click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+                }));
+            }
+
+            // Only add separator if we had suggestions
+            if (params.dictionarySuggestions.length > 0) {
+                menu.append(new MenuItem({ type: 'separator' }));
+            }
+
+            // Add "Add to dictionary" option
+            menu.append(new MenuItem({
+                label: 'Add to dictionary',
+                click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+            }));
+            menu.append(new MenuItem({ type: 'separator' }));
+        }
+
+        // Add standard editing options if right-clicked on an editable field or text is selected
+        if (params.isEditable || params.selectionText.trim().length > 0) {
+            menu.append(new MenuItem({ role: 'cut' }));
+            menu.append(new MenuItem({ role: 'copy' }));
+            menu.append(new MenuItem({ role: 'paste' }));
+            menu.append(new MenuItem({ type: 'separator' }));
+            menu.append(new MenuItem({ role: 'selectAll' }));
+        }
+
+        // Show menu if there are items in it
+        if (menu.items.length > 0) {
+            menu.popup();
+        }
+    });
 
     mainWindow.on('closed', () => {
         mainWindow = null;

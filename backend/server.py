@@ -1560,7 +1560,7 @@ async def get_fleet_status(sid):
             "branch": "unknown",
             "status": "Remote (Loading...)" if token else "Remote (No Auth)",
             "last_commit": None,
-            "auto_merge_disabled": r.get('auto_merge_disabled', False)
+            "auto_merge_enabled": r.get('auto_merge_enabled', False)
         } for r in fleet]
         await sio.emit('fleet_status_update', basic_fleet, to=sid)
 
@@ -1601,7 +1601,7 @@ async def get_fleet_status(sid):
                 "branch": default_branch,
                 "status": "Remote",
                 "last_commit": commit_info,
-                "auto_merge_disabled": repo.get('auto_merge_disabled', False)
+                "auto_merge_enabled": repo.get('auto_merge_enabled', False)
             }
 
         # Background task to fetch detailed status without blocking the event loop
@@ -2145,7 +2145,10 @@ async def check_and_start_next_task(repo_name, agent_id=None):
             state = fleet_manager.get_state()
             idle_agent = next((a for a in state["agents"] if a["current_repo"] == repo_name and a["status"] == "idle"), None)
             if not idle_agent:
-                break
+                # If no assigned agents are idle, look for a temp worker from the unassigned pool
+                idle_agent = next((a for a in state["agents"] if a["current_repo"] is None and a["status"] == "idle"), None)
+                if not idle_agent:
+                    break
             current_agent_id = idle_agent["id"]
 
         # We only use the passed agent_id for the first iteration
@@ -2200,6 +2203,8 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     await check_and_start_next_task(repo_name, current_agent_id)
                 elif "Error polling" in message or "failed" in message.lower() and ("Task Execution Failed" in message or "Exception" in message):
                     print(f"[SERVER] Jules session failed for task {current_task['id']}")
+                    if audio_loop:
+                        audio_loop.notify_user(f"Jules task in {repo_name} failed.")
                     if selected_api_key and selected_api_key in fleet_account_active_sessions:
                         fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
@@ -2244,12 +2249,16 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     else:
                         if selected_api_key and selected_api_key in fleet_account_active_sessions:
                             fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
+                        if audio_loop:
+                            audio_loop.notify_user(f"Jules task in {repo_name} failed to start.")
                         fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
                         fleet_manager.update_agent_session(current_agent_id, None, "error")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                 except Exception as e:
                     if selected_api_key and selected_api_key in fleet_account_active_sessions:
                         fleet_account_active_sessions[selected_api_key] = max(0, fleet_account_active_sessions[selected_api_key] - 1)
+                    if audio_loop:
+                        audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {e}")
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
                     fleet_manager.update_agent_session(current_agent_id, None, "error")
                     await sio.emit('error', {'msg': f"Failed to start task for {current_agent_id}: {e}"})
@@ -2305,6 +2314,13 @@ async def remove_task_from_queue(sid, data):
     repo_name = data.get('repo_name')
     task_id = data.get('task_id')
     fleet_manager.remove_task_from_queue(repo_name, task_id)
+    await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+@sio.event
+async def retry_task(sid, data):
+    repo_name = data.get('repo_name')
+    task_id = data.get('task_id')
+    fleet_manager.retry_task(repo_name, task_id)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
 
 if __name__ == "__main__":

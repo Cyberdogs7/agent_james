@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 const WinampVisualizer = ({ socket, onClose }) => {
@@ -127,34 +127,24 @@ const WinampVisualizer = ({ socket, onClose }) => {
     };
   }, [mode]);
 
-  const lyricLines = useMemo(() => {
-    return status.track?.lyrics?.split("\n") || [];
-  }, [status.track?.lyrics]);
-
-  const activeLineIndex = useMemo(() => {
-    if (status.track?.progress !== undefined && status.track?.duration && lyricLines.length > 0) {
-      const percent = Math.min(1, Math.max(0, status.track.progress / status.track.duration));
-      // calculate which line we are on
-      // e.g. percent 0.5 with 10 lines -> 5
-      return Math.min(lyricLines.length - 1, Math.floor(percent * lyricLines.length));
-    }
-    return 0;
-  }, [status.track?.progress, status.track?.duration, lyricLines.length]);
-
   useEffect(() => {
-    const container = lyricsRef.current;
-    if (container && lyricLines.length > 0) {
-      const activeChild = container.children[activeLineIndex];
-      if (activeChild) {
-        const scrollTarget = activeChild.offsetTop - container.clientHeight / 2 + activeChild.clientHeight / 2;
+    if (lyricsRef.current && status.track?.progress !== undefined && status.track?.duration) {
+      const progress = status.track.progress;
+      const duration = status.track.duration;
+      const percent = Math.min(1, Math.max(0, progress / duration));
 
-        container.scrollTo({
-          top: scrollTarget,
-          behavior: "smooth",
+      const el = lyricsRef.current;
+      const maxScrollTop = el.scrollHeight - el.clientHeight;
+
+      if (maxScrollTop > 0) {
+        // Smooth scroll by setting scrollTop
+        el.scrollTo({
+          top: percent * maxScrollTop,
+          behavior: "smooth"
         });
       }
     }
-  }, [activeLineIndex, lyricLines.length]);
+  }, [status.track?.progress, status.track?.duration]);
 
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] text-[#00FF00] font-mono text-xs select-none pb-1">
@@ -221,17 +211,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
             className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/70 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto"
             style={{ textShadow: "1px 1px 0 #000" }}
           >
-            {lyricLines.map((line, idx) => (
-              <div
-                key={idx}
-                style={{
-                  color: idx === activeLineIndex ? "#FFFFFF" : "#00FF00",
-                  fontWeight: idx === activeLineIndex ? "bold" : "normal",
-                }}
-              >
-                {line || " "}
-              </div>
-            ))}
+            {status.track.lyrics}
           </div>
         )}
       </div>

@@ -2053,6 +2053,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         if event['type'] == 'git_commit':
             msg = f"New commit in {event['repo']} by {event['author']}: {event['message']}"
             self.notify_user(msg)
+        elif event['type'] == 'git_pr':
+            msg = f"New pull request in {event['repo']} by {event['author']}: {event['title']}"
+            self.notify_user(msg)
         elif event['type'] == 'trello_move':
             msg = f"New card '{event.get('card_name')}' added to Trello list '{event.get('list_name')}' in board '{event.get('board_name')}'."
             self.notify_user(msg)

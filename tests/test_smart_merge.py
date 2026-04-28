@@ -22,7 +22,7 @@ class TestSmartMerge(unittest.IsolatedAsyncioTestCase):
         # Default mock config
         self.mock_pm.get_project_config.return_value = {}
         self.mock_pm.get_github_token.return_value = "fake_token"
-        self.mock_pm.load_fleet.return_value = [{"owner": "test", "name": "repo"}]
+        self.mock_pm.load_fleet.return_value = [{"owner": "test", "name": "repo", "auto_merge_enabled": True}]
 
     @patch("automation_engine.GitHubClient")
     async def test_smart_merge_trigger(self, MockGitHubClient):

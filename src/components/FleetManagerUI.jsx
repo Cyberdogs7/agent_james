@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw, Paperclip } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onRetryTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
@@ -192,7 +192,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
             {/* Main Area: Repository Rooms */}
             <div
-                className="flex-1 overflow-y-auto p-6 bg-transparent"
+                className="flex-1 overflow-y-auto p-6 bg-transparent scrollbar-hide"
                 onDragOver={handleDragOver}
                 onDrop={handleMainAreaDrop}
             >
@@ -320,7 +320,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             <select
                                                 value={newTaskDependencies[repo.name] || ''}
                                                 onChange={(e) => setNewTaskDependencies({...newTaskDependencies, [repo.name]: e.target.value})}
-                                                className="bg-transparent text-xs font-mono text-gold9/60 border border-gold9/20 rounded p-1 outline-none"
+                                                className="bg-[#111111] text-xs font-mono text-gold9/60 border border-gold9/20 rounded p-1 outline-none scrollbar-hide"
                                             >
                                                 <option value="">No dependencies</option>
                                                 {repo.queue.map(t => (
@@ -380,12 +380,24 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <button
-                                                        onClick={() => onRemoveTask(repo.name, task.id)}
-                                                        className="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-500 transition-opacity p-1"
-                                                    >
-                                                        <Plus size={14} className="rotate-45" />
-                                                    </button>
+                                                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                                                        {task.status === 'failed' && (
+                                                            <button
+                                                                onClick={() => onRetryTask && onRetryTask(repo.name, task.id)}
+                                                                className="text-cyan-500/50 hover:text-cyan-400 p-1 transition-colors"
+                                                                title="Retry Task"
+                                                            >
+                                                                <RefreshCw size={14} />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => onRemoveTask(repo.name, task.id)}
+                                                            className="text-red-500/50 hover:text-red-500 p-1 transition-colors"
+                                                            title="Remove Task"
+                                                        >
+                                                            <Plus size={14} className="rotate-45" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             );
                                         })}

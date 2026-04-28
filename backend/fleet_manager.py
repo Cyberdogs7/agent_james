@@ -119,6 +119,15 @@ class FleetManager:
             self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t["id"] != task_id]
             self.save_state()
 
+    def retry_task(self, repo_name, task_id):
+        if repo_name in self.repos:
+            for task in self.repos[repo_name]["queue"]:
+                if task["id"] == task_id:
+                    task["status"] = "pending"
+                    task["agent_id"] = None
+                    break
+            self.save_state()
+
     def clear_completed_tasks(self, repo_name):
         if repo_name in self.repos:
             self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t.get("status") != "completed"]
