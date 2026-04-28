@@ -308,13 +308,21 @@ class AutomationEngine:
                     # Support overriding per project or global
                     threshold = self.project_manager.get_project_config().get("auto_merge_threshold", self.MERGE_CANDIDATE_THRESHOLD)
 
-                    if age_seconds < threshold:
-                        continue # Too young
+                    auto_merge_master = False
+                    try:
+                        from backend.server import SETTINGS
+                        auto_merge_master = SETTINGS.get("auto_merge_master", False)
+                    except Exception:
+                        pass
 
-                    # Check cooldown
-                    last_nag = self.last_nag_times.get(f"merge_{pr_url}", 0)
-                    if now - last_nag < self.NAG_COOLDOWN:
-                         continue
+                    if not auto_merge_master:
+                        if age_seconds < threshold:
+                            continue # Too young
+
+                        # Check cooldown
+                        last_nag = self.last_nag_times.get(f"merge_{pr_url}", 0)
+                        if now - last_nag < self.NAG_COOLDOWN:
+                             continue
 
                     # 2. Check Mergeability (Detailed Fetch)
                     full_pr = await client.get_pull_request(owner, name, number)
@@ -375,13 +383,23 @@ class AutomationEngine:
                             is_green = (state == 'success')
 
                     if is_green:
-                        msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks and has been stable for over 24 hours. Shall I merge it for you?"
-                        print(f"[AutomationEngine] SMART MERGE: {msg}")
-                        await self.ada.handle_external_event({
-                            "type": "notification",
-                            "message": msg
-                        })
-                        self.last_nag_times[f"merge_{pr_url}"] = now
+                        if auto_merge_master:
+                            msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks. Auto merging..."
+                            print(f"[AutomationEngine] SMART MERGE (AUTO): {msg}")
+                            await self.ada.handle_external_event({
+                                "type": "notification",
+                                "message": msg
+                            })
+                            await client.merge_pull_request(owner, name, number)
+                            self.last_nag_times[f"merge_{pr_url}"] = now
+                        else:
+                            msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks and has been stable for over 24 hours. Shall I merge it for you?"
+                            print(f"[AutomationEngine] SMART MERGE: {msg}")
+                            await self.ada.handle_external_event({
+                                "type": "notification",
+                                "message": msg
+                            })
+                            self.last_nag_times[f"merge_{pr_url}"] = now
 
             except Exception as e:
                 print(f"[AutomationEngine] Error checking merge candidates for {repo.get('name')}: {e}")
