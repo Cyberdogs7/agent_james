@@ -951,11 +951,11 @@ const ArtifactModal = ({ artifact, onClose }) => {
                 <div className="flex-1 overflow-y-auto p-6 scrollbar-hide text-green-200">
                     <div className="mb-4">
                         <h3 className="text-sm font-bold text-green-500 mb-1 uppercase tracking-widest">Subject</h3>
-                        <div className="text-lg font-bold">{artifact.title}</div>
+                        <div className="text-lg font-bold select-text">{artifact.title}</div>
                     </div>
                     <div>
                         <h3 className="text-sm font-bold text-green-500 mb-2 uppercase tracking-widest">Description</h3>
-                        <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed bg-green-900/10 p-4 rounded border border-green-500/10">
+                        <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed bg-green-900/10 p-4 rounded border border-green-500/10 select-text">
                             {artifact.body || "No detailed description provided."}
                         </div>
                     </div>
