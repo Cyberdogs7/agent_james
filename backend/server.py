@@ -193,7 +193,8 @@ DEFAULT_SETTINGS = {
     },
     "printers": [], # List of {host, port, name, type}
     "kasa_devices": [], # List of {ip, alias, model}
-    "camera_flipped": False # Invert cursor horizontal direction
+    "camera_flipped": False, # Invert cursor horizontal direction
+    "auto_merge_master": False
 }
 
 SETTINGS = copy.deepcopy(DEFAULT_SETTINGS)
@@ -1346,6 +1347,9 @@ async def update_settings(sid, data):
     if "camera_flipped" in data:
         SETTINGS["camera_flipped"] = data["camera_flipped"]
         print(f"[SERVER] Camera flip set to: {data['camera_flipped']}")
+
+    if "auto_merge_master" in data:
+        SETTINGS["auto_merge_master"] = data["auto_merge_master"]
 
     save_settings()
     # Broadcast new full settings

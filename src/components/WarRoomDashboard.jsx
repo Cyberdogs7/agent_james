@@ -43,6 +43,21 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [selectedFleetAgent, setSelectedFleetAgent] = useState(null);
     const [selectedTask, setSelectedTask] = useState(null);
         const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
+    const [autoMergeMaster, setAutoMergeMaster] = useState(false);
+
+    // Add effect for settings fetch
+    useEffect(() => {
+        if (socket) {
+            socket.emit('get_settings');
+            const handleSettings = (settings) => {
+                if (settings && typeof settings.auto_merge_master !== 'undefined') {
+                    setAutoMergeMaster(settings.auto_merge_master);
+                }
+            };
+            socket.on('settings', handleSettings);
+            return () => socket.off('settings', handleSettings);
+        }
+    }, [socket]);
 
     // Add effect for fleet state
     useEffect(() => {
@@ -324,6 +339,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
                             onAgentClick={setSelectedFleetAgent}
                             onTaskClick={(task, repoName) => setSelectedTask({...task, repoName})}
+                            autoMergeMaster={autoMergeMaster}
+                            onToggleAutoMergeMaster={(val) => {
+                                setAutoMergeMaster(val);
+                                socket.emit('update_settings', { auto_merge_master: val });
+                            }}
                         />
                     </div>
 

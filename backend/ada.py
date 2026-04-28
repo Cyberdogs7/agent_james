@@ -1735,6 +1735,11 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                             if hasattr(self, 'tool_permissions') and fc.name in self.tool_permissions:
                                 requires_confirmation = self.tool_permissions[fc.name]
 
+                            if fc.name == "merge_pull_request":
+                                from backend.server import SETTINGS
+                                if SETTINGS.get("auto_merge_master", False):
+                                    requires_confirmation = False
+
                             if requires_confirmation:
                                 if self.on_tool_confirmation:
                                     import uuid

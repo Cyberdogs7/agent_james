@@ -15,7 +15,7 @@ class ToolRegistry:
 
     def is_confirmation_required(self, tool_name):
         """Checks if a tool requires user confirmation."""
-        destructive_keywords = ['delete', 'remove', 'wipe', 'destroy', 'dismiss', 'stop_jules']
+        destructive_keywords = ['delete', 'remove', 'wipe', 'destroy', 'dismiss', 'stop_jules', 'merge_pull_request']
         return any(keyword in tool_name.lower() for keyword in destructive_keywords)
 
     async def dispatch(self, tool_name, args):
