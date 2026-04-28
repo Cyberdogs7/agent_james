@@ -302,9 +302,11 @@ class AudioLoop:
                     fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
                     fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
 
+                    message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
+                    self.notify_user(message, duration=20000)
+
                     if self.session:
                         try:
-                            message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
                             asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
