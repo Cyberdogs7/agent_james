@@ -1462,9 +1462,9 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             return f"Assigned {agent_id} to {repo_name}."
         return f"Failed to assign {agent_id}. Agent may not exist."
 
-    async def handle_add_task(self, repo_name, prompt, depends_on=None):
+    async def handle_add_task(self, repo_name, prompt, depends_on=None, attachments=None):
         from backend.server import fleet_manager, sio, check_and_start_next_task
-        task_id = fleet_manager.add_task_to_queue(repo_name, prompt, depends_on)
+        task_id = fleet_manager.add_task_to_queue(repo_name, prompt, depends_on, attachments or [])
         await sio.emit('fleet_state_update', fleet_manager.get_state())
         await check_and_start_next_task(repo_name)
         return f"Task '{task_id}' added to {repo_name} queue."

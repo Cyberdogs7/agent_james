@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw } from 'lucide-react';
+import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw, Paperclip } from 'lucide-react';
 
 const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onRetryTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
@@ -76,14 +76,50 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
     const [newTaskPrompts, setNewTaskPrompts] = useState({});
     const [newTaskDependencies, setNewTaskDependencies] = useState({});
+    const [newTaskAttachments, setNewTaskAttachments] = useState({});
+
+    const handleFileChange = (e, repoName) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        Promise.all(files.map(file => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve({
+                    name: file.name,
+                    type: file.type,
+                    content: reader.result // base64 string
+                });
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        })).then(attachments => {
+            setNewTaskAttachments(prev => ({
+                ...prev,
+                [repoName]: [...(prev[repoName] || []), ...attachments]
+            }));
+        }).catch(err => {
+            console.error("Failed to read files", err);
+        });
+    };
+
+    const removeAttachment = (repoName, index) => {
+        setNewTaskAttachments(prev => ({
+            ...prev,
+            [repoName]: prev[repoName].filter((_, i) => i !== index)
+        }));
+    };
 
     const handleAddTask = (repoName) => {
         const prompt = newTaskPrompts[repoName];
         const dependsOn = newTaskDependencies[repoName];
+        const attachments = newTaskAttachments[repoName] || [];
+
         if (prompt && prompt.trim()) {
-            onAddTask(repoName, prompt.trim(), dependsOn);
+            onAddTask(repoName, prompt.trim(), dependsOn, attachments);
             setNewTaskPrompts(prev => ({ ...prev, [repoName]: '' }));
             setNewTaskDependencies(prev => ({ ...prev, [repoName]: '' }));
+            setNewTaskAttachments(prev => ({ ...prev, [repoName]: [] }));
         }
     };
 
@@ -238,7 +274,33 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                     </div>
 
                                     <div className="flex flex-col gap-2 mb-4">
+                                        {newTaskAttachments[repo.name] && newTaskAttachments[repo.name].length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mb-1">
+                                                {newTaskAttachments[repo.name].map((file, i) => (
+                                                    <div key={i} className="flex items-center gap-1 bg-gold9/10 text-gold9 text-xs rounded px-2 py-1 border border-gold9/30">
+                                                        <span className="truncate max-w-[150px]">{file.name}</span>
+                                                        <button onClick={() => removeAttachment(repo.name, i)} className="text-gold9/50 hover:text-gold9">
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                         <div className="flex gap-2">
+                                            <input
+                                                type="file"
+                                                id={`file-upload-${repo.name}`}
+                                                multiple
+                                                className="hidden"
+                                                onChange={(e) => handleFileChange(e, repo.name)}
+                                            />
+                                            <button
+                                                onClick={() => document.getElementById(`file-upload-${repo.name}`).click()}
+                                                className="bg-transparent text-gold9/50 hover:text-gold9 p-2 transition-colors"
+                                                title="Attach files"
+                                            >
+                                                <Paperclip size={18} />
+                                            </button>
                                             <input
                                                 type="text"
                                                 value={newTaskPrompts[repo.name] || ''}

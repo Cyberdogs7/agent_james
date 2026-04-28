@@ -23,6 +23,7 @@ import os
 import time
 import json
 import copy
+import base64
 from datetime import datetime
 from pathlib import Path
 
@@ -2158,6 +2159,28 @@ async def check_and_start_next_task(repo_name, agent_id=None):
         await sio.emit('fleet_state_update', fleet_manager.get_state())
 
         prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
+        attachments = task.get("attachments", [])
+        if attachments:
+            for att in attachments:
+                name = att.get("name", "Unknown")
+                mime_type = att.get("type", "")
+                content = att.get("content", "")
+                if mime_type.startswith("text/") or mime_type in ["application/json", "application/javascript", "application/xml"]:
+                    try:
+                        # Convert base64 data URL to text
+                        if "base64," in content:
+                            base64_data = content.split("base64,")[1]
+                            text_content = base64.b64decode(base64_data).decode('utf-8')
+                            prompt += f"\n\nAttachment {name}:\n{text_content}"
+                        else:
+                            prompt += f"\n\nAttachment {name}:\n{content}"
+                    except Exception as e:
+                        print(f"[SERVER] Failed to decode text attachment {name}: {e}")
+                        prompt += f"\n\nAttachment {name}:\n[Error decoding text file]"
+                else:
+                    # For non-text files (e.g. images), just append the base64 data URL directly
+                    prompt += f"\n\nAttachment {name}:\n{content}"
+
         source = f"github.com/{repo_name}"
         await sio.emit('status', {'msg': f"Agent {current_agent_id} picking up task in {repo_name}..."})
 
@@ -2274,7 +2297,8 @@ async def add_task_to_repo_queue(sid, data):
     repo_name = data.get('repo_name')
     prompt = data.get('prompt')
     depends_on = data.get('depends_on')
-    fleet_manager.add_task_to_queue(repo_name, prompt, depends_on)
+    attachments = data.get('attachments', [])
+    fleet_manager.add_task_to_queue(repo_name, prompt, depends_on, attachments)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
 
     await check_and_start_next_task(repo_name)
