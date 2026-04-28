@@ -2173,6 +2173,12 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     prompt += f"\n\nAttachment {name}:\n{content}"
 
         source = f"github.com/{repo_name}"
+        if audio_loop and audio_loop.project_manager:
+            fleet = audio_loop.project_manager.load_fleet()
+            for r in fleet:
+                if f"{r.get('owner')}/{r.get('name')}" == repo_name:
+                    source = r.get("source", source)
+                    break
         await sio.emit('status', {'msg': f"Agent {current_agent_id} picking up task in {repo_name}..."})
 
         # We need to capture variables for the closure, so we create a factory function
