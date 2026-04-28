@@ -224,6 +224,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                     {activeRepos.map(repo => {
                         const repoAgents = agents.filter(a => a.current_repo === repo.name);
+                        const totalTasks = repo.queue?.length || 0;
+                        const pendingTasks = repo.queue?.filter(t => t.status === 'pending').length || 0;
+                        const inProgressTasks = repo.queue?.filter(t => t.status === 'in_progress').length || 0;
+                        const stalledTasks = repo.queue?.filter(t => t.status === 'needing_feedback').length || 0;
+                        const failedTasks = repo.queue?.filter(t => t.status === 'failed').length || 0;
 
                         return (
                             <motion.div
@@ -234,18 +239,38 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 onDrop={(e) => handleDrop(e, repo.name)}
                             >
                                 {/* Repo Header */}
-                                <div className="p-4 bg-gold9/5 border-b border-gold9/10 flex justify-between items-center">
-                                    <h3 className="font-bold text-gold9 font-mono flex items-center gap-2">
-                                        <Server size={16} />
-                                        <span className="truncate max-w-[200px]" title={repo.name}>{repo.name}</span>
-                                    </h3>
-                                    <div className="flex items-center gap-3">
-                                        <div className="text-xs text-gold9/60 font-mono">
-                                            {repoAgents.length} AGENTS
+                                <div className="p-4 bg-gold9/5 border-b border-gold9/10 flex flex-col">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="font-bold text-gold9 font-mono flex items-center gap-2">
+                                            <Server size={16} />
+                                            <span className="truncate max-w-[200px]" title={repo.name}>{repo.name}</span>
+                                        </h3>
+                                        <div className="flex items-center gap-3">
+                                            <div className="text-xs text-gold9/60 font-mono">
+                                                {repoAgents.length} AGENTS
+                                            </div>
+                                            <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, false)} className="text-gold9/40 hover:text-red-500 transition-colors p-1" title="Deactivate Repo">
+                                                <X size={14} />
+                                            </button>
                                         </div>
-                                        <button onClick={() => onToggleRepoActive && onToggleRepoActive(repo.name, false)} className="text-gold9/40 hover:text-red-500 transition-colors p-1" title="Deactivate Repo">
-                                            <X size={14} />
-                                        </button>
+                                    </div>
+                                    {/* Repo Stats */}
+                                    <div className="flex gap-4 text-[10px] font-mono border-t border-gold9/10 pt-2">
+                                        <div className="flex items-center gap-1 text-gray-300">
+                                            <span className="text-gold9/60">TOT:</span> {totalTasks}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-gray-400">
+                                            <span className="text-gold9/60">PND:</span> {pendingTasks}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-cyan-400">
+                                            <span className="text-gold9/60">INP:</span> {inProgressTasks}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-yellow-400">
+                                            <span className="text-gold9/60">STL:</span> {stalledTasks}
+                                        </div>
+                                        <div className="flex items-center gap-1 text-red-500">
+                                            <span className="text-gold9/60">FLD:</span> {failedTasks}
+                                        </div>
                                     </div>
                                 </div>
 
