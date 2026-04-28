@@ -261,19 +261,9 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
     };
 
 
-    // Calculate stats from fleetState
-    const activeAgentsCount = fleetState.agents.filter(a => a.status === 'working').length;
-    let totalTasks = 0;
-    let completedTasks = 0;
-    fleetState.repos.forEach(repo => {
-        if (repo.queue) {
-            totalTasks += repo.queue.length;
-            repo.queue.forEach(task => {
-                if (task.status === 'completed') completedTasks++;
-            });
-        }
-    });
-    const successRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    // Extract stats from system_stats provided by the backend
+    const activeAgentsCount = system_stats.active_agents;
+    const successRate = system_stats.success_rate;
 
     return (
         <AnimatePresence>
