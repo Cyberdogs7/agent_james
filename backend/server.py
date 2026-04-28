@@ -583,6 +583,14 @@ async def start_audio(sid, data=None):
             await check_morning_briefing_trigger()
         asyncio.create_task(delayed_briefing_check())
 
+        # Trigger check_and_start_next_task for all active repos
+        # so that previously assigned agents start working
+        fleet_state = fleet_manager.get_state()
+        for repo in fleet_state.get('repos', []):
+            if repo.get('is_active'):
+                print(f"[SERVER] Resuming tasks for active repo: {repo.get('name')}")
+                asyncio.create_task(check_and_start_next_task(repo.get('name')))
+
         print("Emitting 'A.D.A Started'")
         await sio.emit('status', {'msg': 'A.D.A Started'})
 
