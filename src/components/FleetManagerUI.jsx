@@ -313,7 +313,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 ))}
                                             </div>
                                         )}
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 items-start">
                                             <input
                                                 type="file"
                                                 id={`file-upload-${repo.name}`}
@@ -328,13 +328,17 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             >
                                                 <Paperclip size={18} />
                                             </button>
-                                            <input
-                                                type="text"
+                                            <textarea
                                                 value={newTaskPrompts[repo.name] || ''}
                                                 onChange={(e) => setNewTaskPrompts({...newTaskPrompts, [repo.name]: e.target.value})}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleAddTask(repo.name)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleAddTask(repo.name);
+                                                    }
+                                                }}
                                                 placeholder="Assign new task..."
-                                                className="flex-1 bg-transparent border-b-2 border-gold9/20 focus:border-gold9 text-sm text-gray-100 font-mono px-3 py-2 outline-none transition-colors placeholder-[#474746]"
+                                                className="flex-1 bg-transparent border-b-2 border-gold9/20 focus:border-gold9 text-sm text-gray-100 font-mono px-3 py-2 outline-none transition-all placeholder-[#474746] resize-none min-h-[40px] focus:min-h-[96px] scrollbar-hide"
                                             />
                                             <button
                                                 onClick={() => handleAddTask(repo.name)}
