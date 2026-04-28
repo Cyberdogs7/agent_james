@@ -11,7 +11,7 @@ class JulesAgent:
     def __init__(self, session=None, api_key=None, project_manager=None):
         self.api_key = api_key or os.getenv("JULES_API_KEY") or ""
         self.base_url = "https://jules.googleapis.com/v1alpha"
-        self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key})
+        self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key}, timeout=60.0)
         self.session_id = None
         self.session = session # Optional: Main Gemini Session (Legacy support, prefer callbacks)
         self.project_manager = project_manager
