@@ -2192,7 +2192,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     print(f"[SERVER] Jules session failed for task {current_task['id']}")
                     if audio_loop:
                         audio_loop.notify_user(f"Jules task in {repo_name} failed.")
-                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
+                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error=message)
                     fleet_manager.update_agent_session(current_agent_id, None, "idle")
                     await sio.emit('fleet_state_update', fleet_manager.get_state())
                     # Still check next task
@@ -2226,13 +2226,13 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     else:
                         if audio_loop:
                             audio_loop.notify_user(f"Jules task in {repo_name} failed to start.")
-                        fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
+                        fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error="Session failed to start.")
                         fleet_manager.update_agent_session(current_agent_id, None, "error")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                 except Exception as e:
                     if audio_loop:
                         audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {e}")
-                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed")
+                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error=str(e))
                     fleet_manager.update_agent_session(current_agent_id, None, "error")
                     await sio.emit('error', {'msg': f"Failed to start task for {current_agent_id}: {e}"})
                     await sio.emit('fleet_state_update', fleet_manager.get_state())

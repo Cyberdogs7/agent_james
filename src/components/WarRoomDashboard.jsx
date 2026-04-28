@@ -561,6 +561,14 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                         <span className="text-gray-200">{selectedTask.depends_on || 'None'}</span>
                                     </div>
                                 </div>
+                                {selectedTask.status === 'failed' && selectedTask.error && (
+                                    <div>
+                                        <span className="text-gold9/40 block text-xs mb-1">ERROR DETAILS</span>
+                                        <div className="text-red-400 bg-red-950/30 p-3 rounded border border-red-500/20 whitespace-pre-wrap select-text">
+                                            {selectedTask.error}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
