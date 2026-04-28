@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Activity,
@@ -31,7 +31,7 @@ import FleetManagerUI from './FleetManagerUI';
 import ClockDisplay from './ClockDisplay';
 
 
-const WarRoomDashboard = ({ data, socket, onClose }) => {
+const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, setInputValue, handleSend }) => {
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
         const [selectedSession, setSelectedSession] = useState(null);
@@ -44,6 +44,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     const [selectedTask, setSelectedTask] = useState(null);
         const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
     const [autoMergeMaster, setAutoMergeMaster] = useState(false);
+    const messagesEndRef = useRef(null);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
 
     // Add effect for settings fetch
     useEffect(() => {
@@ -273,7 +278,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
     return (
         <AnimatePresence>
             <motion.div
-                className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-xl flex flex-col p-6 text-gold9 font-mono overflow-hidden"
+                className="fixed inset-0 z-[100] bg-black/90  flex flex-col p-6 text-gold9 font-mono overflow-hidden"
                 initial="hidden"
                 animate="visible"
                 exit="exit"
@@ -286,7 +291,6 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                     <div className="absolute top-0 right-0 w-64 h-64 border-r-2 border-t-2 border-gold9/30 rounded-tr-3xl"></div>
                     <div className="absolute bottom-0 left-0 w-64 h-64 border-l-2 border-b-2 border-gold9/30 rounded-bl-3xl"></div>
                     <div className="absolute bottom-0 right-0 w-64 h-64 border-r-2 border-b-2 border-gold9/30 rounded-br-3xl"></div>
-                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 mix-blend-overlay"></div>
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] border border-gold9/5 rounded-full"></div>
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-dashed border-gold9/10 rounded-full animate-spin-slow"></div>
                 </div>
@@ -340,7 +344,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                 <div className="relative z-10 grid grid-cols-12 grid-rows-6 gap-6 flex-1 min-h-0">
 
                     {/* FLEET MANAGER (AGENT POOL + KINETIC COMMAND) */}
-                    <div className="col-span-9 row-span-6 bg-black/40 border border-gold9/20 rounded-xl overflow-hidden flex flex-col">
+                    <div className="col-span-9 row-span-6 bg-black/80 border border-gold9/20 rounded-xl overflow-hidden flex flex-col">
                         <FleetManagerUI
                             fleetState={fleetState}
                             fleetStatus={fleetStatus}
@@ -366,11 +370,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                     <div className="col-span-3 row-span-6 flex flex-col gap-6">
                         {/* STATS */}
                         <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
-                            <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
+                            <div className="bg-black/80 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
                                 <div className="text-xs text-gold9/60">ACTIVE AGENTS</div>
                                 <div className="text-2xl font-bold text-green-400">{activeAgentsCount}</div>
                             </div>
-                            <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
+                            <div className="bg-black/80 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
                                 <div className="text-xs text-gold9/60">SUCCESS RATE</div>
                                 <div className="text-2xl font-bold text-blue-400">{successRate}%</div>
                             </div>
@@ -379,7 +383,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         {/* FLEET COMMAND (GIT) */}
                         <motion.div
                             variants={itemVariants}
-                            className="flex-1 flex flex-col gap-4 bg-black/40 border border-gold9/20 rounded-xl p-4 overflow-hidden"
+                            className="flex-1 flex flex-col gap-4 bg-black/80 border border-gold9/20 rounded-xl p-4 overflow-hidden"
                         >
                             <div className="flex items-center justify-between border-b border-gold9/10 pb-2 mb-2">
                                 <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest">
@@ -423,7 +427,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                             </div>
 
                                             {repo.last_commit && (
-                                                <div className="text-[10px] bg-black/30 p-2 rounded border border-white/5">
+                                                <div className="text-[10px] bg-black/80 p-2 rounded border border-white/5">
                                                     <div className="text-gold9/70 font-bold mb-0.5 truncate">{repo.last_commit.message}</div>
                                                     <div className="text-gray-500 flex justify-between">
                                                         <span>{repo.last_commit.author}</span>
@@ -434,6 +438,35 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                         </div>
                                     ))
                                 )}
+                            </div>
+                        </motion.div>
+
+                        {/* MINI CHATBOX */}
+                        <motion.div variants={itemVariants} className="h-48 flex flex-col bg-black/40 border border-gold9/20 rounded-xl overflow-hidden relative">
+                            <div className="flex items-center justify-between border-b border-gold9/10 px-4 py-2 bg-gold9/5">
+                                <h2 className="flex items-center gap-2 text-sm font-bold tracking-widest">
+                                    <MessageSquare className="w-4 h-4 text-gold9" />
+                                    <span className="text-gold9">COMM LINK</span>
+                                </h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide mask-image-gradient">
+                                {messages && messages.slice(-10).map((msg, i) => (
+                                    <div key={i} className="text-sm">
+                                        <span className="text-gold8 font-sans text-[10px] opacity-70">[{msg.time}]</span> <span className="font-bold text-gold9 text-xs">{msg.sender}</span>
+                                        <div className="text-gray11 mt-0.5 leading-relaxed text-xs">{msg.text}</div>
+                                    </div>
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </div>
+                            <div className="p-2 border-t border-gold9/10 bg-black/60 backdrop-blur-md">
+                                <input
+                                    type="text"
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onKeyDown={handleSend}
+                                    placeholder="TRANSMIT COMMAND..."
+                                    className="w-full bg-black/40 border border-gold9/30 rounded p-2 text-xs text-gold9 focus:outline-none focus:border-gold9 focus:ring-1 focus:ring-gold9/50 transition-all placeholder-gold9/50"
+                                />
                             </div>
                         </motion.div>
                     </div>
@@ -492,7 +525,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
 
                 {/* FLEET AGENT DETAIL MODAL */}
                 {selectedFleetAgent && (
-                    <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
+                    <div className="absolute inset-0 z-[150] bg-black/80  flex items-center justify-center p-6">
                         <div className="bg-[#111] border border-gold9/30 rounded-xl w-full max-w-md shadow-[0_0_50px_rgba(255,215,0,0.1)] flex flex-col max-h-full">
                             <div className="p-4 border-b border-gold9/20 flex justify-between items-center bg-gold9/5">
                                 <h2 className="text-lg font-bold text-gold9 font-mono flex items-center gap-2">
@@ -535,7 +568,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
 
                 {/* TASK DETAIL MODAL */}
                 {selectedTask && (
-                    <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
+                    <div className="absolute inset-0 z-[150] bg-black/80  flex items-center justify-center p-6">
                         <div className="bg-[#111] border border-gold9/30 rounded-xl w-full max-w-lg shadow-[0_0_50px_rgba(255,215,0,0.1)] flex flex-col max-h-full">
                             <div className="p-4 border-b border-gold9/20 flex justify-between items-center bg-gold9/5">
                                 <h2 className="text-lg font-bold text-gold9 font-mono flex items-center gap-2">
@@ -549,7 +582,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto scrollbar-hide select-text">
                                 <div>
                                     <span className="text-gold9/40 block text-xs mb-1">PROMPT</span>
-                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap select-text">{selectedTask.prompt}</div>
+                                    <div className="text-gray-200 bg-black/80 p-3 rounded border border-white/5 whitespace-pre-wrap select-text">{selectedTask.prompt}</div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -576,6 +609,14 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                                         <span className="text-gray-200">{selectedTask.depends_on || 'None'}</span>
                                     </div>
                                 </div>
+                                {selectedTask.status === 'failed' && selectedTask.error_message && (
+                                    <div className="mt-4">
+                                        <span className="text-red-500/80 font-bold block text-xs mb-1 tracking-widest">FAILURE REASON</span>
+                                        <div className="bg-red-500/20 text-red-400 p-3 rounded border border-red-500/30 whitespace-pre-wrap select-text font-mono text-xs">
+                                            {selectedTask.error_message}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -583,7 +624,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
 
                 {/* AUTH MODAL */}
                 {showAuthModal && (
-                    <div className="absolute inset-0 z-[150] bg-black/80 backdrop-blur-md flex items-center justify-center">
+                    <div className="absolute inset-0 z-[150] bg-black/80  flex items-center justify-center">
                         <div className="bg-black border border-gold9 p-6 rounded-xl w-[400px] shadow-[0_0_50px_rgba(255,215,0,0.2)]">
                             <h2 className="text-xl font-bold text-gold9 mb-4 flex items-center gap-2">
                                 <Shield size={18} />
@@ -679,7 +720,7 @@ const SessionDetailModal = ({ session, onClose, socket, onViewArtifact }) => {
     };
 
     return (
-        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-8">
+        <div className="absolute inset-0 z-50 bg-black/80  flex items-center justify-center p-8">
             <div className="bg-black border border-gold9 rounded-xl w-full max-w-4xl h-[80vh] flex flex-col relative shadow-[0_0_50px_rgba(255,215,0,0.2)]">
                 {/* Header */}
                 <div className="flex justify-between items-center p-4 border-b border-gold9/20 bg-gold9/5">
@@ -694,7 +735,7 @@ const SessionDetailModal = ({ session, onClose, socket, onViewArtifact }) => {
                 </div>
 
                 {/* Chat Area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-black/50 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-black/80 scrollbar-hide">
                     {loading ? (
                         <div className="text-center text-gold9/40 py-20 animate-pulse">Initializing Uplink...</div>
                     ) : (
@@ -740,7 +781,7 @@ const ActivityItem = ({ activity, onViewArtifact }) => {
     if (activity.agentMessage) {
         return (
             <div className="flex justify-start">
-                <div className="max-w-[80%] p-4 rounded-xl border border-gold9/30 bg-gold9/5 text-gold9 backdrop-blur-sm shadow-[0_0_15px_rgba(255,215,0,0.05)]">
+                <div className="max-w-[80%] p-4 rounded-xl border border-gold9/30 bg-gold9/5 text-gold9  shadow-[0_0_15px_rgba(255,215,0,0.05)]">
                     <div className="flex items-center gap-2 mb-2 border-b border-gold9/10 pb-1">
                         <Cpu size={12} />
                         <span className="text-[10px] font-bold tracking-widest opacity-70">JULES AGENT</span>
@@ -758,7 +799,7 @@ const ActivityItem = ({ activity, onViewArtifact }) => {
     if (activity.userMessage) {
         return (
             <div className="flex justify-end">
-                <div className="max-w-[80%] p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 text-blue-200 backdrop-blur-sm">
+                <div className="max-w-[80%] p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 text-blue-200 ">
                     <div className="flex items-center gap-2 mb-2 border-b border-blue-500/10 pb-1 justify-end">
                         <span className="text-[10px] opacity-40 mr-auto">{new Date(activity.createTime || Date.now()).toLocaleTimeString()}</span>
                         <span className="text-[10px] font-bold tracking-widest opacity-70">OPERATOR</span>
@@ -880,7 +921,7 @@ const ActivityItem = ({ activity, onViewArtifact }) => {
 
 const ArtifactModal = ({ artifact, onClose }) => {
     return (
-        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-8">
+        <div className="absolute inset-0 z-[60] bg-black/80  flex items-center justify-center p-8">
             <div className="bg-black border border-green-500/50 rounded-xl w-full max-w-3xl max-h-[80vh] flex flex-col relative shadow-[0_0_50px_rgba(0,255,0,0.1)]">
                 <div className="flex justify-between items-center p-4 border-b border-green-500/20 bg-green-500/5">
                     <div>
@@ -1001,7 +1042,7 @@ const CommandModal = ({ onClose, socket }) => {
     };
 
     return (
-        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center">
+        <div className="absolute inset-0 z-50 bg-black/80  flex items-center justify-center">
             <div className="bg-black border border-gold9 p-6 rounded-xl w-[400px] relative shadow-[0_0_50px_rgba(255,215,0,0.2)]">
                 <button onClick={onClose} className="absolute top-2 right-2 text-gold9/50 hover:text-gold9">
                     ✕
@@ -1243,7 +1284,7 @@ const RepoDetailsModal = ({ repo, onClose, socket }) => {
     }
 
     return (
-        <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-8">
+        <div className="absolute inset-0 z-[70] bg-black/80  flex items-center justify-center p-8">
             <div className="bg-black border border-gold9 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col relative shadow-[0_0_50px_rgba(255,215,0,0.1)]">
                 <div className="flex justify-between items-center p-4 border-b border-gold9/20 bg-gold9/5">
                     <div>
@@ -1351,7 +1392,7 @@ const BranchReviewView = ({ repo, branch, socket, onBack, onClose }) => {
     }
 
     return (
-        <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="absolute inset-0 z-[70] bg-black/80  flex items-center justify-center p-4">
             <div className="bg-black border border-gold9 rounded-xl w-full max-w-6xl h-[90vh] flex flex-col relative shadow-[0_0_50px_rgba(255,215,0,0.1)]">
                 {/* Header */}
                 <div className="flex justify-between items-center p-4 border-b border-gold9/20 bg-gold9/5">
@@ -1375,7 +1416,7 @@ const BranchReviewView = ({ repo, branch, socket, onBack, onClose }) => {
                 {/* Content Split */}
                 <div className="flex-1 flex min-h-0 overflow-hidden">
                     {/* Left: File List */}
-                    <div className="w-1/3 border-r border-gold9/20 flex flex-col bg-black/50">
+                    <div className="w-1/3 border-r border-gold9/20 flex flex-col bg-black/80">
                         <div className="p-2 border-b border-gold9/10 text-xs font-bold text-gold9/40 tracking-widest uppercase">
                             Changed Files
                         </div>

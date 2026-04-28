@@ -53,7 +53,7 @@ const AuthLock = ({ socket, onAuthenticated, onAnimationComplete }) => {
             {/* Background Grid */}
             <div className={`absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] ${bgGradient} pointer-events-none transition-colors duration-[1500ms]`}></div>
 
-            <div className={`relative flex flex-col items-center gap-6 p-10 border ${borderColor}/30 rounded-lg bg-black/80 backdrop-blur-xl ${shadowColor} transition-all duration-[1500ms]`}>
+            <div className={`relative flex flex-col items-center gap-6 p-10 border ${borderColor}/30 rounded-lg bg-black/80  ${shadowColor} transition-all duration-[1500ms]`}>
                 <div className={`text-3xl font-bold tracking-[0.3em] uppercase drop-shadow-[0_0_10px_currentColor] flex items-center gap-4 ${themeColor} transition-colors duration-1000`}>
                     {isUnlocking ? <Unlock size={32} /> : <Lock size={32} />}
                     {isUnlocking ? "SYSTEM UNLOCKED" : "SYSTEM LOCKED"}

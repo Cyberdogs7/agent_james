@@ -89,7 +89,7 @@ const SettingsWindow = ({
     };
 
     return (
-        <div className="absolute top-20 right-10 bg-black/90 border border-gold9/50 p-4 rounded-lg z-50 w-80 backdrop-blur-xl shadow-[0_0_30px_rgba(255,215,0,0.2)]">
+        <div className="absolute top-20 right-10 bg-black/90 border border-gold9/50 p-4 rounded-lg z-50 w-80  shadow-[0_0_30px_rgba(255,215,0,0.2)]">
             <div className="flex justify-between items-center mb-4 border-b border-gold9/50 pb-2">
                 <h2 className="text-gold9 font-bold text-sm uppercase tracking-wider">Settings</h2>
                 <button onClick={onClose} className="text-gold8 hover:text-gold9">

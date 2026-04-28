@@ -160,6 +160,9 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                         if (agent.status === 'working') {
                             statusColor = 'bg-green-500';
                             statusGlow = 'animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.5)]';
+                        } else if (agent.status === 'needing_feedback') {
+                            statusColor = 'bg-yellow-500';
+                            statusGlow = 'animate-pulse shadow-[0_0_10px_rgba(234,179,8,0.5)]';
                         } else if (agent.status === 'stuck' || agent.status === 'error') {
                             statusColor = 'bg-red-500';
                             statusGlow = 'shadow-[0_0_10px_rgba(239,68,68,0.5)]';
@@ -170,7 +173,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 key={agent.id}
                                 draggable={true}
                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/40 border border-gold9/20 hover:border-gold9 hover:bg-gold9/10 cursor-pointer active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
+                                className={`flex items-center justify-between p-2 mb-2 rounded bg-black/80 border border-gold9/20 hover:border-gold9 hover:bg-gold9/10 cursor-pointer active:cursor-grabbing transition-colors ${draggedAgentId === agent.id ? 'opacity-50' : ''}`}
                                 onClick={() => onAgentClick && onAgentClick(agent)}
                             >
                                 <div className="flex flex-col">
@@ -206,7 +209,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                         <p className="text-gold9/60 text-sm mt-1">Drag agents from the pool to allocate resources.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-2 cursor-pointer bg-black/40 border border-gold9/20 px-3 py-1.5 rounded-lg hover:border-gold9/50 transition-colors">
+                        <label className="flex items-center gap-2 cursor-pointer bg-black/80 border border-gold9/20 px-3 py-1.5 rounded-lg hover:border-gold9/50 transition-colors">
                             <input
                                 type="checkbox"
                                 checked={autoMergeMaster}
@@ -247,7 +250,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 </div>
 
                                 {/* Active Agents in Repo */}
-                                <div className="p-4 border-b border-gold9/20 min-h-[100px] bg-black/40">
+                                <div className="p-4 border-b border-gold9/20 min-h-[100px] bg-black/80">
                                     <div className="text-[10px] font-bold text-gold9/40 mb-2 tracking-widest">ASSIGNED UNIT</div>
                                     <div className="flex flex-wrap gap-2">
                                         {repoAgents.map(agent => (
@@ -255,13 +258,13 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 key={agent.id}
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex flex-col cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : ''}`}
+                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex flex-col cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : (agent.status === 'needing_feedback' ? 'shadow-[0_0_8px_rgba(234,179,8,0.15)] border-yellow-500/30' : '')}`}
                                                 onClick={() => onAgentClick && onAgentClick(agent)}
                                             >
                                                 <div className="flex items-center gap-2 text-xs font-mono">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-gold9 animate-pulse' : (agent.status === 'stuck' ? 'bg-red-500' : 'bg-gray-500')}`} />
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-gold9 animate-pulse' : (agent.status === 'needing_feedback' ? 'bg-yellow-500 animate-pulse' : (agent.status === 'stuck' ? 'bg-red-500' : 'bg-gray-500'))}`} />
                                                     <span>{agent.id.replace('agent_', 'A-')}</span>
-                                                    {agent.status === 'working' && (
+                                                    {(agent.status === 'working' || agent.status === 'needing_feedback') && (
                                                         <span className="text-[9px] text-gold9 ml-1">{formatTime(agent.last_active)}</span>
                                                     )}
                                                 </div>
@@ -313,7 +316,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 ))}
                                             </div>
                                         )}
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 items-start">
                                             <input
                                                 type="file"
                                                 id={`file-upload-${repo.name}`}
@@ -328,13 +331,17 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             >
                                                 <Paperclip size={18} />
                                             </button>
-                                            <input
-                                                type="text"
+                                            <textarea
                                                 value={newTaskPrompts[repo.name] || ''}
                                                 onChange={(e) => setNewTaskPrompts({...newTaskPrompts, [repo.name]: e.target.value})}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleAddTask(repo.name)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleAddTask(repo.name);
+                                                    }
+                                                }}
                                                 placeholder="Assign new task..."
-                                                className="flex-1 bg-transparent border-b-2 border-gold9/20 focus:border-gold9 text-sm text-gray-100 font-mono px-3 py-2 outline-none transition-colors placeholder-[#474746]"
+                                                className="flex-1 bg-transparent border-b-2 border-gold9/20 focus:border-gold9 text-sm text-gray-100 font-mono px-3 py-2 outline-none transition-all placeholder-[#474746] resize-none min-h-[40px] focus:min-h-[96px] scrollbar-hide"
                                             />
                                             <button
                                                 onClick={() => handleAddTask(repo.name)}
@@ -372,6 +379,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 taskBg = 'bg-cyan-500/5';
                                                 statusText = `IN PROGRESS (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
                                                 statusTextColor = 'text-cyan-400';
+                                            } else if (task.status === 'needing_feedback') {
+                                                taskBorder = 'border-yellow-500/50';
+                                                taskBg = 'bg-yellow-500/10';
+                                                statusText = `NEEDS FEEDBACK (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusTextColor = 'text-yellow-400 animate-pulse font-bold';
                                             } else if (task.status === 'completed') {
                                                 taskBorder = 'border-green-500/30';
                                                 taskBg = 'bg-green-500/5';

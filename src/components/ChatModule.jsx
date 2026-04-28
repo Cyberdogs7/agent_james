@@ -36,7 +36,7 @@ const ChatModule = ({
             id="chat"
             onMouseDown={onMouseDown}
             className={`absolute px-6 py-4 pointer-events-auto ${activeDragElement === "chat" ? "" : "transition-all duration-200"}
-            backdrop-blur-xl bg-black/40 border border-gold9/20 shadow-2xl rounded-2xl
+             bg-black/80 border border-gold9/20 shadow-2xl rounded-2xl
             ${isModularMode ? (activeDragElement === 'chat' ? 'ring-2 ring-green-500' : 'ring-1 ring-yellow-500/30') : ''}
         `}
             style={{
@@ -47,7 +47,6 @@ const ChatModule = ({
                 height: height
             }}
         >
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-5 pointer-events-none mix-blend-overlay"></div>
 
             <div
                 className="flex flex-col gap-3 overflow-y-auto mb-4 scrollbar-hide mask-image-gradient relative z-10"
@@ -82,7 +81,7 @@ const ChatModule = ({
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleSend}
                     placeholder="INITIALIZE COMMAND..."
-                    className="flex-1 bg-black/40 border border-gold9/30 rounded-lg p-3 text-gold9 focus:outline-none focus:border-gold9 focus:ring-1 focus:ring-gold9/50 transition-all placeholder-gold9/50 backdrop-blur-sm"
+                    className="flex-1 bg-black/80 border border-gold9/30 rounded-lg p-3 text-gold9 focus:outline-none focus:border-gold9 focus:ring-1 focus:ring-gold9/50 transition-all placeholder-gold9/50 "
                 />
             </div>
             {isModularMode && <div className={`absolute -top-6 left-0 text-xs font-bold tracking-widest ${activeDragElement === 'chat' ? 'text-green-500' : 'text-yellow-500/50'}`}>CHAT MODULE</div>}

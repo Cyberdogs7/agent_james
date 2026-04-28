@@ -293,11 +293,22 @@ class AudioLoop:
                     fleet_manager.update_task_status(repo_name, task_id, "completed")
                     fleet_manager.update_agent_session(agent_id, None, "idle")
                 elif new_state == "FAILED":
-                    fleet_manager.update_task_status(repo_name, task_id, "failed")
+                    fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
                     fleet_manager.update_agent_session(agent_id, None, "error")
-                elif new_state in ["QUEUED", "PLANNING", "AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK", "IN_PROGRESS"]:
+                elif new_state in ["QUEUED", "PLANNING", "IN_PROGRESS"]:
                     fleet_manager.update_task_status(repo_name, task_id, "in_progress")
                     fleet_manager.update_agent_session(agent_id, session_id, "working")
+                elif new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
+                    fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
+                    fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
+
+                    if self.session:
+                        try:
+                            message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
+                            asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
+                        except Exception as e:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
                 elif new_state == "PAUSED":
                     fleet_manager.update_task_status(repo_name, task_id, "in_progress")
                     fleet_manager.update_agent_session(agent_id, session_id, "stuck")
@@ -1865,14 +1876,22 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 except queue.Empty:
                     pass
 
-                try:
-                    while True:
-                        m_data = self.music_queue.get_nowait()
-                        if getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
-                            continue # Discard if paused
-                        m_buffer.extend(m_data)
-                except queue.Empty:
-                    pass
+                is_paused = getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)
+
+                if is_paused:
+                    m_buffer.clear()
+                    try:
+                        while True:
+                            self.music_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                else:
+                    try:
+                        while True:
+                            m_data = self.music_queue.get_nowait()
+                            m_buffer.extend(m_data)
+                    except queue.Empty:
+                        pass
 
                 # If both buffers are empty, wait a bit
                 if not v_buffer and not m_buffer:
@@ -1880,12 +1899,12 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         v_data = self.audio_in_queue.get(timeout=0.05)
                         v_buffer.extend(v_data)
                     except queue.Empty:
-                        try:
-                            m_data = self.music_queue.get(timeout=0.05)
-                            if not (getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)):
+                        if not is_paused:
+                            try:
+                                m_data = self.music_queue.get(timeout=0.05)
                                 m_buffer.extend(m_data)
-                        except queue.Empty:
-                            pass
+                            except queue.Empty:
+                                pass
 
                 now = time.time()
                 if v_buffer:

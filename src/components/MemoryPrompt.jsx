@@ -10,9 +10,8 @@ const MemoryPrompt = ({ onConfirm, onDeny, onCancel }) => {
     }, []);
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 ">
             <div className="bg-black/90 border border-cyan-500/50 rounded-2xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(6,182,212,0.3)] text-center relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay"></div>
 
                 <Save className="w-12 h-12 text-cyan-400 mx-auto mb-4 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)]" />
 
@@ -28,7 +27,7 @@ const MemoryPrompt = ({ onConfirm, onDeny, onCancel }) => {
                         type="text"
                         value={filename}
                         onChange={(e) => setFilename(e.target.value)}
-                        className="w-full bg-black/50 border border-cyan-700/50 rounded-lg p-3 text-cyan-100 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 font-mono text-sm"
+                        className="w-full bg-black/80 border border-cyan-700/50 rounded-lg p-3 text-cyan-100 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 font-mono text-sm"
                         placeholder="Enter filename..."
                     />
                     <div className="absolute right-3 top-[34px] text-cyan-800 text-xs pointer-events-none">.txt</div>
