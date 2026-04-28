@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
@@ -165,7 +165,17 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                         <h1 className="text-2xl font-black tracking-tight text-white font-mono">KINETIC COMMAND</h1>
                         <p className="text-gold9/60 text-sm mt-1">Drag agents from the pool to allocate resources.</p>
                     </div>
-                    {/* Could add a 'New Repo' button here later */}
+                    <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer bg-black/40 border border-gold9/20 px-3 py-1.5 rounded-lg hover:border-gold9/50 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={autoMergeMaster}
+                                onChange={(e) => onToggleAutoMergeMaster && onToggleAutoMergeMaster(e.target.checked)}
+                                className="accent-gold9 bg-black border-gold9"
+                            />
+                            <span className="text-xs font-mono text-gold9 uppercase tracking-wider">Auto Merge</span>
+                        </label>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
