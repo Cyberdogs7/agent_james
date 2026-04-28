@@ -514,7 +514,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             <div className="p-6 space-y-4 font-mono text-sm overflow-y-auto scrollbar-hide">
                                 <div>
                                     <span className="text-gold9/40 block text-xs mb-1">PROMPT</span>
-                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap">{selectedTask.prompt}</div>
+                                    <div className="text-gray-200 bg-black/40 p-3 rounded border border-white/5 whitespace-pre-wrap select-text">{selectedTask.prompt}</div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
