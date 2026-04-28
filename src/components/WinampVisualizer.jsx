@@ -1,11 +1,21 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { X } from "lucide-react";
 
+const VIS_MODES = [
+  "spectrum",
+  "oscilloscope",
+  "bars",
+  "mirrored",
+  "circle",
+  "wave_filled",
+  "rainbow"
+];
+
 const WinampVisualizer = ({ socket, onClose }) => {
   const canvasRef = useRef(null);
   const [visData, setVisData] = useState(new Array(64).fill(0));
   const [status, setStatus] = useState({ status: "stopped", track: null });
-  const [mode, setMode] = useState("spectrum"); // 'spectrum' or 'oscilloscope'
+  const [mode, setMode] = useState("spectrum");
   const animationRef = useRef(null);
   const dataRef = useRef(new Array(64).fill(0));
   const smoothDataRef = useRef(new Array(64).fill(0));
@@ -96,7 +106,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
           ctx.fillStyle = "#FFFFFF";
           ctx.fillRect(i * barWidth, h - barHeight - 2, barWidth - 1, 1);
         }
-      } else {
+      } else if (mode === "oscilloscope") {
         // Oscilloscope
         ctx.beginPath();
         ctx.strokeStyle = "#00FF00";
@@ -115,6 +125,105 @@ const WinampVisualizer = ({ socket, onClose }) => {
           x += sliceWidth;
         }
         ctx.stroke();
+      } else if (mode === "bars") {
+        const numBars = data.length;
+        const spacing = 2;
+        const barWidth = (w - (numBars - 1) * spacing) / numBars;
+
+        for (let i = 0; i < numBars; i++) {
+          const percent = data[i] / 255;
+          const barHeight = percent * h;
+
+          const hue = (i / numBars) * 360;
+          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          ctx.fillRect(i * (barWidth + spacing), h - barHeight, barWidth, barHeight);
+        }
+      } else if (mode === "mirrored") {
+        const numBars = data.length;
+        const barWidth = w / numBars;
+        const midY = h / 2;
+
+        for (let i = 0; i < numBars; i++) {
+          const percent = data[i] / 255;
+          const barHeight = percent * (h / 2);
+
+          const r = 0;
+          const g = Math.floor(255 * (1 - percent));
+          const b = 255;
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+          ctx.fillRect(i * barWidth, midY - barHeight, barWidth - 1, barHeight * 2);
+        }
+      } else if (mode === "circle") {
+        const numBars = data.length;
+        const centerX = w / 2;
+        const centerY = h / 2;
+        const radius = Math.min(w, h) / 4;
+
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.strokeStyle = "#FF00FF";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        for (let i = 0; i < numBars; i++) {
+          const angle = (i / numBars) * Math.PI * 2;
+          const percent = data[i] / 255;
+          const length = percent * radius * 1.5;
+
+          const x1 = centerX + Math.cos(angle) * radius;
+          const y1 = centerY + Math.sin(angle) * radius;
+          const x2 = centerX + Math.cos(angle) * (radius + length);
+          const y2 = centerY + Math.sin(angle) * (radius + length);
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.strokeStyle = `hsl(${(i / numBars) * 360}, 100%, 50%)`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      } else if (mode === "wave_filled") {
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(0, 255, 0, 0.4)";
+        ctx.strokeStyle = "#00FF00";
+        ctx.lineWidth = 2;
+
+        const sliceWidth = (w * 1.0) / data.length;
+        let x = 0;
+
+        ctx.moveTo(0, h);
+
+        for (let i = 0; i < data.length; i++) {
+          const v = data[i] / 128.0;
+          const y = (v * h) / 2;
+
+          ctx.lineTo(x, y);
+
+          x += sliceWidth;
+        }
+
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else if (mode === "rainbow") {
+        const barWidth = w / data.length;
+        const time = Date.now() / 1000;
+
+        for (let i = 0; i < data.length; i++) {
+          const value = data[i];
+          const percent = value / 255;
+          const barHeight = percent * h;
+
+          const hue = ((i / data.length) * 360 + time * 100) % 360;
+          ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+          ctx.fillRect(i * barWidth, h - barHeight, barWidth - 1, barHeight);
+
+          // Peak
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(i * barWidth, h - barHeight - 2, barWidth - 1, 1);
+        }
       }
 
       animationRef.current = requestAnimationFrame(draw);
@@ -169,9 +278,12 @@ const WinampVisualizer = ({ socket, onClose }) => {
         </div>
         <div className="flex gap-1">
           <button
-            onClick={() =>
-              setMode((m) => (m === "spectrum" ? "oscilloscope" : "spectrum"))
-            }
+            onClick={() => {
+              setMode((m) => {
+                const nextIdx = (VIS_MODES.indexOf(m) + 1) % VIS_MODES.length;
+                return VIS_MODES[nextIdx];
+              });
+            }}
             className="hover:text-white"
             title="Toggle Mode"
             aria-label="Toggle Mode"
@@ -197,9 +309,12 @@ const WinampVisualizer = ({ socket, onClose }) => {
         <canvas
           ref={canvasRef}
           className="w-full h-full"
-          onClick={() =>
-            setMode((m) => (m === "spectrum" ? "oscilloscope" : "spectrum"))
-          }
+          onClick={() => {
+            setMode((m) => {
+              const nextIdx = (VIS_MODES.indexOf(m) + 1) % VIS_MODES.length;
+              return VIS_MODES[nextIdx];
+            });
+          }}
         />
 
         {/* Track Info Overlay */}
