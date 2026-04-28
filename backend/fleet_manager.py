@@ -206,11 +206,11 @@ class FleetManager:
         if repo_name in self.repos:
             for task in self.repos[repo_name]["queue"]:
                 if task["id"] == task_id:
+                    # If the task was assigned to an agent that errored out, reset its state to idle
                     agent_id_failed = task.get("agent_id")
                     if agent_id_failed and agent_id_failed in self.agents:
                         if self.agents[agent_id_failed]["status"] == "error":
-                            self.agents[agent_id_failed]["status"] = "idle"
-                            self.agents[agent_id_failed]["error"] = None
+                            self.update_agent_session(agent_id_failed, None, "idle")
 
                     task["status"] = "pending"
                     task["agent_id"] = None
