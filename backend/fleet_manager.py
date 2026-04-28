@@ -154,6 +154,21 @@ class FleetManager:
             self.repos[repo_name] = {"name": repo_name, "queue": [], "is_active": False}
             self.save_state()
 
+    def reorder_repos(self, ordered_repo_names):
+        new_repos = {}
+        # First, add the repos in the requested order
+        for name in ordered_repo_names:
+            if name in self.repos:
+                new_repos[name] = self.repos[name]
+
+        # Then, append any remaining repos that weren't in the ordered list
+        for name, data in self.repos.items():
+            if name not in new_repos:
+                new_repos[name] = data
+
+        self.repos = new_repos
+        self.save_state()
+
     def add_task_to_queue(self, repo_name, prompt, depends_on=None, attachments=None):
         self.ensure_repo(repo_name)
         task_id = f"task_{int(time.time()*1000)}"
@@ -192,10 +207,10 @@ class FleetManager:
             for task in self.repos[repo_name]["queue"]:
                 if task["id"] == task_id:
                     # If the task was assigned to an agent that errored out, reset its state to idle
-                    agent_id = task.get("agent_id")
-                    if agent_id and agent_id in self.agents:
-                        if self.agents[agent_id]["status"] == "error":
-                            self.update_agent_session(agent_id, None, "idle")
+                    agent_id_failed = task.get("agent_id")
+                    if agent_id_failed and agent_id_failed in self.agents:
+                        if self.agents[agent_id_failed]["status"] == "error":
+                            self.update_agent_session(agent_id_failed, None, "idle")
 
                     task["status"] = "pending"
                     task["agent_id"] = None

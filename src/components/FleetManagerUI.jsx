@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw, Paperclip } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster, onReorderRepos }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
@@ -18,7 +18,20 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         }
     });
     const repos = Array.from(allReposMap.values());
-    const activeRepos = repos.filter(r => r.is_active);
+
+    // Order active repos based on stateRepos order
+    const activeRepos = [];
+    stateRepos.forEach(r => {
+        if (allReposMap.has(r.name) && allReposMap.get(r.name).is_active) {
+            activeRepos.push(allReposMap.get(r.name));
+        }
+    });
+    repos.forEach(r => {
+        if (r.is_active && !activeRepos.find(ar => ar.name === r.name)) {
+            activeRepos.push(r);
+        }
+    });
+
     const inactiveRepos = repos.filter(r => !r.is_active);
 
     // Derived state
@@ -32,12 +45,14 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
     const [draggedRepoName, setDraggedRepoName] = useState(null);
 
     const handleDragStart = (e, agentId) => {
+        e.stopPropagation();
         setDraggedAgentId(agentId);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', agentId);
     };
 
     const handleRepoDragStart = (e, repoName) => {
+        e.stopPropagation();
         setDraggedRepoName(repoName);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('application/repo', repoName);
@@ -50,6 +65,22 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
     const handleDrop = (e, repoName) => {
         e.preventDefault();
+        e.stopPropagation();
+
+        const draggedRepo = e.dataTransfer.getData('application/repo');
+        if (draggedRepo && draggedRepo !== repoName) {
+            const currentIndex = activeRepos.findIndex(r => r.name === draggedRepo);
+            const targetIndex = activeRepos.findIndex(r => r.name === repoName);
+            if (currentIndex !== -1 && targetIndex !== -1 && onReorderRepos) {
+                const newOrder = [...activeRepos.map(r => r.name)];
+                newOrder.splice(currentIndex, 1);
+                newOrder.splice(targetIndex, 0, draggedRepo);
+                onReorderRepos(newOrder);
+            }
+            setDraggedRepoName(null);
+            return;
+        }
+
         const agentId = e.dataTransfer.getData('text/plain');
         if (agentId && repoName) {
             onAssign(agentId, repoName);
@@ -234,7 +265,10 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                             <motion.div
                                 layoutId={repo.name}
                                 key={repo.name}
-                                className="bg-black/20 border border-gold9/20 rounded-lg overflow-hidden flex flex-col shadow-xl"
+                                draggable={true}
+                                onDragStart={(e) => handleRepoDragStart(e, repo.name)}
+                                onDragEnd={() => setDraggedRepoName(null)}
+                                className={`bg-black/20 border border-gold9/20 rounded-lg overflow-hidden flex flex-col shadow-xl cursor-grab active:cursor-grabbing ${draggedRepoName === repo.name ? 'opacity-50' : ''}`}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, repo.name)}
                             >

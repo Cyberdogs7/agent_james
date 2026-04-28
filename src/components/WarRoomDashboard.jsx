@@ -233,7 +233,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                 onClick={() => openSessionDetails(session)}
                 className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-all hover:-translate-y-0.5 hover:shadow-[0_4px_15px_rgba(255,215,0,0.1)] group/item mb-2 last:mb-0"
             >
-                <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500')}`}></div>
+                <div className={`w-2 h-2 rounded-full ${session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : (session.state === 'AWAITING_USER_FEEDBACK' || session.state === 'AWAITING_PLAN_APPROVAL' || session.state === 'needing_feedback' ? 'bg-yellow-500 animate-pulse' : (session.state === 'COMPLETED' ? 'bg-blue-500' : 'bg-gray-500'))}`}></div>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                         {role && (
@@ -261,19 +261,9 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
     };
 
 
-    // Calculate stats from fleetState
-    const activeAgentsCount = fleetState.agents.filter(a => a.status === 'working').length;
-    let totalTasks = 0;
-    let completedTasks = 0;
-    fleetState.repos.forEach(repo => {
-        if (repo.queue) {
-            totalTasks += repo.queue.length;
-            repo.queue.forEach(task => {
-                if (task.status === 'completed') completedTasks++;
-            });
-        }
-    });
-    const successRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    // Extract stats from system_stats provided by the backend
+    const activeAgentsCount = system_stats.active_agents;
+    const successRate = system_stats.success_rate;
 
     return (
         <AnimatePresence>
@@ -318,6 +308,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                         <button
                             onClick={() => setShowEditor(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                            style={{ WebkitAppRegion: 'no-drag' }}
                         >
                             <Cpu size={14} />
                             EDITOR
@@ -326,6 +317,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                             data-testid="open-command-modal"
                             onClick={() => setShowCommandModal(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                            style={{ WebkitAppRegion: 'no-drag' }}
                         >
                             <Terminal size={14} />
                             COMMAND
@@ -334,6 +326,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                         <button
                             onClick={onClose}
                             className="px-4 py-2 border border-gold9/30 hover:bg-gold9/10 hover:border-gold9 rounded text-xs tracking-widest transition-all"
+                            style={{ WebkitAppRegion: 'no-drag' }}
                         >
                             CLOSE HUD
                         </button>
@@ -356,6 +349,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                             onRetryTask={(repoName, taskId) => socket.emit('retry_task', { repo_name: repoName, task_id: taskId })}
                             onClearCompleted={(repoName) => socket.emit('clear_completed_tasks', { repo_name: repoName })}
                             onToggleRepoActive={(repoName, isActive) => socket.emit('set_repo_active_state', { repo_name: repoName, is_active: isActive })}
+                            onReorderRepos={(orderedNames) => socket.emit('reorder_repos', { ordered_names: orderedNames })}
                             onAgentClick={setSelectedFleetAgent}
                             onTaskClick={(task, repoName) => setSelectedTask({...task, repoName})}
                             autoMergeMaster={autoMergeMaster}

@@ -302,9 +302,11 @@ class AudioLoop:
                     fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
                     fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
 
+                    message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
+                    self.notify_user(message, duration=20000)
+
                     if self.session:
                         try:
-                            message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
                             asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
@@ -1862,6 +1864,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         last_voice_time = 0
         DUCK_DURATION = 1.0 # Keep ducking for 1 sec after voice stops
         DUCK_VOLUME = 0.15 # 85% reduction
+        MAX_CHUNK_SIZE = 4096 # Process in small chunks to remain responsive to pause/stop
 
         v_buffer = bytearray()
         m_buffer = bytearray()
@@ -1917,7 +1920,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 mixed_data = b""
 
                 if v_buffer and m_buffer:
-                    min_len = min(len(v_buffer), len(m_buffer))
+                    min_len = min(len(v_buffer), len(m_buffer), MAX_CHUNK_SIZE)
                     min_len = (min_len // 2) * 2 # 16-bit align
 
                     if min_len > 0:
@@ -1934,12 +1937,14 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         mixed_data = audioop.add(v_chunk, m_chunk, 2)
 
                 elif v_buffer:
-                    v_len = (len(v_buffer) // 2) * 2
+                    v_len = min(len(v_buffer), MAX_CHUNK_SIZE)
+                    v_len = (v_len // 2) * 2
                     if v_len > 0:
                         mixed_data = bytes(v_buffer[:v_len])
                         del v_buffer[:v_len]
                 elif m_buffer:
-                    m_len = (len(m_buffer) // 2) * 2
+                    m_len = min(len(m_buffer), MAX_CHUNK_SIZE)
+                    m_len = (m_len // 2) * 2
                     if m_len > 0:
                         m_chunk = bytes(m_buffer[:m_len])
                         del m_buffer[:m_len]

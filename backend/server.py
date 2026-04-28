@@ -2237,18 +2237,36 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         session_id = session.get('name')
                         fleet_manager.update_agent_session(current_agent_id, session_id, "working")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
-                    else:
-                        if audio_loop:
-                            audio_loop.notify_user(f"Jules task in {repo_name} failed to start.")
-                        fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error_message="Jules task failed to start.")
-                        fleet_manager.update_agent_session(current_agent_id, None, "error")
-                        await sio.emit('fleet_state_update', fleet_manager.get_state())
+                        return
+
                 except Exception as e:
+                    print(f"[SERVER] Error during spawn_agent: {e}")
+
+                # If we get here, spawn_agent either returned None or raised an exception
+                state = fleet_manager.get_state()
+                agent_info = next((a for a in state["agents"] if a["id"] == current_agent_id), None)
+                current_api_key = agent_info.get("api_key") if agent_info else None
+
+                # Try to find an alternate idle agent with a different API key
+                alternate_agent = next((a for a in state["agents"] if a["status"] == "idle" and a.get("api_key") and a.get("api_key") != current_api_key), None)
+
+                if alternate_agent:
+                    print(f"[SERVER] Jules task failed to start for {current_agent_id}. Retrying with alternate agent {alternate_agent['id']} using a different key.")
                     if audio_loop:
-                        audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {e}")
-                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error_message=str(e))
+                        audio_loop.notify_user(f"Jules task in {repo_name} failed to start. Retrying with a different key.")
                     fleet_manager.update_agent_session(current_agent_id, None, "error")
-                    await sio.emit('error', {'msg': f"Failed to start task for {current_agent_id}: {e}"})
+                    fleet_manager.retry_task(repo_name, current_task["id"])
+                    fleet_manager.unassign_agent(current_agent_id)
+                    fleet_manager.assign_agent(alternate_agent["id"], repo_name)
+                    await sio.emit('fleet_state_update', fleet_manager.get_state())
+                    await check_and_start_next_task(repo_name, alternate_agent["id"])
+                else:
+                    err_msg = "spawn_agent failed and no alternate keys available."
+                    if audio_loop:
+                        audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {err_msg}")
+                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error_message=err_msg)
+                    fleet_manager.update_agent_session(current_agent_id, None, "error")
+                    await sio.emit('error', {'msg': f"Failed to start task for {current_agent_id}: {err_msg}"})
                     await sio.emit('fleet_state_update', fleet_manager.get_state())
 
             return run_spawn
@@ -2263,6 +2281,13 @@ async def set_repo_active_state(sid, data):
     is_active = data.get('is_active')
     if repo_name is not None and is_active is not None:
         fleet_manager.set_repo_active(repo_name, is_active)
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+@sio.event
+async def reorder_repos(sid, data):
+    ordered_names = data.get('ordered_names')
+    if ordered_names is not None and isinstance(ordered_names, list):
+        fleet_manager.reorder_repos(ordered_names)
         await sio.emit('fleet_state_update', fleet_manager.get_state())
 
 @sio.event

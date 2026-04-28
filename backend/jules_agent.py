@@ -104,8 +104,15 @@ class JulesAgent:
             # API requires githubRepoContext for github sources
             if "sources/github/" in source_context["source"]:
                 source_context["githubRepoContext"] = {}
-                if starting_branch:
-                    source_context["githubRepoContext"]["startingBranch"] = starting_branch
+
+                # Extract branch from source if not explicitly provided
+                if not starting_branch:
+                    if "/branches/" in source_context["source"]:
+                        starting_branch = source_context["source"].split("/branches/")[-1]
+                    else:
+                        starting_branch = "master"
+
+                source_context["githubRepoContext"]["startingBranch"] = starting_branch
         
         # Sanitize title: remove newlines and limit length
         clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
