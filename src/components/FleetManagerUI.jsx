@@ -76,6 +76,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
 
     const [newTaskPrompts, setNewTaskPrompts] = useState({});
     const [newTaskDependencies, setNewTaskDependencies] = useState({});
+    const [expandedQueues, setExpandedQueues] = useState({});
 
     const handleAddTask = (repoName) => {
         const prompt = newTaskPrompts[repoName];
@@ -227,14 +228,22 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                 <div className="p-4 flex-1 flex flex-col bg-black/20">
                                     <div className="text-[10px] font-bold text-gold9/40 mb-3 tracking-widest flex justify-between items-center">
                                         <span>TASK QUEUE ({repo.queue?.length || 0})</span>
-                                        {repo.queue?.some(t => t.status === 'completed') && (
+                                        <div className="flex gap-2">
                                             <button
-                                                onClick={() => onClearCompleted && onClearCompleted(repo.name)}
+                                                onClick={() => setExpandedQueues(prev => ({ ...prev, [repo.name]: !prev[repo.name] }))}
                                                 className="text-[9px] bg-gold9/5 hover:bg-[#2A2A2A] text-gold9/60 px-2 py-1 rounded transition-colors"
                                             >
-                                                CLEAR COMPLETED
+                                                {expandedQueues[repo.name] ? 'COLLAPSE' : 'EXPAND'}
                                             </button>
-                                        )}
+                                            {repo.queue?.some(t => t.status === 'completed') && (
+                                                <button
+                                                    onClick={() => onClearCompleted && onClearCompleted(repo.name)}
+                                                    className="text-[9px] bg-gold9/5 hover:bg-[#2A2A2A] text-gold9/60 px-2 py-1 rounded transition-colors"
+                                                >
+                                                    CLEAR COMPLETED
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="flex flex-col gap-2 mb-4">
@@ -270,7 +279,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                         )}
                                     </div>
 
-                                    <div className="flex-1 overflow-y-auto space-y-2 max-h-48 scrollbar-hide">
+                                    <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-hide ${expandedQueues[repo.name] ? 'max-h-[800px]' : 'max-h-48'}`}>
                                         {repo.queue?.map((task, i) => {
                                             let taskBorder = 'border-transparent';
                                             let taskBg = 'bg-gold9/5';
