@@ -335,23 +335,27 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                     <div className="flex-1 overflow-y-auto space-y-2 max-h-48 scrollbar-hide">
                                         {repo.queue?.map((task, i) => {
                                             let taskBorder = 'border-transparent';
-                                            let taskBg = 'bg-gold9/5';
+                                            let taskBg = 'bg-gray-500/5';
                                             let statusText = 'PENDING';
                                             let textStyle = 'text-gray-300';
+                                            let statusTextColor = 'text-gray-400';
 
                                             if (task.status === 'in_progress') {
-                                                taskBorder = 'border-gold9/30';
-                                                taskBg = 'bg-gold9/5';
+                                                taskBorder = 'border-cyan-500/30';
+                                                taskBg = 'bg-cyan-500/5';
                                                 statusText = `IN PROGRESS (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusTextColor = 'text-cyan-400';
                                             } else if (task.status === 'completed') {
                                                 taskBorder = 'border-green-500/30';
                                                 taskBg = 'bg-green-500/5';
                                                 statusText = 'COMPLETED';
                                                 textStyle = 'text-green-500/70 line-through';
+                                                statusTextColor = 'text-green-500';
                                             } else if (task.status === 'failed') {
                                                 taskBorder = 'border-red-500/30';
                                                 taskBg = 'bg-red-500/5';
                                                 statusText = 'FAILED';
+                                                statusTextColor = 'text-red-500';
                                             }
 
                                             // Find dependency label
@@ -375,7 +379,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                         <div className="flex flex-col">
                                                             <div className={`text-xs ${textStyle} line-clamp-2`}>{task.prompt}</div>
                                                             <div className="flex gap-2 mt-1">
-                                                                <span className="text-[9px] font-mono text-gold9/60">{statusText}</span>
+                                                                <span className={`text-[9px] font-mono ${statusTextColor}`}>{statusText}</span>
                                                                 {dependencyLabel && <span className="text-[9px] font-mono text-orange-500/50">{dependencyLabel}</span>}
                                                             </div>
                                                         </div>
