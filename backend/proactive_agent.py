@@ -3,7 +3,6 @@ import os
 import time
 import json
 from datetime import datetime
-import pyperclip
 
 try:
     from google import genai
@@ -22,14 +21,7 @@ class ProactiveAgent:
         self.last_suggestion_time = 0
         self.last_vision_check_time = 0
 
-        # Initialize with current clipboard content to avoid triggering on startup
-        try:
-            self.last_clipboard_content = pyperclip.paste().strip()
-        except Exception:
-            self.last_clipboard_content = ""
-
         self.last_analyzed_project = None
-        self.clipboard_failure_count = 0
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
 
     def _log(self, *args, **kwargs):
@@ -42,46 +34,6 @@ class ProactiveAgent:
         if current_time - self.last_suggestion_time > self.suggestion_interval:
             return True
         return False
-
-    async def _check_clipboard(self):
-        """Checks the clipboard for actionable content."""
-        try:
-            # Run in executor to avoid blocking loop
-            content = await asyncio.to_thread(pyperclip.paste)
-            content = content.strip()
-
-            # Reset failure count on success
-            self.clipboard_failure_count = 0
-
-            if not content:
-                return None
-
-            if content == self.last_clipboard_content:
-                return None
-
-            self.last_clipboard_content = content
-
-            # Simple Heuristics
-            if content.startswith("http://") or content.startswith("https://"):
-                return f"I noticed you copied a link: {content}\n\nShould I open it or summarize it?"
-
-            # Check for code-like patterns
-            if any(k in content for k in ["def ", "class ", "import ", "function ", "const ", "var ", "let "]):
-                # Only if it's multi-line or long enough to be interesting
-                if len(content.split('\n')) > 1 or len(content) > 40:
-                    return f"I noticed you copied some code:\n\n```\n{content}\n```\n\nShould I explain it or create a file?"
-
-            # Check for errors
-            if "error" in content.lower() or "exception" in content.lower() or "traceback" in content.lower():
-                return f"I noticed an error message:\n\n```\n{content}\n```\n\nShould I help debug it?"
-
-            return None
-
-        except Exception as e:
-            self.clipboard_failure_count += 1
-            if self.clipboard_failure_count <= 5:
-                self._log(f"[PROACTIVE_AGENT] [WARN] Clipboard check failed: {e}")
-            return None
 
     async def _make_suggestion(self, suggestion):
         """Sends a suggestion to the user through the AudioLoop session."""
@@ -183,14 +135,6 @@ class ProactiveAgent:
         """The main loop for the ProactiveAgent."""
         while True:
             await asyncio.sleep(5)  # Check every 5 seconds
-
-            # 0. Clipboard Check (Fast)
-            try:
-                clipboard_suggestion = await self._check_clipboard()
-                if clipboard_suggestion:
-                    await self._make_suggestion(clipboard_suggestion)
-            except Exception as e:
-                self._log(f"[PROACTIVE_AGENT] [ERR] Clipboard check failed: {e}")
 
             # 1. Vision Check (Context Anticipation) - Every 60s
             current_time = time.time()
