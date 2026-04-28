@@ -2292,6 +2292,13 @@ async def remove_task_from_queue(sid, data):
     fleet_manager.remove_task_from_queue(repo_name, task_id)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
 
+@sio.event
+async def retry_task(sid, data):
+    repo_name = data.get('repo_name')
+    task_id = data.get('task_id')
+    fleet_manager.retry_task(repo_name, task_id)
+    await sio.emit('fleet_state_update', fleet_manager.get_state())
+
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
     print(f"[SERVER] Starting server on port {port}")
