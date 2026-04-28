@@ -357,7 +357,7 @@ class AutomationEngine:
                                 # No check runs found.
                                 # If status was 'success', we can trust it.
                                 # If status was 'pending', maybe it really is just pending with no checks?
-                                is_green = (state == 'success')
+                                is_green = (state == 'success') or (state == 'pending' and not status.get('statuses', []))
                             else:
                                 # Verify all completed and success
                                 all_passed = True
@@ -380,7 +380,7 @@ class AutomationEngine:
                                     is_green = False
                         else:
                             # No checks system found via API. Trust Status.
-                            is_green = (state == 'success')
+                            is_green = (state == 'success') or (state == 'pending' and not status.get('statuses', []))
 
                     if is_green:
                         if auto_merge_master:
