@@ -99,8 +99,22 @@ class FleetManager:
             print(f"[FleetManager] Error saving state: {e}")
 
     def get_state(self):
+        # Map agent_id to their active task's prompt
+        agent_tasks = {}
+        for repo_data in self.repos.values():
+            for task in repo_data.get("queue", []):
+                if task.get("status") in ["in_progress", "pending"] and task.get("agent_id"):
+                    agent_tasks[task["agent_id"]] = task.get("prompt")
+
+        agents_with_tasks = []
+        for agent in self.agents.values():
+            agent_copy = agent.copy()
+            # If the agent is currently working on something, attach the task string
+            agent_copy["current_task"] = agent_tasks.get(agent["id"])
+            agents_with_tasks.append(agent_copy)
+
         return {
-            "agents": list(self.agents.values()),
+            "agents": agents_with_tasks,
             "repos": list(self.repos.values())
         }
 
