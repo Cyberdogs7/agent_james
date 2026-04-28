@@ -2301,6 +2301,7 @@ async def retry_task(sid, data):
     task_id = data.get('task_id')
     fleet_manager.retry_task(repo_name, task_id)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
+    await check_and_start_next_task(repo_name)
 
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
