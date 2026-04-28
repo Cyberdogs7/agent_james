@@ -296,7 +296,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                 </div>
 
                 {/* HEADER */}
-                <motion.header variants={itemVariants} className="relative z-10 flex justify-between items-center mb-6 border-b border-gold9/20 pb-4">
+                <motion.header variants={itemVariants} className="relative z-10 flex justify-between items-center mb-6 border-b border-gold9/20 pb-4" style={{ WebkitAppRegion: 'drag' }}>
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gold9/10 border border-gold9 rounded-lg flex items-center justify-center">
                             <Shield className="w-6 h-6 text-gold9" />
