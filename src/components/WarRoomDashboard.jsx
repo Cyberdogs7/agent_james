@@ -317,6 +317,7 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                             julesSessions={jules}
                             onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
                             onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
+                            onReorderRepos={(repoNames) => socket.emit('reorder_repos', { repo_names: repoNames })}
                             onAddTask={(repoName, prompt, dependsOn) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn })}
                             onRemoveTask={(repoName, taskId) => socket.emit('remove_task_from_queue', { repo_name: repoName, task_id: taskId })}
                             onRetryTask={(repoName, taskId) => socket.emit('retry_task', { repo_name: repoName, task_id: taskId })}

@@ -71,13 +71,24 @@ class FleetManager:
     def get_state(self):
         return {
             "agents": list(self.agents.values()),
-            "repos": list(self.repos.values())
+            "repos": sorted(list(self.repos.values()), key=lambda x: x.get("order", 999))
         }
 
+    def reorder_repos(self, repo_names):
+        """Update the order of active repositories."""
+        for i, repo_name in enumerate(repo_names):
+            if repo_name in self.repos:
+                self.repos[repo_name]["order"] = i
+        self.save_state()
 
     def set_repo_active(self, repo_name, active):
         self.ensure_repo(repo_name)
         self.repos[repo_name]["is_active"] = active
+        if active and "order" not in self.repos[repo_name]:
+            # Default new active repos to the end of the order
+            active_repos = [r for r in self.repos.values() if r.get("is_active")]
+            max_order = max([r.get("order", 0) for r in active_repos] + [-1])
+            self.repos[repo_name]["order"] = max_order + 1
         if not active:
             # When moving repo out, agents go back to pool but continue if busy
             for agent_id, agent in self.agents.items():

@@ -2,23 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw } from 'lucide-react';
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onRetryTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onRetryTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, onReorderRepos }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();
     fleetStatus.forEach(repo => {
-        allReposMap.set(repo.name, { ...repo, queue: [], is_active: false });
+        allReposMap.set(repo.name, { ...repo, queue: [], is_active: false, order: 999 });
     });
     stateRepos.forEach(repo => {
         if (allReposMap.has(repo.name)) {
             allReposMap.get(repo.name).queue = repo.queue || [];
             allReposMap.get(repo.name).is_active = repo.is_active || false;
+            allReposMap.get(repo.name).order = repo.order ?? 999;
         } else {
-            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [], is_active: repo.is_active || false });
+            allReposMap.set(repo.name, { name: repo.name, queue: repo.queue || [], is_active: repo.is_active || false, order: repo.order ?? 999 });
         }
     });
     const repos = Array.from(allReposMap.values());
-    const activeRepos = repos.filter(r => r.is_active);
+
+    // Sort activeRepos according to 'order' from backend state
+    const activeRepos = repos.filter(r => r.is_active).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
     const inactiveRepos = repos.filter(r => !r.is_active);
 
     // Derived state
@@ -43,18 +47,45 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         e.dataTransfer.setData('application/repo', repoName);
     };
 
+    const handleRepoReorderDragStart = (e, repoName) => {
+        e.stopPropagation();
+        setDraggedRepoName(repoName);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('application/repo-reorder', repoName);
+    };
+
     const handleDragOver = (e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
     };
 
-    const handleDrop = (e, repoName) => {
+    const handleDrop = (e, targetRepoName) => {
         e.preventDefault();
+
+        // Handle agent drop for assignment
         const agentId = e.dataTransfer.getData('text/plain');
-        if (agentId && repoName) {
-            onAssign(agentId, repoName);
+        if (agentId && targetRepoName) {
+            onAssign(agentId, targetRepoName);
+            setDraggedAgentId(null);
+            return;
         }
-        setDraggedAgentId(null);
+
+        // Handle repo reorder drop
+        const sourceRepoName = e.dataTransfer.getData('application/repo-reorder');
+        if (sourceRepoName && targetRepoName && sourceRepoName !== targetRepoName) {
+            if (onReorderRepos) {
+                const currentNames = activeRepos.map(r => r.name);
+                const sourceIndex = currentNames.indexOf(sourceRepoName);
+                const targetIndex = currentNames.indexOf(targetRepoName);
+                if (sourceIndex > -1 && targetIndex > -1) {
+                    currentNames.splice(sourceIndex, 1);
+                    currentNames.splice(targetIndex, 0, sourceRepoName);
+                    onReorderRepos(currentNames);
+                }
+            }
+            setDraggedRepoName(null);
+            return;
+        }
     };
 
     const handleMainAreaDrop = (e) => {
@@ -176,12 +207,14 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                             <motion.div
                                 layoutId={repo.name}
                                 key={repo.name}
-                                className="bg-black/20 border border-gold9/20 rounded-lg overflow-hidden flex flex-col shadow-xl"
+                                draggable={true}
+                                onDragStart={(e) => handleRepoReorderDragStart(e, repo.name)}
+                                className={`bg-black/20 border border-gold9/20 rounded-lg overflow-hidden flex flex-col shadow-xl cursor-grab active:cursor-grabbing ${draggedRepoName === repo.name ? 'opacity-50' : ''}`}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => handleDrop(e, repo.name)}
                             >
                                 {/* Repo Header */}
-                                <div className="p-4 bg-gold9/5 border-b border-gold9/10 flex justify-between items-center">
+                                <div className="p-4 bg-gold9/5 border-b border-gold9/10 flex justify-between items-center cursor-grab active:cursor-grabbing">
                                     <h3 className="font-bold text-gold9 font-mono flex items-center gap-2">
                                         <Server size={16} />
                                         <span className="truncate max-w-[200px]" title={repo.name}>{repo.name}</span>

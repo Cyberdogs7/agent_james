@@ -2129,6 +2129,14 @@ async def get_fleet_state(sid):
     state = fleet_manager.get_state()
     await sio.emit('fleet_state_update', state, to=sid)
 
+@sio.event
+async def reorder_repos(sid, data):
+    repo_names = data.get('repo_names', [])
+    if repo_names:
+        fleet_manager.reorder_repos(repo_names)
+        state = fleet_manager.get_state()
+        await sio.emit('fleet_state_update', state)
+
 async def check_and_start_next_task(repo_name, agent_id=None):
     """Helper to check if there are tasks and idle agents in a repo and start one."""
     if not audio_loop:
