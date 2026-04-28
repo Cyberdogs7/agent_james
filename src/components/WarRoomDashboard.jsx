@@ -255,6 +255,21 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
         );
     };
 
+
+    // Calculate stats from fleetState
+    const activeAgentsCount = fleetState.agents.filter(a => a.status === 'working').length;
+    let totalTasks = 0;
+    let completedTasks = 0;
+    fleetState.repos.forEach(repo => {
+        if (repo.queue) {
+            totalTasks += repo.queue.length;
+            repo.queue.forEach(task => {
+                if (task.status === 'completed') completedTasks++;
+            });
+        }
+    });
+    const successRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
     return (
         <AnimatePresence>
             <motion.div
@@ -353,11 +368,11 @@ const WarRoomDashboard = ({ data, socket, onClose }) => {
                         <motion.div variants={itemVariants} className="grid grid-cols-2 gap-4">
                             <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
                                 <div className="text-xs text-gold9/60">ACTIVE AGENTS</div>
-                                <div className="text-2xl font-bold text-green-400">{system_stats.active_agents}</div>
+                                <div className="text-2xl font-bold text-green-400">{activeAgentsCount}</div>
                             </div>
                             <div className="bg-black/40 border border-gold9/20 rounded-xl p-3 flex flex-col justify-between">
                                 <div className="text-xs text-gold9/60">SUCCESS RATE</div>
-                                <div className="text-2xl font-bold text-blue-400">{system_stats.success_rate}%</div>
+                                <div className="text-2xl font-bold text-blue-400">{successRate}%</div>
                             </div>
                         </motion.div>
 
