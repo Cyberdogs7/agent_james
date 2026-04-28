@@ -1880,8 +1880,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     pass
 
                 is_paused = getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)
+                is_playing = getattr(self, "music_agent", None) and getattr(self.music_agent, "is_playing", False)
 
-                if is_paused:
+                if not is_playing:
                     m_buffer.clear()
                     try:
                         while True:
@@ -1897,7 +1898,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         pass
 
                 # If both buffers are empty, wait a bit
-                if not v_buffer and not m_buffer:
+                if not v_buffer and not (m_buffer and not is_paused):
                     try:
                         v_data = self.audio_in_queue.get(timeout=0.05)
                         v_buffer.extend(v_data)
@@ -1918,8 +1919,8 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 # 2. Mix and flush buffers
                 mixed_data = b""
 
-                if v_buffer and m_buffer:
-                    min_len = min(len(v_buffer), len(m_buffer))
+                if v_buffer and m_buffer and not is_paused:
+                    min_len = min(len(v_buffer), len(m_buffer), 4096)
                     min_len = (min_len // 2) * 2 # 16-bit align
 
                     if min_len > 0:
@@ -1936,12 +1937,14 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         mixed_data = audioop.add(v_chunk, m_chunk, 2)
 
                 elif v_buffer:
-                    v_len = (len(v_buffer) // 2) * 2
+                    v_len = min(len(v_buffer), 4096)
+                    v_len = (v_len // 2) * 2
                     if v_len > 0:
                         mixed_data = bytes(v_buffer[:v_len])
                         del v_buffer[:v_len]
-                elif m_buffer:
-                    m_len = (len(m_buffer) // 2) * 2
+                elif m_buffer and not is_paused:
+                    m_len = min(len(m_buffer), 4096)
+                    m_len = (m_len // 2) * 2
                     if m_len > 0:
                         m_chunk = bytes(m_buffer[:m_len])
                         del m_buffer[:m_len]
