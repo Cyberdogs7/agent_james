@@ -21,6 +21,7 @@ import {
   Hand,
   Printer,
   Clock,
+  Bell,
 } from "lucide-react";
 import {
   FilesetResolver,
@@ -106,6 +107,8 @@ function App() {
   const [printerCount, setPrinterCount] = useState(0); // Count of connected printers
   const [currentTime, setCurrentTime] = useState(new Date()); // Live clock
   const [timers, setTimers] = useState([]); // Timers and Reminders
+  const [notificationHistory, setNotificationHistory] = useState([]);
+  const [showNotificationHistory, setShowNotificationHistory] = useState(false);
 
   // RESTORED STATE
   const [aiAudioData, setAiAudioData] = useState(new Array(64).fill(0));
@@ -1711,7 +1714,7 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-gray2 text-gray11 font-sans overflow-hidden flex flex-col relative selection:bg-gold-900/50 selection:text-white">
-      <NotificationManager socket={socket} />
+      <NotificationManager socket={socket} onNewNotification={(n) => setNotificationHistory(prev => [n, ...prev])} />
       {/* --- PREMIUM UI LAYER --- */}
 
       {/* --- PREMIUM UI LAYER --- */}
@@ -1804,6 +1807,18 @@ function App() {
           className="flex items-center gap-2 pr-2"
           style={{ WebkitAppRegion: "no-drag" }}
         >
+          {/* Notifications */}
+          <button
+            onClick={() => setShowNotificationHistory(!showNotificationHistory)}
+            className={`p-1 hover:bg-blue-500/20 rounded transition-colors relative ${showNotificationHistory ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            title="Notifications"
+          >
+            <Bell size={14} />
+            {notificationHistory.length > 0 && (
+              <span className="absolute top-0 right-0 w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+            )}
+          </button>
+
           {/* Live Clock */}
           <div className="flex items-center gap-1.5 text-[11px] text-gold9/70 font-sans px-2">
             <Clock size={12} className="text-gold9/50" />
@@ -1834,6 +1849,43 @@ function App() {
           </button>
         </div>
       </div>
+
+      {/* Notification History Dropdown */}
+      {showNotificationHistory && (
+        <div className="absolute top-12 right-4 w-80 bg-black/90 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-[9998] flex flex-col max-h-[60vh]">
+          <div className="p-3 border-b border-white/10 flex items-center justify-between">
+            <h3 className="text-white font-bold text-sm tracking-wide">Notification History</h3>
+            <button
+              onClick={() => {
+                setNotificationHistory([]);
+                setShowNotificationHistory(false);
+              }}
+              className="text-xs text-gray-400 hover:text-red-400 transition-colors px-2 py-1 bg-white/5 hover:bg-red-500/10 rounded"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-hide">
+            {notificationHistory.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 text-sm">No notifications</div>
+            ) : (
+              notificationHistory.map((notif, idx) => (
+                <div key={idx} className="p-3 bg-white/5 rounded-lg border border-white/5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bell className="w-3 h-3 text-blue-400" />
+                    <span className="text-xs text-gray-400">
+                      {new Date(notif.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-200 leading-snug break-words">
+                    {notif.text}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 relative z-10 flex flex-col items-center justify-center">
