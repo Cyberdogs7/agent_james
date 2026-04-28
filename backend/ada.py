@@ -1876,14 +1876,22 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 except queue.Empty:
                     pass
 
-                try:
-                    while True:
-                        m_data = self.music_queue.get_nowait()
-                        if getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False):
-                            continue # Discard if paused
-                        m_buffer.extend(m_data)
-                except queue.Empty:
-                    pass
+                is_paused = getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)
+
+                if is_paused:
+                    m_buffer.clear()
+                    try:
+                        while True:
+                            self.music_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                else:
+                    try:
+                        while True:
+                            m_data = self.music_queue.get_nowait()
+                            m_buffer.extend(m_data)
+                    except queue.Empty:
+                        pass
 
                 # If both buffers are empty, wait a bit
                 if not v_buffer and not m_buffer:
@@ -1891,12 +1899,12 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         v_data = self.audio_in_queue.get(timeout=0.05)
                         v_buffer.extend(v_data)
                     except queue.Empty:
-                        try:
-                            m_data = self.music_queue.get(timeout=0.05)
-                            if not (getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)):
+                        if not is_paused:
+                            try:
+                                m_data = self.music_queue.get(timeout=0.05)
                                 m_buffer.extend(m_data)
-                        except queue.Empty:
-                            pass
+                            except queue.Empty:
+                                pass
 
                 now = time.time()
                 if v_buffer:
