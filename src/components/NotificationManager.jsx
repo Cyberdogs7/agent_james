@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const NotificationManager = ({ socket }) => {
+const NotificationManager = ({ socket, onNewNotification }) => {
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
@@ -14,9 +14,13 @@ const NotificationManager = ({ socket }) => {
           id: Date.now().toString(),
           text: data.data.text,
           duration: data.duration || 10000,
+          timestamp: new Date().toISOString(),
         };
 
         setNotifications((prev) => [...prev, newNotification]);
+        if (onNewNotification) {
+          onNewNotification(newNotification);
+        }
 
         if (newNotification.duration > 0) {
           setTimeout(() => {
