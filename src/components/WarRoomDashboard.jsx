@@ -308,6 +308,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                         <button
                             onClick={() => setShowEditor(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                            style={{ WebkitAppRegion: 'no-drag' }}
                         >
                             <Cpu size={14} />
                             EDITOR
@@ -316,6 +317,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                             data-testid="open-command-modal"
                             onClick={() => setShowCommandModal(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                            style={{ WebkitAppRegion: 'no-drag' }}
                         >
                             <Terminal size={14} />
                             COMMAND
@@ -324,6 +326,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                         <button
                             onClick={onClose}
                             className="px-4 py-2 border border-gold9/30 hover:bg-gold9/10 hover:border-gold9 rounded text-xs tracking-widest transition-all"
+                            style={{ WebkitAppRegion: 'no-drag' }}
                         >
                             CLOSE HUD
                         </button>
