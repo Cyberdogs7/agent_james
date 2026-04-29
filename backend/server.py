@@ -2257,6 +2257,92 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         print("[SERVER] Falling back to default environment API key for task.")
                         agent_instance = audio_loop.jules_agent
 
+                    # Check if task already has a session
+                    existing_session_id = current_task.get("session_id")
+                    session_to_resume = None
+                    is_resumption = (current_task.get("status") == "in_progress")
+
+                    if existing_session_id:
+                        # Try all available API keys to find the session
+                        accounts = get_all_accounts()
+                        all_keys = [a.get("api_key") for a in accounts if a.get("api_key")]
+                        default_key = os.getenv("JULES_API_KEY")
+                        if default_key and default_key not in all_keys:
+                            all_keys.append(default_key)
+
+                        found_in_any = False
+                        for key in all_keys:
+                            try:
+                                test_agent = JulesAgent(api_key=key, project_manager=audio_loop.project_manager)
+                                session_obj = await test_agent.get_session(existing_session_id)
+                                if session_obj:
+                                    found_in_any = True
+                                    state = session_obj.get("state")
+                                    if state not in ["COMPLETED", "FAILED"]:
+                                        session_to_resume = existing_session_id
+                                        agent_instance = test_agent # Use the agent that found it
+                                        print(f"[SERVER] Found existing active session {existing_session_id} for task {current_task['id']}")
+                                        break
+                                    else:
+                                        # Session finished while we were away
+                                        print(f"[SERVER] Session {existing_session_id} found but already {state}. Updating task status.")
+                                        fleet_manager.update_task_status(repo_name, current_task["id"], "completed" if state == "COMPLETED" else "failed")
+                                        fleet_manager.update_agent_session(current_agent_id, None, "idle")
+                                        await sio.emit('fleet_state_update', fleet_manager.get_state())
+                                        await check_and_start_next_task(repo_name, current_agent_id)
+                                        return
+                            except Exception:
+                                continue
+
+                        if not found_in_any:
+                            print(f"[SERVER] Session {existing_session_id} not found in any Jules account.")
+                            # If it was in progress, we mark as complete per policy
+                            if is_resumption:
+                                print(f"[SERVER] Task was in-progress, marking as COMPLETED since session is missing.")
+                                fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
+                                fleet_manager.update_agent_session(current_agent_id, None, "idle")
+                                await sio.emit('fleet_state_update', fleet_manager.get_state())
+                                await check_and_start_next_task(repo_name, current_agent_id)
+                                return
+                            else:
+                                # If it was pending, we just clear the stale session ID and let it start a new one below
+                                print(f"[SERVER] Task was pending, clearing stale session ID.")
+                                current_task["session_id"] = None
+
+                    # Fallback to checking title match if no saved session or it's dead (ONLY for non-resumption tasks)
+                    if not session_to_resume and not is_resumption:
+                        clean_title_prompt = current_prompt.replace('\\n', ' ').replace('\\r', ' ').strip()[:40]
+                        try:
+                            existing_sessions = await agent_instance.list_sessions()
+                            for s in existing_sessions:
+                                s_title = s.get('title', '')
+                                if not s_title: continue
+                                if clean_title_prompt in s_title or s_title in clean_title_prompt:
+                                    if s.get("state") not in ["COMPLETED", "FAILED"]:
+                                        session_to_resume = s.get('name')
+                                        print(f"[SERVER] Found matching title active session {session_to_resume} for task {current_task['id']}")
+                                        # Save it to the task so we don't have to search next time
+                                        fleet_manager.update_task_session(repo_name, current_task["id"], session_to_resume)
+                                        break
+                        except Exception as e:
+                            print(f"[SERVER] Failed to list sessions for deduplication: {e}")
+
+                    if session_to_resume:
+                        agent_instance.start_polling(session_to_resume, callback=_on_jules_finished)
+                        fleet_manager.update_agent_session(current_agent_id, session_to_resume, "working")
+                        await sio.emit('fleet_state_update', fleet_manager.get_state())
+                        return
+
+                    if is_resumption:
+                        # We reached here and it's a resumption but we couldn't find it
+                        # This shouldn't happen due to the logic above, but safety first
+                        print(f"[SERVER] Resumption failed for task {current_task['id']}. Marking as COMPLETED.")
+                        fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
+                        fleet_manager.update_agent_session(current_agent_id, None, "idle")
+                        await sio.emit('fleet_state_update', fleet_manager.get_state())
+                        await check_and_start_next_task(repo_name, current_agent_id)
+                        return
+
                     session = await agent_instance.spawn_agent(
                         prompt=current_prompt,
                         source=current_source,
@@ -2265,6 +2351,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     )
                     if session:
                         session_id = session.get('name')
+                        fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
                         fleet_manager.update_agent_session(current_agent_id, session_id, "working")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                         return
