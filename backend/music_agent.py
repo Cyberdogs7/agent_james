@@ -82,6 +82,21 @@ class MusicAgent:
         except queue.Full:
             pass
 
+        if self.ffmpeg_process:
+            try:
+                self.ffmpeg_process.terminate()
+                self.ffmpeg_process.wait(timeout=2.0)
+            except Exception:
+                try:
+                    self.ffmpeg_process.kill()
+                    self.ffmpeg_process.wait(timeout=2.0)
+                except Exception:
+                    pass
+            self.ffmpeg_process = None
+
+        if hasattr(self, '_current_thread_stop_event'):
+            self._current_thread_stop_event.set()
+
         # Wait for threads to exit cleanly
         if hasattr(self, '_ffmpeg_thread') and self._ffmpeg_thread and self._ffmpeg_thread.is_alive() and self._ffmpeg_thread != threading.current_thread():
             try:
@@ -97,21 +112,14 @@ class MusicAgent:
         # Immediately replace the queue so new streams start fresh
         self.internal_queue = queue.Queue(maxsize=2000)
 
-        if self.ffmpeg_process:
-            try:
-                self.ffmpeg_process.terminate()
-                self.ffmpeg_process.wait(timeout=2.0)
-            except Exception:
-                try:
-                    self.ffmpeg_process.kill()
-                    self.ffmpeg_process.wait(timeout=2.0)
-                except Exception:
-                    pass
-            self.ffmpeg_process = None
-
     async def play(self, query):
         """Searches for a query and streams it."""
         self.logger.info(f"Searching for: {query}")
+
+        self._stop_event.set()
+        await self._kill_ffmpeg()
+        self._stop_event.clear()
+
         try:
             # 1. Search
             # We first search with no filter. If no playlist/album is explicitly requested, we just use top result.
@@ -228,6 +236,10 @@ class MusicAgent:
     async def create_playlist(self, name, queries):
         """Creates a playlist from a list of queries and starts playing it."""
         self.logger.info(f"Creating playlist '{name}' with queries: {queries}")
+
+        self._stop_event.set()
+        await self._kill_ffmpeg()
+        self._stop_event.clear()
 
         if not queries:
             return "No queries provided for the playlist."
@@ -371,11 +383,14 @@ class MusicAgent:
             self.is_playing = True
             self.paused = False
 
+            # Create a thread-specific stop event for this play session
+            self._current_thread_stop_event = threading.Event()
+
             # Start reading from stdout
             q = self.internal_queue
             p = self.ffmpeg_process
-            self._ffmpeg_thread = threading.Thread(target=self._ffmpeg_reader_sync, args=(q, p), daemon=True)
-            self._stream_thread = threading.Thread(target=self._stream_reader_sync, args=(q,), daemon=True)
+            self._ffmpeg_thread = threading.Thread(target=self._ffmpeg_reader_sync, args=(q, p, self._current_thread_stop_event), daemon=True)
+            self._stream_thread = threading.Thread(target=self._stream_reader_sync, args=(q, self._current_thread_stop_event), daemon=True)
             self._ffmpeg_thread.start()
             self._stream_thread.start()
 
@@ -393,10 +408,10 @@ class MusicAgent:
             await asyncio.sleep(1) # Backoff
             asyncio.create_task(self._play_current_track())
 
-    def _ffmpeg_reader_sync(self, internal_queue, ffmpeg_process):
+    def _ffmpeg_reader_sync(self, internal_queue, ffmpeg_process, stop_event):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
         chunk_size = 131072
-        while self.is_playing and ffmpeg_process:
+        while self.is_playing and ffmpeg_process and internal_queue is self.internal_queue:
             if ffmpeg_process.poll() is not None:
                 break
 
@@ -409,7 +424,7 @@ class MusicAgent:
         # Put None to signal EOF to the playback task
         internal_queue.put(None)
 
-    def _stream_reader_sync(self, internal_queue):
+    def _stream_reader_sync(self, internal_queue, stop_event):
         """Reads from internal queue and pushes to audio queue at playback speed."""
         start_time = time.time()
         last_emit_time = start_time
@@ -422,7 +437,7 @@ class MusicAgent:
         small_chunk_buffer = b""
         SMALL_CHUNK_SIZE = 4096
 
-        while self.is_playing:
+        while self.is_playing and internal_queue is self.internal_queue:
             if self.paused:
                 time.sleep(0.1)
                 # Adjust start time to account for pause duration
@@ -452,7 +467,8 @@ class MusicAgent:
 
                 if not data:
                     self.logger.info("Internal audio queue finished.")
-                    self.is_playing = False
+                    if internal_queue is self.internal_queue:
+                        self.is_playing = False
                     break
 
                 small_chunk_buffer += data
@@ -528,12 +544,12 @@ class MusicAgent:
             if sleep_delay > 0:
                 time.sleep(sleep_delay)
 
-        if not self._stop_event.is_set():
+        if not self._stop_event.is_set() and internal_queue is self.internal_queue:
              # Natural end of track, go to next
              self.current_track_index += 1
              if self.main_loop:
                  asyncio.run_coroutine_threadsafe(self._play_current_track(), self.main_loop)
-        else:
+        elif internal_queue is self.internal_queue:
              self.is_playing = False
              if self.sio and self.main_loop:
                  asyncio.run_coroutine_threadsafe(self.sio.emit('music_status', {

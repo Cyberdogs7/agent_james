@@ -25,7 +25,11 @@ class TestSmartMerge(unittest.IsolatedAsyncioTestCase):
         self.mock_pm.load_fleet.return_value = [{"owner": "test", "name": "repo", "auto_merge_enabled": True}]
 
     @patch("automation_engine.GitHubClient")
+    @patch.dict("sys.modules", {"backend.server": MagicMock()})
     async def test_smart_merge_trigger(self, MockGitHubClient):
+        import sys
+        sys.modules["backend.server"].fleet_manager.repos = {"test/repo": {"is_active": True}}
+        sys.modules["backend.server"].SETTINGS = {}
         # Setup GitHub Client Mock
         mock_client = MockGitHubClient.return_value
 
@@ -69,7 +73,11 @@ class TestSmartMerge(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Shall I merge it", args['message'])
 
     @patch("automation_engine.GitHubClient")
+    @patch.dict("sys.modules", {"backend.server": MagicMock()})
     async def test_smart_merge_respects_threshold_config(self, MockGitHubClient):
+        import sys
+        sys.modules["backend.server"].fleet_manager.repos = {"test/repo": {"is_active": True}}
+        sys.modules["backend.server"].SETTINGS = {}
         mock_client = MockGitHubClient.return_value
 
         # Set config to 5 hours (18000 seconds)
@@ -92,7 +100,11 @@ class TestSmartMerge(unittest.IsolatedAsyncioTestCase):
         self.mock_ada.handle_external_event.assert_not_called()
 
     @patch("automation_engine.GitHubClient")
+    @patch.dict("sys.modules", {"backend.server": MagicMock()})
     async def test_smart_merge_respects_threshold_default(self, MockGitHubClient):
+        import sys
+        sys.modules["backend.server"].fleet_manager.repos = {"test/repo": {"is_active": True}}
+        sys.modules["backend.server"].SETTINGS = {}
         mock_client = MockGitHubClient.return_value
 
         import sys

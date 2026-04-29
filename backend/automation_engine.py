@@ -281,6 +281,11 @@ class AutomationEngine:
         client = GitHubClient(token)
         fleet = self.project_manager.load_fleet()
 
+        try:
+            from backend.server import fleet_manager
+        except ImportError:
+            fleet_manager = None
+
         for repo in fleet:
             try:
                 owner = repo.get('owner')
@@ -468,6 +473,11 @@ class AutomationEngine:
         if token:
             client = GitHubClient(token)
             fleet = self.project_manager.load_fleet()
+
+            try:
+                from backend.server import fleet_manager
+            except ImportError:
+                fleet_manager = None
 
             for repo in fleet:
                 try:
