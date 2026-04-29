@@ -2334,6 +2334,14 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     if session_to_resume:
                         agent_instance.start_polling(session_to_resume, callback=_on_jules_finished)
                         fleet_manager.update_agent_session(current_agent_id, session_to_resume, "working")
+                        # Restore original status or move to in_progress so we aren't stuck in 'submitting'
+                        resumption_status = original_status if original_status not in ["submitting", "received"] else "in_progress"
+                        fleet_manager.update_task_status(repo_name, current_task["id"], resumption_status)
+                        
+                        # Force the monitoring loop to re-process this session on next poll so it triggers the sync callback
+                        if hasattr(agent_instance, 'monitored_sessions'):
+                            agent_instance.monitored_sessions.pop(session_to_resume, None)
+                            
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                         return
                     
