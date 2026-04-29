@@ -97,13 +97,15 @@ class FleetManager:
                             agent["current_session"] = None
                             modified = True
 
-                    # Reset any tasks stuck in "in_progress" state from a previous run
+                    # Handle tasks from a previous run
                     for repo in self.repos.values():
                         for task in repo.get("queue", []):
                             if task.get("status") == "in_progress":
-                                task["status"] = "pending"
+                                # Keep as in_progress but clear agent_id so it can be picked up for reconciliation/resumption
                                 task["agent_id"] = None
                                 modified = True
+                            elif task.get("status") == "pending":
+                                task["agent_id"] = None # Just in case
 
                     if modified:
                         self.save_state()
@@ -283,7 +285,8 @@ class FleetManager:
             task_status = {t["id"]: t.get("status") for t in queue}
 
             for task in queue:
-                if task.get("status", "pending") == "pending":
+                status = task.get("status", "pending")
+                if (status == "pending" or status == "in_progress") and task.get("agent_id") is None:
                     depends_on = task.get("depends_on")
                     # Task is unblocked if it has no dependency, OR
                     # if the dependency is completed, OR
