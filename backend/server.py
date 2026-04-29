@@ -2257,6 +2257,44 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         print("[SERVER] Falling back to default environment API key for task.")
                         agent_instance = audio_loop.jules_agent
 
+                    # Check if task already has a session
+                    existing_session_id = current_task.get("session_id")
+                    session_to_resume = None
+
+                    if existing_session_id:
+                        try:
+                            # Verify the session is still active
+                            session_obj = await agent_instance.get_session(existing_session_id)
+                            if session_obj and session_obj.get("state") not in ["COMPLETED", "FAILED"]:
+                                session_to_resume = existing_session_id
+                                print(f"[SERVER] Found existing active session {existing_session_id} for task {current_task['id']}")
+                        except Exception as e:
+                            print(f"[SERVER] Could not retrieve existing session {existing_session_id}: {e}")
+
+                    # Fallback to checking title match if no saved session or it's dead
+                    if not session_to_resume:
+                        clean_title_prompt = current_prompt.replace('\\n', ' ').replace('\\r', ' ').strip()[:40]
+                        try:
+                            existing_sessions = await agent_instance.list_sessions()
+                            for s in existing_sessions:
+                                s_title = s.get('title', '')
+                                if not s_title: continue
+                                if clean_title_prompt in s_title or s_title in clean_title_prompt:
+                                    if s.get("state") not in ["COMPLETED", "FAILED"]:
+                                        session_to_resume = s.get('name')
+                                        print(f"[SERVER] Found matching title active session {session_to_resume} for task {current_task['id']}")
+                                        # Save it to the task so we don't have to search next time
+                                        fleet_manager.update_task_session(repo_name, current_task["id"], session_to_resume)
+                                        break
+                        except Exception as e:
+                            print(f"[SERVER] Failed to list sessions for deduplication: {e}")
+
+                    if session_to_resume:
+                        agent_instance.start_polling(session_to_resume, callback=_on_jules_finished)
+                        fleet_manager.update_agent_session(current_agent_id, session_to_resume, "working")
+                        await sio.emit('fleet_state_update', fleet_manager.get_state())
+                        return
+
                     session = await agent_instance.spawn_agent(
                         prompt=current_prompt,
                         source=current_source,
@@ -2265,6 +2303,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     )
                     if session:
                         session_id = session.get('name')
+                        fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
                         fleet_manager.update_agent_session(current_agent_id, session_id, "working")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                         return
