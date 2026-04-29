@@ -411,7 +411,7 @@ class MusicAgent:
     def _ffmpeg_reader_sync(self, internal_queue, ffmpeg_process, stop_event):
         """Reads from ffmpeg stdout and pushes to internal queue as fast as possible."""
         chunk_size = 131072
-        while not stop_event.is_set() and ffmpeg_process:
+        while self.is_playing and ffmpeg_process and internal_queue is self.internal_queue:
             if ffmpeg_process.poll() is not None:
                 break
 
@@ -437,7 +437,7 @@ class MusicAgent:
         small_chunk_buffer = b""
         SMALL_CHUNK_SIZE = 4096
 
-        while not stop_event.is_set():
+        while self.is_playing and internal_queue is self.internal_queue:
             if self.paused:
                 time.sleep(0.1)
                 # Adjust start time to account for pause duration
@@ -467,7 +467,8 @@ class MusicAgent:
 
                 if not data:
                     self.logger.info("Internal audio queue finished.")
-                    self.is_playing = False
+                    if internal_queue is self.internal_queue:
+                        self.is_playing = False
                     break
 
                 small_chunk_buffer += data
@@ -543,12 +544,12 @@ class MusicAgent:
             if sleep_delay > 0:
                 time.sleep(sleep_delay)
 
-        if not self._stop_event.is_set():
+        if not self._stop_event.is_set() and internal_queue is self.internal_queue:
              # Natural end of track, go to next
              self.current_track_index += 1
              if self.main_loop:
                  asyncio.run_coroutine_threadsafe(self._play_current_track(), self.main_loop)
-        else:
+        elif internal_queue is self.internal_queue:
              self.is_playing = False
              if self.sio and self.main_loop:
                  asyncio.run_coroutine_threadsafe(self.sio.emit('music_status', {
