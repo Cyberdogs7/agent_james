@@ -295,11 +295,20 @@ class AudioLoop:
                 elif new_state == "FAILED":
                     fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
                     fleet_manager.update_agent_session(agent_id, None, "error")
-                elif new_state in ["QUEUED", "PLANNING", "IN_PROGRESS"]:
+                elif new_state == "QUEUED":
+                    fleet_manager.update_task_status(repo_name, task_id, "queued")
+                    fleet_manager.update_agent_session(agent_id, session_id, "working")
+                elif new_state == "PLANNING":
+                    fleet_manager.update_task_status(repo_name, task_id, "planning")
+                    fleet_manager.update_agent_session(agent_id, session_id, "working")
+                elif new_state == "IN_PROGRESS":
                     fleet_manager.update_task_status(repo_name, task_id, "in_progress")
                     fleet_manager.update_agent_session(agent_id, session_id, "working")
-                elif new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
-                    fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
+                elif new_state == "AWAITING_PLAN_APPROVAL":
+                    fleet_manager.update_task_status(repo_name, task_id, "awaiting_plan_approval")
+                    fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
+                elif new_state == "AWAITING_USER_FEEDBACK":
+                    fleet_manager.update_task_status(repo_name, task_id, "awaiting_user_feedback")
                     fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
 
                     message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."

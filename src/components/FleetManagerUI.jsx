@@ -256,9 +256,9 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                     {activeRepos.map(repo => {
                         const repoAgents = agents.filter(a => a.current_repo === repo.name);
                         const totalTasks = repo.queue?.length || 0;
-                        const pendingTasks = repo.queue?.filter(t => t.status === 'pending').length || 0;
-                        const inProgressTasks = repo.queue?.filter(t => t.status === 'in_progress').length || 0;
-                        const stalledTasks = repo.queue?.filter(t => t.status === 'needing_feedback').length || 0;
+                        const pendingTasks = repo.queue?.filter(t => t.status === 'pending' || t.status === 'received' || t.status === 'queued').length || 0;
+                        const inProgressTasks = repo.queue?.filter(t => t.status === 'in_progress' || t.status === 'submitting' || t.status === 'planning').length || 0;
+                        const stalledTasks = repo.queue?.filter(t => t.status === 'awaiting_plan_approval' || t.status === 'awaiting_user_feedback').length || 0;
                         const failedTasks = repo.queue?.filter(t => t.status === 'failed').length || 0;
 
                         return (
@@ -438,10 +438,30 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 taskBg = 'bg-cyan-500/5';
                                                 statusText = `IN PROGRESS (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
                                                 statusTextColor = 'text-cyan-400';
-                                            } else if (task.status === 'needing_feedback') {
+                                            } else if (task.status === 'planning') {
+                                                taskBorder = 'border-blue-500/30';
+                                                taskBg = 'bg-blue-500/5';
+                                                statusText = `PLANNING (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusTextColor = 'text-blue-400 animate-pulse';
+                                            } else if (task.status === 'submitting') {
+                                                taskBorder = 'border-gold9/30';
+                                                taskBg = 'bg-gold9/5';
+                                                statusText = `SUBMITTING (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusTextColor = 'text-gold9 animate-pulse';
+                                            } else if (task.status === 'queued') {
+                                                taskBorder = 'border-gray-500/30';
+                                                taskBg = 'bg-gray-500/5';
+                                                statusText = `QUEUED (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusTextColor = 'text-gray-400';
+                                            } else if (task.status === 'received') {
+                                                taskBorder = 'border-gray-700/30';
+                                                taskBg = 'bg-gray-700/5';
+                                                statusText = `RECEIVED`;
+                                                statusTextColor = 'text-gray-500';
+                                            } else if (task.status === 'awaiting_plan_approval' || task.status === 'awaiting_user_feedback') {
                                                 taskBorder = 'border-yellow-500/50';
                                                 taskBg = 'bg-yellow-500/10';
-                                                statusText = `NEEDS FEEDBACK (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
+                                                statusText = `${task.status === 'awaiting_plan_approval' ? 'AWAITING APPROVAL' : 'AWAITING FEEDBACK'} (${task.agent_id ? task.agent_id.replace('agent_', 'A-') : ''})`;
                                                 statusTextColor = 'text-yellow-400 animate-pulse font-bold';
                                             } else if (task.status === 'completed') {
                                                 taskBorder = 'border-green-500/30';

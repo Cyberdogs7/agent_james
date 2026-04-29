@@ -128,7 +128,7 @@ class JulesAgent:
                                         print(f"[JulesAgent] Resolved default branch for {owner}/{repo}: {starting_branch}")
                             except Exception as e:
                                 print(f"[JulesAgent] Failed to fetch repo details for branch resolution: {e}")
-
+                    
                     if not starting_branch:
                         # Fallback if GitHub fetch fails or no token
                         starting_branch = "master"
@@ -292,7 +292,7 @@ class JulesAgent:
                             self.session_insights[session_id] = insight
                             session_completed = True
                         elif state == "IN_PROGRESS":
-                            # CI/CD Re-run with no work case:
+                            # CI/CD Re-run with no work case: 
                             # If we have a PR (outputs exist) and it's been idle for a while, assume it's done.
                             has_outputs = bool(session_obj.get("outputs"))
                             if has_outputs and (datetime.now() - last_activity_time > timedelta(minutes=10)):
@@ -339,7 +339,7 @@ class JulesAgent:
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Error polling {session_id}: {e}")
                 # If we get a 404 or persistent error, we should probably stop polling eventually
-                # but for now we just wait and retry.
+                # but for now we just wait and retry. 
                 # If get_session above returned None and we didn't break, we'll hit this or retry.
                 await asyncio.sleep(60)
 
@@ -428,13 +428,13 @@ class JulesAgent:
         while True:
             try:
                 sessions = await self.list_sessions()
-
+                
                 # IMPORTANT: If sessions is None, it means the request failed.
                 # Do NOT mark sessions as completed if we just failed to fetch the list.
                 if sessions is not None:
                     # Tracking which sessions are currently seen
                     current_session_ids = {s.get("name") for s in sessions if s.get("name")}
-
+                    
                     # 1. Detect missing sessions (assume completed as requested)
                     for session_id in list(self.monitored_sessions.keys()):
                         if session_id not in current_session_ids:
@@ -464,6 +464,8 @@ class JulesAgent:
                         if previous_state is None:
                             self._log(f"[JULES_AGENT] New active session found: {session_id}. State: {current_state}.")
                             self.monitored_sessions[session_id] = current_state
+                            if status_change_callback:
+                                asyncio.create_task(status_change_callback(session_id, title, current_state))
                         elif previous_state != current_state:
                             self._log(f"[JULES_AGENT] Status change for {session_id}: {previous_state} -> {current_state}")
                             self.monitored_sessions[session_id] = current_state
