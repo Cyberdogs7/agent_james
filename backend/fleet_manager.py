@@ -100,7 +100,7 @@ class FleetManager:
                     # Handle tasks from a previous run
                     for repo in self.repos.values():
                         for task in repo.get("queue", []):
-                            if task.get("status") in ["in_progress", "submitting", "pending"]:
+                            if task.get("status") in ["in_progress", "submitting", "pending", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]:
                                 # Keep as is but clear agent_id so it can be picked up for reconciliation/resumption
                                 task["agent_id"] = None
                                 modified = True
@@ -286,8 +286,8 @@ class FleetManager:
 
             for task in queue:
                 status = task.get("status", "pending")
-                # We pick up tasks that are received, pending, or were already in_progress but lost their agent
-                if (status in ["received", "pending", "in_progress", "submitting"]) and task.get("agent_id") is None:
+                # We pick up tasks that are received, pending, or were already active but lost their agent
+                if (status in ["received", "pending", "in_progress", "submitting", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]) and task.get("agent_id") is None:
                     depends_on = task.get("depends_on")
                     # Task is unblocked if it has no dependency, OR
                     # if the dependency is completed, OR

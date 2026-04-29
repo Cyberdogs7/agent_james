@@ -464,6 +464,8 @@ class JulesAgent:
                         if previous_state is None:
                             self._log(f"[JULES_AGENT] New active session found: {session_id}. State: {current_state}.")
                             self.monitored_sessions[session_id] = current_state
+                            if status_change_callback:
+                                asyncio.create_task(status_change_callback(session_id, title, current_state))
                         elif previous_state != current_state:
                             self._log(f"[JULES_AGENT] Status change for {session_id}: {previous_state} -> {current_state}")
                             self.monitored_sessions[session_id] = current_state
