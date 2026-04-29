@@ -1901,15 +1901,16 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     pass
 
                 is_paused = getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)
+                is_playing = getattr(self, "music_agent", None) and getattr(self.music_agent, "is_playing", False)
 
-                if is_paused:
+                if not is_playing:
                     m_buffer.clear()
                     try:
                         while True:
                             self.music_queue.get_nowait()
                     except queue.Empty:
                         pass
-                else:
+                elif not is_paused:
                     try:
                         while True:
                             m_data = self.music_queue.get_nowait()
@@ -1923,7 +1924,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         v_data = self.audio_in_queue.get(timeout=0.05)
                         v_buffer.extend(v_data)
                     except queue.Empty:
-                        if not is_paused:
+                        if is_playing and not is_paused:
                             try:
                                 m_data = self.music_queue.get(timeout=0.05)
                                 m_buffer.extend(m_data)
