@@ -104,6 +104,8 @@ class FleetManager:
                                 # Keep as is but clear agent_id so it can be picked up for reconciliation/resumption
                                 task["agent_id"] = None
                                 modified = True
+                            elif task.get("status") == "pending":
+                                task["agent_id"] = None # Just in case
 
                     if modified:
                         self.save_state()
