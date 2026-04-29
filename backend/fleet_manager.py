@@ -100,12 +100,10 @@ class FleetManager:
                     # Handle tasks from a previous run
                     for repo in self.repos.values():
                         for task in repo.get("queue", []):
-                            if task.get("status") == "in_progress":
-                                # Keep as in_progress but clear agent_id so it can be picked up for reconciliation/resumption
+                            if task.get("status") in ["in_progress", "submitting", "pending"]:
+                                # Keep as is but clear agent_id so it can be picked up for reconciliation/resumption
                                 task["agent_id"] = None
                                 modified = True
-                            elif task.get("status") == "pending":
-                                task["agent_id"] = None # Just in case
 
                     if modified:
                         self.save_state()
@@ -177,7 +175,9 @@ class FleetManager:
         self.repos[repo_name]["queue"].append({
             "id": task_id,
             "prompt": prompt,
-            "status": "pending", # pending, in_progress, completed, failed
+            "status": "received", # received, submitting, pending, in_progress, completed, failed
+            "submitted": True,
+            "received": True,
             "depends_on": depends_on,
             "agent_id": None,
             "attachments": attachments or []
@@ -277,7 +277,7 @@ class FleetManager:
             self.save_state()
 
     def get_next_task(self, repo_name):
-        """Returns the next pending task whose dependencies are satisfied."""
+        """Returns the next pending/received task whose dependencies are satisfied."""
         if repo_name in self.repos and self.repos[repo_name]["queue"]:
             queue = self.repos[repo_name]["queue"]
             # Pre-compute ALL task states for dependency checking
@@ -286,7 +286,8 @@ class FleetManager:
 
             for task in queue:
                 status = task.get("status", "pending")
-                if (status == "pending" or status == "in_progress") and task.get("agent_id") is None:
+                # We pick up tasks that are received, pending, or were already in_progress but lost their agent
+                if (status in ["received", "pending", "in_progress", "submitting"]) and task.get("agent_id") is None:
                     depends_on = task.get("depends_on")
                     # Task is unblocked if it has no dependency, OR
                     # if the dependency is completed, OR

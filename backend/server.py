@@ -2180,8 +2180,13 @@ async def check_and_start_next_task(repo_name, agent_id=None):
         # We only use the passed agent_id for the first iteration
         agent_id = None
 
+        # Capture if this was an already active task (e.g. after restart)
+        original_status = task.get("status")
+        was_in_progress = (original_status == "in_progress")
+
         fleet_manager.update_agent_session(current_agent_id, None, "working")
-        fleet_manager.update_task_status(repo_name, task["id"], "in_progress", current_agent_id)
+        # Move to 'submitting' to show we are communicating with Jules
+        fleet_manager.update_task_status(repo_name, task["id"], "submitting", current_agent_id)
         await sio.emit('fleet_state_update', fleet_manager.get_state())
 
         prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
@@ -2220,7 +2225,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
         await sio.emit('status', {'msg': f"Agent {current_agent_id} picking up task in {repo_name}..."})
 
         # We need to capture variables for the closure, so we create a factory function
-        def create_spawn_task(current_task, current_agent_id, current_prompt, current_source):
+        def create_spawn_task(current_task, current_agent_id, current_prompt, current_source, was_in_progress):
             async def _on_jules_finished(message):
                 # Callback wrapper that looks for completion/failure signals
                 # JulesAgent sends generic messages through callback
@@ -2257,10 +2262,9 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         print("[SERVER] Falling back to default environment API key for task.")
                         agent_instance = audio_loop.jules_agent
 
-                    # Check if task already has a session
                     existing_session_id = current_task.get("session_id")
                     session_to_resume = None
-                    is_resumption = (current_task.get("status") == "in_progress")
+                    is_resumption = was_in_progress or bool(existing_session_id)
 
                     if existing_session_id:
                         # Try all available API keys to find the session
@@ -2352,6 +2356,8 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     if session:
                         session_id = session.get('name')
                         fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
+                        # Once received by Jules, move to 'pending' as requested
+                        fleet_manager.update_task_status(repo_name, current_task["id"], "pending")
                         fleet_manager.update_agent_session(current_agent_id, session_id, "working")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                         return
@@ -2388,7 +2394,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
 
             return run_spawn
 
-        spawn_task = create_spawn_task(task, current_agent_id, prompt, source)
+        spawn_task = create_spawn_task(task, current_agent_id, prompt, source, was_in_progress)
         asyncio.create_task(spawn_task())
 
 
