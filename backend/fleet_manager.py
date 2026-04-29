@@ -197,6 +197,15 @@ class FleetManager:
                     break
             self.save_state()
 
+    def update_task_session(self, repo_name, task_id, session_id):
+        """Saves a Jules session ID directly to a task."""
+        if repo_name in self.repos:
+            for task in self.repos[repo_name]["queue"]:
+                if task["id"] == task_id:
+                    task["session_id"] = session_id
+                    break
+            self.save_state()
+
     def remove_task_from_queue(self, repo_name, task_id):
         if repo_name in self.repos:
             self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t["id"] != task_id]
@@ -216,6 +225,8 @@ class FleetManager:
                     task["agent_id"] = None
                     if "error_message" in task:
                         del task["error_message"]
+                    if "session_id" in task:
+                        del task["session_id"]
                     break
             self.save_state()
 
