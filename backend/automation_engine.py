@@ -294,10 +294,15 @@ class AutomationEngine:
                 if not repo.get('auto_merge_enabled', False): continue
 
                 repo_name = f"{owner}/{name}"
-                if fleet_manager:
-                    is_active = fleet_manager.repos.get(repo_name, {}).get('is_active', False)
-                    if not is_active:
-                        continue
+                try:
+                    from backend.server import fleet_manager
+                except ImportError:
+                    fleet_manager = None
+
+                is_active = False
+                if fleet_manager and repo_name in fleet_manager.repos:
+                    is_active = fleet_manager.repos[repo_name].get('is_active', False)
+                if not is_active: continue
 
                 # List PRs
                 prs = await client.list_pull_requests(owner, name)
@@ -481,10 +486,15 @@ class AutomationEngine:
                     if not owner or not name: continue
 
                     repo_name = f"{owner}/{name}"
-                    if fleet_manager:
-                        is_active = fleet_manager.repos.get(repo_name, {}).get('is_active', False)
-                        if not is_active:
-                            continue
+                    try:
+                        from backend.server import fleet_manager
+                    except ImportError:
+                        fleet_manager = None
+
+                    is_active = False
+                    if fleet_manager and repo_name in fleet_manager.repos:
+                        is_active = fleet_manager.repos[repo_name].get('is_active', False)
+                    if not is_active: continue
 
                     prs = await client.list_pull_requests(owner, name)
                     if not prs: continue

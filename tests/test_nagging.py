@@ -80,6 +80,12 @@ class TestNaggingSecretary(unittest.IsolatedAsyncioTestCase):
         self.project_manager.get_github_token.return_value = "fake_token"
         self.project_manager.load_fleet.return_value = [{"owner": "me", "name": "my-repo"}]
 
+        import sys
+        import types
+        sys.modules['backend.server'] = types.ModuleType('backend.server')
+        sys.modules['backend.server'].fleet_manager = MagicMock()
+        sys.modules['backend.server'].fleet_manager.repos = {"me/my-repo": {"is_active": True}}
+
         mock_client = MockGitHubClient.return_value
         mock_client.list_pull_requests = AsyncMock()
 

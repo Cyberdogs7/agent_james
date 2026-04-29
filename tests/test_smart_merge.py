@@ -33,6 +33,12 @@ class TestSmartMerge(unittest.IsolatedAsyncioTestCase):
         # Setup GitHub Client Mock
         mock_client = MockGitHubClient.return_value
 
+        import sys
+        import types
+        sys.modules['backend.server'] = types.ModuleType('backend.server')
+        sys.modules['backend.server'].fleet_manager = MagicMock()
+        sys.modules['backend.server'].fleet_manager.repos = {"test/repo": {"is_active": True}}
+
         # 1. Mock List PRs
         now = datetime.utcnow()
         old_enough_date = (now - timedelta(hours=3)).isoformat() + "Z" # 3 hours old
@@ -100,6 +106,12 @@ class TestSmartMerge(unittest.IsolatedAsyncioTestCase):
         sys.modules["backend.server"].fleet_manager.repos = {"test/repo": {"is_active": True}}
         sys.modules["backend.server"].SETTINGS = {}
         mock_client = MockGitHubClient.return_value
+
+        import sys
+        import types
+        sys.modules['backend.server'] = types.ModuleType('backend.server')
+        sys.modules['backend.server'].fleet_manager = MagicMock()
+        sys.modules['backend.server'].fleet_manager.repos = {"test/repo": {"is_active": True}}
 
         # Default is 2 hours. PR is 3 hours old. Should trigger.
         self.mock_pm.get_project_config.return_value = {} # Empty config
