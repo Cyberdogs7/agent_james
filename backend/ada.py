@@ -197,6 +197,9 @@ class AudioLoop:
 
         self.sct = None
 
+        self._pending_voice_notifications = []
+        self._notification_batch_task = None
+
         # Initialize Face Detector for Presence
         try:
             self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -2088,6 +2091,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     print(f"[ADA DEBUG] [ERR] Failed to close MSS: {e}")
             self.sct = None
 
+        self._pending_voice_notifications = []
+        self._notification_batch_task = None
+
 
     def notify_user(self, text, duration=10000, send_voice=True, send_slack=True):
         """Consolidated method to dispatch system notifications across UI, Voice, and Slack."""
@@ -2104,7 +2110,25 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 
         # Voice
         if send_voice and self.session:
-            asyncio.create_task(self.session.send(input=f"System Notification: {text}", end_of_turn=False))
+            self._pending_voice_notifications.append(text)
+            if self._notification_batch_task is None or self._notification_batch_task.done():
+                async def process_notifications():
+                    while True:
+                        await asyncio.sleep(2.0)
+                        if not self._pending_voice_notifications:
+                            break
+                        messages = self._pending_voice_notifications.copy()
+                        self._pending_voice_notifications.clear()
+                        if len(messages) == 1:
+                            combined_text = f"System Notification: {messages[0]}"
+                        else:
+                            combined_text = f"System Notification: You have {len(messages)} new notifications. " + " ".join(messages)
+                        try:
+                            await self.session.send(input=combined_text, end_of_turn=False)
+                        except Exception as e:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] Failed to send batched voice notification: {e}")
+                self._notification_batch_task = asyncio.create_task(process_notifications())
 
         # Slack
         if send_slack and self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):

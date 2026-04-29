@@ -14,7 +14,9 @@ def jules_agent():
     mock_ada_session = AsyncMock()
     # Set the JULES_API_KEY for the test environment
     os.environ["JULES_API_KEY"] = "test_api_key"
-    agent = JulesAgent(session=mock_ada_session)
+    mock_pm = MagicMock()
+    mock_pm.get_github_token.return_value = "mock_token"
+    agent = JulesAgent(session=mock_ada_session, project_manager=mock_pm)
     return agent
 
 
@@ -218,10 +220,17 @@ async def test_poll_for_updates_flow(jules_agent):
         # Create a stop event to control the polling loop
         stop_event = asyncio.Event()
 
-        # We can now await the polling function directly. It should stop on its own
-        # when it receives the sessionComplete message.
-        # It takes (session_id, stop_event, callback). Passing None for callback to use default session.send logic.
-        await jules_agent._poll_loop(session_id, stop_event, None)
+        with patch.object(jules_agent, "get_session", new_callable=AsyncMock) as mock_get_session:
+            mock_get_session.side_effect = [
+                {"state": "ACTIVE"},
+                {"state": "ACTIVE"},
+                {"state": "COMPLETED"},
+                {"state": "COMPLETED"}
+            ]
+            # We can now await the polling function directly. It should stop on its own
+            # when it receives the sessionComplete message.
+            # It takes (session_id, stop_event, callback). Passing None for callback to use default session.send logic.
+            await jules_agent._poll_loop(session_id, stop_event, None)
 
         # Check calls to ada_session.send
         send_calls = jules_agent.session.send.call_args_list
