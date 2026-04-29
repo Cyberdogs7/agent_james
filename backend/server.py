@@ -2182,7 +2182,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
 
         # Capture if this was an already active task (e.g. after restart)
         original_status = task.get("status")
-        was_in_progress = (original_status == "in_progress")
+        was_in_progress = (original_status in ["in_progress", "awaiting_user_feedback", "awaiting_plan_approval", "planning"])
 
         fleet_manager.update_agent_session(current_agent_id, None, "working")
         # Move to 'submitting' to show we are communicating with Jules
