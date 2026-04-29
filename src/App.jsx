@@ -1758,7 +1758,7 @@ function App() {
       ></div>
 
       {/* Ambient Glow (Fixed: Static) */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gold-900/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gold-900/10 rounded-full  pointer-events-none" />
 
       {/* Top Bar (Draggable) */}
       <div
@@ -1852,7 +1852,7 @@ function App() {
 
       {/* Notification History Dropdown */}
       {showNotificationHistory && (
-        <div className="absolute top-12 right-4 w-80 bg-black/90 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-[9998] flex flex-col max-h-[60vh]">
+        <div className="absolute top-12 right-4 w-80 bg-black/90  border border-white/20 rounded-xl  z-[9998] flex flex-col max-h-[60vh]">
           <div className="p-3 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-white font-bold text-sm tracking-wide">Notification History</h3>
             <button
@@ -1893,7 +1893,7 @@ function App() {
         <div
           id="visualizer"
           className={`absolute flex items-center justify-center ${activeDragElement === "visualizer" ? "" : "transition-all duration-200"}
-                         bg-black/80 border border-white/10 shadow-2xl overflow-visible
+                         bg-black/80 border border-white/10  overflow-visible
                         ${isModularMode ? (activeDragElement === "visualizer" ? "ring-2 ring-green-500 bg-green-500/10" : "ring-1 ring-yellow-500/30 bg-yellow-500/5") + " rounded-2xl pointer-events-auto" : "rounded-2xl pointer-events-none"}
                     `}
           style={{
@@ -1997,7 +1997,7 @@ function App() {
           <div
             id="cad"
             className={`absolute flex flex-col ${activeDragElement === "cad" ? "" : "transition-all duration-200"}
-                         bg-black/80 border border-white/10 shadow-2xl overflow-hidden rounded-2xl
+                         bg-black/80 border border-white/10  overflow-hidden rounded-2xl
                         ${activeDragElement === "cad" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
             style={{
@@ -2043,7 +2043,7 @@ function App() {
           <div
             id="browser"
             className={`absolute flex flex-col ${activeDragElement === "browser" ? "" : "transition-all duration-200"}
-                         bg-black/80 border border-white/10 shadow-2xl overflow-hidden rounded-lg
+                         bg-black/80 border border-white/10  overflow-hidden rounded-lg
                         ${activeDragElement === "browser" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
             style={{
@@ -2168,7 +2168,7 @@ function App() {
             id="music"
             ref={musicWindowRef}
             className={`absolute flex flex-col ${activeDragElement === "music" ? "" : "transition-all duration-200"}
-                         shadow-2xl overflow-hidden rounded-md
+                          overflow-hidden rounded-md
                         ${activeDragElement === "music" ? "ring-2 ring-green-500" : ""}
                     `}
             style={{

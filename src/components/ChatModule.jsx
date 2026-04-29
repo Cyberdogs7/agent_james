@@ -36,7 +36,7 @@ const ChatModule = ({
             id="chat"
             onMouseDown={onMouseDown}
             className={`absolute px-6 py-4 pointer-events-auto ${activeDragElement === "chat" ? "" : "transition-all duration-200"}
-             bg-black/80 border border-gold9/20 shadow-2xl rounded-2xl
+             bg-black/80 border border-gold9/20  rounded-2xl
             ${isModularMode ? (activeDragElement === 'chat' ? 'ring-2 ring-green-500' : 'ring-1 ring-yellow-500/30') : ''}
         `}
             style={{
