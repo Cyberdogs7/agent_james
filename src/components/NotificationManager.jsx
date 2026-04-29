@@ -51,7 +51,7 @@ const NotificationManager = ({ socket, onNewNotification }) => {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="pointer-events-auto bg-black/80 backdrop-blur-xl border border-white/20 p-4 rounded-xl shadow-2xl w-80 flex items-start gap-3 relative overflow-hidden"
+            className="pointer-events-auto bg-black/80  border border-white/20 p-4 rounded-xl  w-80 flex items-start gap-3 relative overflow-hidden"
           >
             <div className="mt-1 p-2 bg-blue-500/20 rounded-full shrink-0">
               <Bell className="w-5 h-5 text-blue-400" />

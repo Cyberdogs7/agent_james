@@ -458,7 +458,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                                 ))}
                                 <div ref={messagesEndRef} />
                             </div>
-                            <div className="p-2 border-t border-gold9/10 bg-black/60 backdrop-blur-md">
+                            <div className="p-2 border-t border-gold9/10 bg-black/60 ">
                                 <input
                                     type="text"
                                     value={inputValue}
