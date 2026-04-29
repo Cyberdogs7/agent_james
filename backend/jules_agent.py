@@ -223,6 +223,14 @@ class JulesAgent:
         while not stop_event.is_set():
             try:
                 session_obj = await self.get_session(session_id)
+                if session_obj is None:
+                    # If we can't find the session, it's likely been deleted or finished
+                    self._log(f"[JULES_AGENT] Session {session_id} no longer available. Assuming task completed.")
+                    if callback:
+                         await callback(f"Jules Update ({session_id}):\nSession is no longer available. Assuming task completed.")
+                    stop_event.set()
+                    break
+
                 activities_response = await self.list_activities(session_id)
 
                 if activities_response and "activities" in activities_response:
@@ -283,6 +291,16 @@ class JulesAgent:
                             insight = "Session Failed."
                             self.session_insights[session_id] = insight
                             session_completed = True
+                        elif state == "IN_PROGRESS":
+                            # CI/CD Re-run with no work case: 
+                            # If we have a PR (outputs exist) and it's been idle for a while, assume it's done.
+                            has_outputs = bool(session_obj.get("outputs"))
+                            if has_outputs and (datetime.now() - last_activity_time > timedelta(minutes=10)):
+                                self._log(f"[JULES_AGENT] Session {session_id} is IN_PROGRESS but idle with outputs. Assuming completed.")
+                                messages_to_send.append("Jules task appears completed (detected idle state with existing outputs).")
+                                insight = "Session Completed (Idle)."
+                                self.session_insights[session_id] = insight
+                                session_completed = True
 
                     if messages_to_send:
                         combined_message = "\n".join(messages_to_send)
@@ -311,7 +329,7 @@ class JulesAgent:
                     last_activity_count = len(activities)
                 else:
                     # No new activity, check for timeout
-                    if datetime.now() - last_activity_time > timedelta(minutes=20):
+                    if datetime.now() - last_activity_time > timedelta(minutes=10):
                         self._log(f"[JULES_AGENT] Session {session_id} timed out. Stopping polling.")
                         stop_event.set()
 
@@ -320,6 +338,9 @@ class JulesAgent:
 
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Error polling {session_id}: {e}")
+                # If we get a 404 or persistent error, we should probably stop polling eventually
+                # but for now we just wait and retry. 
+                # If get_session above returned None and we didn't break, we'll hit this or retry.
                 await asyncio.sleep(60)
 
     async def send_message(self, session_id, message):
@@ -337,12 +358,12 @@ class JulesAgent:
 
         params = {"pageSize": limit}
         response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions", params=params)
-        if response and "sessions" in response:
-            sessions = response["sessions"]
+        if response is not None:
+            sessions = response.get("sessions", [])
             self._cache[cache_key] = sessions
             self._cache_expiry[cache_key] = now + self._cache_ttl
             return sessions
-        return []
+        return None
 
     async def get_session(self, session_id):
         """Fetches a single session by ID."""
@@ -407,7 +428,22 @@ class JulesAgent:
         while True:
             try:
                 sessions = await self.list_sessions()
-                if sessions:
+                
+                # IMPORTANT: If sessions is None, it means the request failed.
+                # Do NOT mark sessions as completed if we just failed to fetch the list.
+                if sessions is not None:
+                    # Tracking which sessions are currently seen
+                    current_session_ids = {s.get("name") for s in sessions if s.get("name")}
+                    
+                    # 1. Detect missing sessions (assume completed as requested)
+                    for session_id in list(self.monitored_sessions.keys()):
+                        if session_id not in current_session_ids:
+                            self._log(f"[JULES_AGENT] Session {session_id} no longer returned by API. Assuming COMPLETED.")
+                            if status_change_callback:
+                                asyncio.create_task(status_change_callback(session_id, "Unknown Task", "COMPLETED"))
+                            del self.monitored_sessions[session_id]
+
+                    # 2. Process current sessions
                     for session in sessions:
                         session_id = session.get("name")
                         current_state = session.get("state")
@@ -454,16 +490,18 @@ class JulesAgent:
         """Returns a formatted list of Jules sessions."""
         try:
             sessions = await self.list_sessions()
-            if sessions:
-                 # Format for readability
-                 lines = []
-                 for s in sessions:
-                     name = s.get('name', 'Unknown')
-                     state = s.get('state', 'Unknown')
-                     title = s.get('title', name)
-                     lines.append(f"- {title} ({name}) [State: {state}]")
-                 return "\n".join(lines)
-            return "No Jules sessions found."
+            if sessions is not None:
+                 if sessions:
+                     # Format for readability
+                     lines = []
+                     for s in sessions:
+                         name = s.get('name', 'Unknown')
+                         state = s.get('state', 'Unknown')
+                         title = s.get('title', name)
+                         lines.append(f"- {title} ({name}) [State: {state}]")
+                     return "\n".join(lines)
+                 return "No Jules sessions found."
+            return "Failed to fetch Jules sessions."
         except Exception as e:
             return f"Error listing sessions: {str(e)}"
 
