@@ -1900,9 +1900,10 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 except queue.Empty:
                     pass
 
+                is_playing = getattr(self, "music_agent", None) and getattr(self.music_agent, "is_playing", False)
                 is_paused = getattr(self, "music_agent", None) and getattr(self.music_agent, "paused", False)
 
-                if is_paused:
+                if getattr(self, "music_agent", None) and not is_playing:
                     m_buffer.clear()
                     try:
                         while True:
@@ -1918,7 +1919,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         pass
 
                 # If both buffers are empty, wait a bit
-                if not v_buffer and not m_buffer:
+                if not v_buffer and (not m_buffer or is_paused):
                     try:
                         v_data = self.audio_in_queue.get(timeout=0.05)
                         v_buffer.extend(v_data)
@@ -1939,7 +1940,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                 # 2. Mix and flush buffers
                 mixed_data = b""
 
-                if v_buffer and m_buffer:
+                if v_buffer and m_buffer and not is_paused:
                     min_len = min(len(v_buffer), len(m_buffer), MAX_CHUNK_SIZE)
                     min_len = (min_len // 2) * 2 # 16-bit align
 
@@ -1962,7 +1963,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     if v_len > 0:
                         mixed_data = bytes(v_buffer[:v_len])
                         del v_buffer[:v_len]
-                elif m_buffer:
+                elif m_buffer and not is_paused:
                     m_len = min(len(m_buffer), MAX_CHUNK_SIZE)
                     m_len = (m_len // 2) * 2
                     if m_len > 0:
