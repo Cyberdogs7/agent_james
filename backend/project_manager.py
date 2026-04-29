@@ -579,12 +579,19 @@ class ProjectManager:
             owner = repo['owner']
             name = repo['name']
 
+            # Fetch repo details to get the official default branch
+            details = await client.get_repo_details(owner, name)
+            if not details:
+                return None
+            
+            default_branch_name = details.get('default_branch', 'main')
+            
+            # Fetch branches to find the SHA of the default branch
             branches = await client.get_branches(owner, name)
             if not branches:
                 return None
 
-            # Assume first branch is default or look for main/master
-            default_branch = next((b for b in branches if b['name'] in ['main', 'master']), branches[0])
+            default_branch = next((b for b in branches if b['name'] == default_branch_name), branches[0])
 
             current_sha = default_branch['commit']['sha']
             repo_key = f"{owner}/{name}"

@@ -1630,6 +1630,33 @@ async def get_fleet_status(sid):
             # Wait for all background fetches to complete
             await asyncio.gather(*tasks)
 
+            # Persist discovered default branches to fleet.json if they changed
+            modified = False
+            for i, repo in enumerate(fleet):
+                discovered_branch = updated_fleet[i].get('branch')
+                if discovered_branch and discovered_branch != "unknown":
+                    # Update branch field
+                    if repo.get('branch') != discovered_branch:
+                        repo['branch'] = discovered_branch
+                        modified = True
+                    
+                    # Update source field to include the branch if needed
+                    current_source = repo.get('source', '')
+                    if current_source:
+                        if "/branches/" in current_source:
+                            base_source = current_source.split("/branches/")[0]
+                            new_source = f"{base_source}/branches/{discovered_branch}"
+                        else:
+                            new_source = f"{current_source}/branches/{discovered_branch}"
+                        
+                        if current_source != new_source:
+                            repo['source'] = new_source
+                            modified = True
+            
+            if modified:
+                audio_loop.project_manager.save_fleet(fleet)
+                print(f"[SERVER] Updated fleet.json with discovered default branches.")
+
         # Fire and forget the background fetch
         asyncio.create_task(fetch_all_and_emit())
 
@@ -2186,6 +2213,9 @@ async def check_and_start_next_task(repo_name, agent_id=None):
             for r in fleet:
                 if f"{r.get('owner')}/{r.get('name')}" == repo_name:
                     source = r.get("source", source)
+                    branch = r.get("branch")
+                    if branch and "/branches/" not in source:
+                         source = f"{source}/branches/{branch}"
                     break
         await sio.emit('status', {'msg': f"Agent {current_agent_id} picking up task in {repo_name}..."})
 

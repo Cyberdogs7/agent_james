@@ -36,3 +36,7 @@ out/
 .DS_Store
 Thumbs.db
 *.log
+/public/reactions/
+/fleet.json
+/settings.json
+settings.json

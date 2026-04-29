@@ -110,7 +110,25 @@ class JulesAgent:
                     if "/branches/" in source_context["source"]:
                         starting_branch = source_context["source"].split("/branches/")[-1]
                     else:
-                        starting_branch = "master"
+                        # Attempt to fetch default branch from GitHub if we have a token
+                        token = self.project_manager.get_github_token()
+                        if token:
+                            parts = source_context["source"].split("/")
+                            if len(parts) >= 4:
+                                owner, repo = parts[2], parts[3]
+                                try:
+                                    client = GitHubClient(token)
+                                    details = await client.get_repo_details(owner, repo)
+                                    if details:
+                                        starting_branch = details.get("default_branch")
+                                        if starting_branch:
+                                            print(f"[JulesAgent] Resolved default branch for {owner}/{repo}: {starting_branch}")
+                                except Exception as e:
+                                    print(f"[JulesAgent] Failed to fetch repo details for branch resolution: {e}")
+                        
+                        if not starting_branch:
+                            # Fallback if GitHub fetch fails or no token
+                            starting_branch = "master"
 
                 source_context["githubRepoContext"]["startingBranch"] = starting_branch
         
