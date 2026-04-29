@@ -51,10 +51,11 @@ async def test_start_monitoring_detects_state_change(jules_agent):
                 pass  # Test finished
 
     # Verification
-    # The callback should have been called twice (once for IN_PROGRESS, once for COMPLETED)
+    # The callback should have been called three times (PLANNING, IN_PROGRESS, COMPLETED)
+    mock_status_change_callback.assert_any_call("sessions/123", "Test Task", "PLANNING")
     mock_status_change_callback.assert_any_call("sessions/123", "Test Task", "IN_PROGRESS")
     mock_status_change_callback.assert_any_call("sessions/123", "Test Task", "COMPLETED")
-    assert mock_status_change_callback.call_count == 2
+    assert mock_status_change_callback.call_count == 3
 
     # list_sessions should have been called multiple times
     assert mock_list_sessions.call_count >= 2

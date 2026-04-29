@@ -2364,8 +2364,19 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     if session:
                         session_id = session.get('name')
                         fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
-                        # Once received by Jules, move to 'queued'
-                        fleet_manager.update_task_status(repo_name, current_task["id"], "queued")
+
+                        # Prevent race condition: Jules might have already started and emitted IN_PROGRESS
+                        state_now = fleet_manager.get_state()
+                        current_task_now = None
+                        for repo in state_now["repos"]:
+                            if repo["name"] == repo_name:
+                                current_task_now = next((t for t in repo["queue"] if t["id"] == current_task["id"]), None)
+                                break
+
+                        if current_task_now and current_task_now.get("status") not in ["in_progress", "planning", "submitting", "completed", "failed"]:
+                            # Once received by Jules, move to 'queued'
+                            fleet_manager.update_task_status(repo_name, current_task["id"], "queued")
+
                         fleet_manager.update_agent_session(current_agent_id, session_id, "working")
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
                         return
