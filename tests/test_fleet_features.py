@@ -121,6 +121,12 @@ class TestFleetFeatures(unittest.IsolatedAsyncioTestCase):
         # It's imported in backend.automation_engine.
 
         with patch('backend.automation_engine.GitHubClient') as MockGH:
+            import sys
+            import types
+            sys.modules['backend.server'] = types.ModuleType('backend.server')
+            sys.modules['backend.server'].fleet_manager = MagicMock()
+            sys.modules['backend.server'].fleet_manager.repos = {"Owner/Repo": {"is_active": True}}
+
             mock_client = MockGH.return_value
 
             # Setup stalled PR
