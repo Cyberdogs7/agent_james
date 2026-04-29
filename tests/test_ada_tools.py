@@ -264,7 +264,10 @@ class TestJulesNotifications:
         from ada import AudioLoop
 
         # Create an instance of AudioLoop
-        audio_loop = AudioLoop()
+        mock_pm = MagicMock()
+        from pathlib import Path
+        mock_pm.get_current_project_path.return_value = Path("/tmp")
+        audio_loop = AudioLoop(project_manager=mock_pm)
 
         # Mock the dependencies of the handler method
         audio_loop.on_display_content = MagicMock()
@@ -284,7 +287,11 @@ class TestJulesNotifications:
         assert "Jules task 'Fix Login Bug' has moved to IN_PROGRESS" in call_args["data"]["text"]
         assert call_args["duration"] == 20000
 
-        # 2. Verify Voice Notification
+        # 2. Verify Voice Notification Batching behavior
+        # Because voice notifications are now batched, we need to wait for the batching task to finish.
+        if hasattr(audio_loop, '_notification_batch_task') and audio_loop._notification_batch_task:
+            await audio_loop._notification_batch_task
+
         audio_loop.session.send.assert_called_once()
         voice_args = audio_loop.session.send.call_args.kwargs
         assert "System Notification: Jules task 'Fix Login Bug' has moved to IN_PROGRESS." in voice_args["input"]
