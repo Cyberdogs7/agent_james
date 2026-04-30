@@ -1329,8 +1329,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         project = self.project_manager.current_project
 
         # 2. Jules Data (Fetch early for stats)
-        jules_sessions = await self.jules_agent.list_sessions()
-        ollama_sessions = await self.ollama_agent.list_sessions()
+        jules_sessions = await self.jules_agent.list_sessions() or []
+        ollama_sessions = await self.ollama_agent.list_sessions() or []
 
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [DASHBOARD] Jules sessions: {len(jules_sessions)}, Ollama sessions: {len(ollama_sessions)}")

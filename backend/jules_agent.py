@@ -11,7 +11,8 @@ class JulesAgent:
     def __init__(self, session=None, api_key=None, project_manager=None):
         self.api_key = api_key or os.getenv("JULES_API_KEY") or ""
         self.base_url = "https://jules.googleapis.com/v1alpha"
-        self.client = httpx.AsyncClient(headers={"x-goog-api-key": self.api_key}, timeout=60.0)
+        self._client = None          # Created lazily in _request (must be bound to running loop)
+        self._client_loop = None     # The event loop the client was created in
         self.session_id = None
         self.session = session # Optional: Main Gemini Session (Legacy support, prefer callbacks)
         self.project_manager = project_manager
@@ -29,6 +30,29 @@ class JulesAgent:
         self._cache_expiry = {}
         self._cache_ttl = 15 # Seconds
 
+    async def _get_client(self):
+        """Returns an httpx.AsyncClient bound to the current running event loop.
+        Recreates the client if the loop has changed (e.g. after uvicorn startup)."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if self._client is None or self._client_loop is not loop:
+            if self._client is not None:
+                try:
+                    await self._client.aclose()
+                except Exception:
+                    pass
+            self._client = httpx.AsyncClient(
+                headers={"x-goog-api-key": self.api_key},
+                timeout=60.0
+            )
+            self._client_loop = loop
+            self._log("[JULES_AGENT] Created new httpx client bound to current event loop.")
+
+        return self._client
+
     def _log(self, *args, **kwargs):
         if self.include_raw:
             print(*args, **kwargs)
@@ -38,11 +62,12 @@ class JulesAgent:
         self._log(f"[JULES_AGENT] Requesting: {tool_name} ({method} {url})")
         if self.include_raw and "json" in kwargs:
             print(f"[JULES_AGENT] Request Body: {kwargs['json']}")
+        client = await self._get_client()
         max_retries = 3
         base_delay = 1
         for attempt in range(max_retries):
             try:
-                response = await self.client.request(method, url, **kwargs)
+                response = await client.request(method, url, **kwargs)
                 response_text = response.text
                 self._log(f"[JULES_AGENT] Response for {tool_name}:")
                 self._log(f"  - Status Code: {response.status_code}")
