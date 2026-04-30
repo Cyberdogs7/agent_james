@@ -425,7 +425,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                         )}
                                     </div>
 
-                                    <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-hide ${expandedQueues[repo.name] ? 'max-h-[800px]' : 'max-h-48'}`}>
+                                    <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin ${expandedQueues[repo.name] ? 'max-h-[800px]' : 'max-h-48'}`}>
                                         {repo.queue?.map((task, i) => {
                                             let taskBorder = 'border-transparent';
                                             let taskBg = 'bg-gray-500/5';
