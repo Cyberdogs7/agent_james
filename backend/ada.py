@@ -284,7 +284,7 @@ class AudioLoop:
 
         # Try to sync this state change with the fleet manager
         try:
-            from backend.server import fleet_manager, sio, check_and_start_next_task, fleet_account_active_sessions, get_all_accounts
+            from backend.server import fleet_manager, sio, check_and_start_next_task, get_all_accounts
 
             agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
             if agent_id and repo_name and task_id:
@@ -339,6 +339,8 @@ class AudioLoop:
             return False
             
         return True
+
+    async def _handle_jules_triage(self, session_id, message_content):
         """
         Intercepts Jules agent messages, acts as a manager using Ollama to triage,
         and either auto-replies or escalates to the human user.

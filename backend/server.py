@@ -2368,7 +2368,10 @@ async def check_and_start_next_task(repo_name, agent_id=None):
 
                         # Jules API is the source of truth - update to whatever state it reports
                         # But ONLY if the monitoring loop hasn't already advanced the state beyond what we just received
-                        current_status = current_task.get("status")
+                        # We fetch the FRESH task object from the fleet manager to ensure we aren't using a stale snapshot
+                        fresh_task = fleet_manager.get_task(repo_name, current_task["id"])
+                        current_status = fresh_task.get("status") if fresh_task else "submitting"
+                        
                         if current_status in ["submitting", "received", "pending", "queued"]:
                             fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower())
                         

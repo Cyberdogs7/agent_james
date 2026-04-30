@@ -187,6 +187,13 @@ class FleetManager:
         self.save_state()
         return task_id
 
+    def get_task(self, repo_name, task_id):
+        if repo_name in self.repos:
+            for task in self.repos[repo_name]["queue"]:
+                if task["id"] == task_id:
+                    return task
+        return None
+
     def update_task_status(self, repo_name, task_id, status, agent_id=None, error_message=None):
         if repo_name in self.repos:
             for task in self.repos[repo_name]["queue"]:
