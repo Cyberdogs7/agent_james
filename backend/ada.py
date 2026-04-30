@@ -82,8 +82,10 @@ from backend.fs_agent import FileSystemAgent
 from backend.git_agent import GitAgent
 try:
     from backend.task_manager import TaskManager
+    from backend.message_deduplicator import MessageDeduplicator
 except ImportError:
     from backend.task_manager import TaskManager
+    from message_deduplicator import MessageDeduplicator
 
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
@@ -208,6 +210,7 @@ class AudioLoop:
                 print(f"[ADA DEBUG] [WARN] Failed to load face cascade: {e}")
             self.face_cascade = None
         self._last_face_check_time = 0
+        self.notification_deduplicator = MessageDeduplicator(max_size=100)
 
         # Initialize Tool Registry
         self.tool_registry = ToolRegistry()
@@ -280,7 +283,10 @@ class AudioLoop:
     async def _handle_jules_status_change(self, session_id, title, new_state):
         """Handles UI and voice notifications for Jules session status changes and syncs fleet."""
         notification_text = f"Jules task '{title}' has moved to {new_state}."
-        self.notify_user(notification_text, duration=20000)
+        
+        # Deduplicate by session and state to allow same notification for different sessions
+        # but prevent spam for the same session/state pair.
+        self.notify_user(notification_text, duration=20000, message_id=f"jules_status_{session_id}_{new_state}")
 
         # Try to sync this state change with the fleet manager
         try:
@@ -2098,8 +2104,15 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         self._notification_batch_task = None
 
 
-    def notify_user(self, text, duration=10000, send_voice=True, send_slack=True):
+    def notify_user(self, text, duration=10000, send_voice=True, send_slack=True, message_id=None):
         """Consolidated method to dispatch system notifications across UI, Voice, and Slack."""
+        # Deduplicate to prevent spamming the same notification
+        dedup_id = message_id or text
+        if not self.notification_deduplicator.check_and_add(dedup_id):
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [NOTIFY] Suppressed duplicate notification: {text}")
+            return
+
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [NOTIFY] {text}")
 
