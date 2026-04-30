@@ -282,22 +282,18 @@ class AudioLoop:
 
     async def _handle_jules_status_change(self, session_id, title, new_state):
         """Handles UI and voice notifications for Jules session status changes and syncs fleet."""
-        notification_text = f"Jules task '{title}' has moved to {new_state}."
-        
-        # Deduplicate by session and state to allow same notification for different sessions
-        # but prevent spam for the same session/state pair.
-        self.notify_user(notification_text, duration=20000, message_id=f"jules_status_{session_id}_{new_state}")
-
-        # Try to sync this state change with the fleet manager
+        # Try to sync this state change with the fleet manager first.
+        # The notification fires only after a successful sync so we don't mislead the user
+        # when the fleet update silently fails.
         try:
             from backend.server import fleet_manager, sio, check_and_start_next_task, get_all_accounts
 
             agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+
             if repo_name and task_id:
                 # Map Jules state to fleet manager state (Source of Truth)
                 local_status = new_state.lower()
-                
-                # Update Task Status ALWAYS if we found the task
+
                 fleet_manager.update_task_status(repo_name, task_id, local_status)
 
                 if agent_id:
@@ -306,14 +302,11 @@ class AudioLoop:
                     elif new_state == "FAILED":
                         fleet_manager.update_agent_session(agent_id, None, "error")
                     else:
-                        # Map agent session status
                         agent_status = "working"
                         if new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
                             agent_status = "needing_feedback"
-                            
                             message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
                             self.notify_user(message, duration=20000)
-
                             if self.session:
                                 try:
                                     asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
@@ -322,31 +315,34 @@ class AudioLoop:
                                         print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
                         elif new_state == "PAUSED":
                             agent_status = "stuck"
-                        
                         fleet_manager.update_agent_session(agent_id, session_id, agent_status)
 
-                # Special case: handle error messages for failed states
                 if new_state == "FAILED":
                     fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
 
-                # Emit update
+                # Emit update to all clients
                 await sio.emit('fleet_state_update', fleet_manager.get_state())
 
-                # If finished, optionally trigger next task if the agent is now idle
+                # Fire notification now that the fleet state is confirmed updated
+                notification_text = f"Jules task '{title}' has moved to {new_state}."
+                self.notify_user(notification_text, duration=20000, message_id=f"jules_status_{session_id}_{new_state}")
+
                 if new_state in ["COMPLETED", "FAILED"] and agent_id:
-                    # Wait a tiny bit to let _on_jules_finished handle it if it hasn't already
                     await asyncio.sleep(1)
                     await check_and_start_next_task(repo_name, agent_id)
+
             else:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Could not find task for session {session_id}. Mapping might not be ready. Will retry.")
+                # Session not yet mapped — return False so the monitoring loop retries next poll.
+                print(f"[ADA] [WARN] Could not find fleet task for Jules session {session_id} (state={new_state}). Will retry next poll.")
                 return False
 
         except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to sync fleet status for {session_id}: {e}")
+            # Always log this — silent failures here cause the task to appear permanently stuck.
+            print(f"[ADA] [ERR] Fleet sync failed for Jules session {session_id} (state={new_state}): {e}")
+            import traceback
+            traceback.print_exc()
             return False
-            
+
         return True
 
     async def _handle_jules_triage(self, session_id, message_content):
