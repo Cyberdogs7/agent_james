@@ -282,9 +282,12 @@ class AudioLoop:
 
     async def _handle_jules_status_change(self, session_id, title, new_state):
         """Handles UI and voice notifications for Jules session status changes and syncs fleet."""
-        # Try to sync this state change with the fleet manager first.
-        # The notification fires only after a successful sync so we don't mislead the user
-        # when the fleet update silently fails.
+        # Notification fires unconditionally — it's the reliable signal that the monitoring
+        # loop is working. The fleet sync happens separately and may fail independently.
+        notification_text = f"Jules task '{title}' has moved to {new_state}."
+        self.notify_user(notification_text, duration=20000, message_id=f"jules_status_{session_id}_{new_state}")
+
+        # Try to sync this state change with the fleet manager
         try:
             from backend.server import fleet_manager, sio, check_and_start_next_task, get_all_accounts
 
@@ -320,12 +323,7 @@ class AudioLoop:
                 if new_state == "FAILED":
                     fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
 
-                # Emit update to all clients
                 await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-                # Fire notification now that the fleet state is confirmed updated
-                notification_text = f"Jules task '{title}' has moved to {new_state}."
-                self.notify_user(notification_text, duration=20000, message_id=f"jules_status_{session_id}_{new_state}")
 
                 if new_state in ["COMPLETED", "FAILED"] and agent_id:
                     await asyncio.sleep(1)
