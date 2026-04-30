@@ -110,6 +110,9 @@ class AudioLoop:
         self.output_device_index = output_device_index
         self.last_input_source = 'ui'  # Default to 'ui'
 
+        import threading
+        self._play_audio_stop_event = threading.Event()
+
         # Initialize ProjectManager
         if project_manager:
             self.project_manager = project_manager
@@ -1909,7 +1912,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
         import audioop
         import time
 
-        while not self.stop_event.is_set():
+        while not self.stop_event.is_set() and not self._play_audio_stop_event.is_set():
             try:
                 # 1. Fill buffers from queues
                 try:
@@ -2225,6 +2228,7 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 
                     tasks.append(asyncio.create_task(self.receive_audio()))
                     import threading
+                    self._play_audio_stop_event.clear()
                     threading.Thread(target=self.play_audio, daemon=True).start()
                     tasks.append(asyncio.create_task(self.proactive_agent.run()))
 
@@ -2309,6 +2313,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                         return True # Signal for reconnect
 
                 finally:
+                    # Stop play_audio thread
+                    self._play_audio_stop_event.set()
+
                     # Flush chat buffer to save any pending conversation before teardown
                     self.flush_chat()
                     if INCLUDE_RAW_LOGS:
