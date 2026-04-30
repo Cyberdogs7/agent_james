@@ -2367,7 +2367,10 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
 
                         # Jules API is the source of truth - update to whatever state it reports
-                        fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower())
+                        # But ONLY if the monitoring loop hasn't already advanced the state beyond what we just received
+                        current_status = current_task.get("status")
+                        if current_status in ["submitting", "received", "pending", "queued"]:
+                            fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower())
                         
                         agent_status = "working"
                         if session_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:

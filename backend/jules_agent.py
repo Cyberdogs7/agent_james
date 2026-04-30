@@ -463,14 +463,22 @@ class JulesAgent:
 
                         if previous_state is None:
                             self._log(f"[JULES_AGENT] New active session found: {session_id}. State: {current_state}.")
-                            self.monitored_sessions[session_id] = current_state
+                            success = True
                             if status_change_callback:
-                                asyncio.create_task(status_change_callback(session_id, title, current_state))
+                                # We await it to ensure it was successfully handled/mapped before caching the state
+                                success = await status_change_callback(session_id, title, current_state)
+                            
+                            if success is not False: # True or None
+                                self.monitored_sessions[session_id] = current_state
+
                         elif previous_state != current_state:
                             self._log(f"[JULES_AGENT] Status change for {session_id}: {previous_state} -> {current_state}")
-                            self.monitored_sessions[session_id] = current_state
+                            success = True
                             if status_change_callback:
-                                asyncio.create_task(status_change_callback(session_id, title, current_state))
+                                success = await status_change_callback(session_id, title, current_state)
+                            
+                            if success is not False: # True or None
+                                self.monitored_sessions[session_id] = current_state
 
             except Exception as e:
                 self._log(f"[JULES_AGENT] [ERR] Error in monitoring loop: {e}")

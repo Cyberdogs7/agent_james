@@ -288,10 +288,6 @@ class AudioLoop:
 
             agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
             if agent_id and repo_name and task_id:
-                # Map Jules state to fleet state where possible
-                # The fleet manager queue tracks "status": pending, in_progress, completed, failed
-                # The agent tracks "status": idle, working, stuck, error
-
                 # Map Jules state to fleet manager state (Source of Truth)
                 local_status = new_state.lower()
                 
@@ -332,12 +328,17 @@ class AudioLoop:
                     # Wait a tiny bit to let _on_jules_finished handle it if it hasn't already
                     await asyncio.sleep(1)
                     await check_and_start_next_task(repo_name, agent_id)
+            else:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [WARN] Could not find task for session {session_id}. Mapping might not be ready. Will retry.")
+                return False
 
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to sync fleet status for {session_id}: {e}")
-
-    async def _handle_jules_triage(self, session_id, message_content):
+            return False
+            
+        return True
         """
         Intercepts Jules agent messages, acts as a manager using Ollama to triage,
         and either auto-replies or escalates to the human user.
