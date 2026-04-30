@@ -292,6 +292,7 @@ class AudioLoop:
             from backend.server import fleet_manager, sio, check_and_start_next_task, get_all_accounts
 
             agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+            print(f"[ADA] [FLEET SYNC] session={session_id} state={new_state} -> repo={repo_name} task={task_id} agent={agent_id}")
 
             if repo_name and task_id:
                 # Map Jules state to fleet manager state (Source of Truth)
@@ -323,7 +324,9 @@ class AudioLoop:
                 if new_state == "FAILED":
                     fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
 
+                print(f"[ADA] [FLEET SYNC] Emitting fleet_state_update: {session_id} -> {local_status}")
                 await sio.emit('fleet_state_update', fleet_manager.get_state())
+                print(f"[ADA] [FLEET SYNC] Emit complete.")
 
                 if new_state in ["COMPLETED", "FAILED"] and agent_id:
                     await asyncio.sleep(1)

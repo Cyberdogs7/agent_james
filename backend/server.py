@@ -2156,6 +2156,41 @@ async def get_fleet_state(sid):
     state = fleet_manager.get_state()
     await sio.emit('fleet_state_update', state, to=sid)
 
+async def _watch_session_status(agent_inst, session_id, repo_name, task_id, agent_id):
+    """
+    Polls a specific Jules session via get_session() and syncs non-terminal state
+    changes (e.g. QUEUED -> IN_PROGRESS) to the fleet manager.
+
+    Necessary because start_monitoring() uses list_sessions() scoped to the default
+    API key and cannot see sessions created under a different fleet account key.
+    """
+    TERMINAL_STATES = {"COMPLETED", "FAILED", "ERROR"}
+    last_synced_state = None
+
+    for _ in range(60):  # Max ~15 minutes
+        await asyncio.sleep(15)
+        try:
+            session_obj = await agent_inst.get_session(session_id)
+            if not session_obj:
+                print(f"[SERVER] _watch_session_status: session {session_id} gone, stopping.")
+                break
+
+            state = session_obj.get("state", "")
+            if state and state != last_synced_state:
+                local_status = state.lower()
+                fleet_manager.update_task_status(repo_name, task_id, local_status, agent_id)
+                await sio.emit('fleet_state_update', fleet_manager.get_state())
+                print(f"[SERVER] _watch_session_status: {session_id} synced -> {local_status}")
+                last_synced_state = state
+
+            if state in TERMINAL_STATES:
+                break
+
+        except Exception as e:
+            print(f"[SERVER] _watch_session_status error for {session_id}: {e}")
+            break
+
+
 async def check_and_start_next_task(repo_name, agent_id=None):
     """Helper to check if there are tasks and idle agents in a repo and start one."""
     if not audio_loop:
@@ -2366,21 +2401,25 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         session_state = session.get('state', 'QUEUED')
                         fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
 
-                        # Jules API is the source of truth - update to whatever state it reports
-                        # But ONLY if the monitoring loop hasn't already advanced the state beyond what we just received
-                        # We fetch the FRESH task object from the fleet manager to ensure we aren't using a stale snapshot
                         fresh_task = fleet_manager.get_task(repo_name, current_task["id"])
                         current_status = fresh_task.get("status") if fresh_task else "submitting"
-                        
+
                         if current_status in ["submitting", "received", "pending", "queued"]:
                             fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower(), current_agent_id)
-                        
+
                         agent_status = "working"
                         if session_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
                             agent_status = "needing_feedback"
-                        
+
                         fleet_manager.update_agent_session(current_agent_id, session_id, agent_status)
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
+
+                        # Start a per-session watcher using agent_instance (correct API key).
+                        # start_monitoring() only sees the default-key sessions via list_sessions(),
+                        # so fleet-account sessions would otherwise stay stuck in 'queued'.
+                        asyncio.create_task(_watch_session_status(
+                            agent_instance, session_id, repo_name, current_task["id"], current_agent_id
+                        ))
                         return
 
                 except Exception as e:
