@@ -2189,7 +2189,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
         fleet_manager.update_task_status(repo_name, task["id"], "submitting", current_agent_id)
         await sio.emit('fleet_state_update', fleet_manager.get_state())
 
-        prompt = f"Context: Repo {repo_name}\nTask: {task['prompt']}"
+        prompt = task['prompt']
         attachments = task.get("attachments", [])
         if attachments:
             for att in attachments:
