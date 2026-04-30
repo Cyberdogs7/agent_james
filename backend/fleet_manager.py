@@ -2,6 +2,17 @@ import time
 import json
 from pathlib import Path
 
+AGENT_NAMES = [
+    "Bob", "Janet", "Kyle", "Alice", "Charlie", "Diana", "Edward", "Fiona", "George", "Hannah",
+    "Ivan", "Julia", "Kevin", "Laura", "Mike", "Nina", "Oscar", "Paula", "Quincy", "Rose",
+    "Steve", "Tina", "Victor", "Wendy", "Xander", "Yara", "Zack", "Arthur", "Beatrice", "Caleb",
+    "Damian", "Elena", "Felix", "Grace", "Hugo", "Iris", "Jasper", "Kira", "Leo", "Maya",
+    "Nico", "Olive", "Phoebe", "Quinn", "Riley", "Sasha", "Theo", "Ursula", "Vera", "Will",
+    "Xenia", "Yusuf", "Zelda", "Abby", "Ben", "Chloe", "Dexter", "Emma", "Finn", "Gia",
+    "Hank", "Ivy", "Jack", "Katie", "Liam", "Mia", "Noah", "Owen", "Penny", "Reed",
+    "Skye", "Toby", "Ulysses", "Violet", "Wyatt"
+]
+
 class FleetManager:
     def __init__(self, data_file="fleet_state.json"):
         self.data_file = Path(data_file)
@@ -19,13 +30,14 @@ class FleetManager:
         that no longer map to an active account limit, and adding new ones to meet capacity.
         """
         desired_agents = []
-        agent_counter = 1
+        agent_counter = 0
 
         if not accounts:
             # Default fallback if no accounts are configured
             for i in range(15):
+                name = f"Agent {AGENT_NAMES[agent_counter]}" if agent_counter < len(AGENT_NAMES) else f"Agent {agent_counter + 1}"
                 desired_agents.append({
-                    "expected_id": f"agent_{agent_counter}",
+                    "expected_id": name,
                     "api_key": None,
                     "account_name": "Default"
                 })
@@ -37,8 +49,9 @@ class FleetManager:
                     limit = 15 # Default for unlimited/unspecified
 
                 for i in range(limit):
+                    name = f"Agent {AGENT_NAMES[agent_counter]}" if agent_counter < len(AGENT_NAMES) else f"Agent {agent_counter + 1}"
                     desired_agents.append({
-                        "expected_id": f"agent_{agent_counter}",
+                        "expected_id": name,
                         "api_key": account.get("api_key"),
                         "account_name": account.get("name") or "Unnamed"
                     })

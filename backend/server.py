@@ -2336,7 +2336,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         fleet_manager.update_agent_session(current_agent_id, session_to_resume, "working")
                         # Restore original status or move to in_progress so we aren't stuck in 'submitting'
                         resumption_status = original_status if original_status not in ["submitting", "received"] else "in_progress"
-                        fleet_manager.update_task_status(repo_name, current_task["id"], resumption_status)
+                        fleet_manager.update_task_status(repo_name, current_task["id"], resumption_status, current_agent_id)
                         
                         # Force the monitoring loop to re-process this session on next poll so it triggers the sync callback
                         if hasattr(agent_instance, 'monitored_sessions'):
@@ -2373,7 +2373,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         current_status = fresh_task.get("status") if fresh_task else "submitting"
                         
                         if current_status in ["submitting", "received", "pending", "queued"]:
-                            fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower())
+                            fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower(), current_agent_id)
                         
                         agent_status = "working"
                         if session_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:

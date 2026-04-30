@@ -287,44 +287,47 @@ class AudioLoop:
             from backend.server import fleet_manager, sio, check_and_start_next_task, get_all_accounts
 
             agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-            if agent_id and repo_name and task_id:
+            if repo_name and task_id:
                 # Map Jules state to fleet manager state (Source of Truth)
                 local_status = new_state.lower()
                 
-                if new_state == "COMPLETED":
-                    fleet_manager.update_task_status(repo_name, task_id, "completed")
-                    fleet_manager.update_agent_session(agent_id, None, "idle")
-                elif new_state == "FAILED":
-                    fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
-                    fleet_manager.update_agent_session(agent_id, None, "error")
-                else:
-                    # Update status for all other states (QUEUED, PLANNING, IN_PROGRESS, etc.)
-                    fleet_manager.update_task_status(repo_name, task_id, local_status)
-                    
-                    # Map agent session status
-                    agent_status = "working"
-                    if new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
-                        agent_status = "needing_feedback"
-                        
-                        message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
-                        self.notify_user(message, duration=20000)
+                # Update Task Status ALWAYS if we found the task
+                fleet_manager.update_task_status(repo_name, task_id, local_status)
 
-                        if self.session:
-                            try:
-                                asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
-                            except Exception as e:
-                                if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
-                    elif new_state == "PAUSED":
-                        agent_status = "stuck"
-                    
-                    fleet_manager.update_agent_session(agent_id, session_id, agent_status)
+                if agent_id:
+                    if new_state == "COMPLETED":
+                        fleet_manager.update_agent_session(agent_id, None, "idle")
+                    elif new_state == "FAILED":
+                        fleet_manager.update_agent_session(agent_id, None, "error")
+                    else:
+                        # Map agent session status
+                        agent_status = "working"
+                        if new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
+                            agent_status = "needing_feedback"
+                            
+                            message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
+                            self.notify_user(message, duration=20000)
+
+                            if self.session:
+                                try:
+                                    asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
+                                except Exception as e:
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
+                        elif new_state == "PAUSED":
+                            agent_status = "stuck"
+                        
+                        fleet_manager.update_agent_session(agent_id, session_id, agent_status)
+
+                # Special case: handle error messages for failed states
+                if new_state == "FAILED":
+                    fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
 
                 # Emit update
                 await sio.emit('fleet_state_update', fleet_manager.get_state())
 
                 # If finished, optionally trigger next task if the agent is now idle
-                if new_state in ["COMPLETED", "FAILED"]:
+                if new_state in ["COMPLETED", "FAILED"] and agent_id:
                     # Wait a tiny bit to let _on_jules_finished handle it if it hasn't already
                     await asyncio.sleep(1)
                     await check_and_start_next_task(repo_name, agent_id)
