@@ -292,40 +292,37 @@ class AudioLoop:
                 # The fleet manager queue tracks "status": pending, in_progress, completed, failed
                 # The agent tracks "status": idle, working, stuck, error
 
+                # Map Jules state to fleet manager state (Source of Truth)
+                local_status = new_state.lower()
+                
                 if new_state == "COMPLETED":
                     fleet_manager.update_task_status(repo_name, task_id, "completed")
                     fleet_manager.update_agent_session(agent_id, None, "idle")
                 elif new_state == "FAILED":
                     fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
                     fleet_manager.update_agent_session(agent_id, None, "error")
-                elif new_state == "QUEUED":
-                    fleet_manager.update_task_status(repo_name, task_id, "queued")
-                    fleet_manager.update_agent_session(agent_id, session_id, "working")
-                elif new_state == "PLANNING":
-                    fleet_manager.update_task_status(repo_name, task_id, "planning")
-                    fleet_manager.update_agent_session(agent_id, session_id, "working")
-                elif new_state == "IN_PROGRESS":
-                    fleet_manager.update_task_status(repo_name, task_id, "in_progress")
-                    fleet_manager.update_agent_session(agent_id, session_id, "working")
-                elif new_state == "AWAITING_PLAN_APPROVAL":
-                    fleet_manager.update_task_status(repo_name, task_id, "awaiting_plan_approval")
-                    fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
-                elif new_state == "AWAITING_USER_FEEDBACK":
-                    fleet_manager.update_task_status(repo_name, task_id, "awaiting_user_feedback")
-                    fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
+                else:
+                    # Update status for all other states (QUEUED, PLANNING, IN_PROGRESS, etc.)
+                    fleet_manager.update_task_status(repo_name, task_id, local_status)
+                    
+                    # Map agent session status
+                    agent_status = "working"
+                    if new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
+                        agent_status = "needing_feedback"
+                        
+                        message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
+                        self.notify_user(message, duration=20000)
 
-                    message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
-                    self.notify_user(message, duration=20000)
-
-                    if self.session:
-                        try:
-                            asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
-                        except Exception as e:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
-                elif new_state == "PAUSED":
-                    fleet_manager.update_task_status(repo_name, task_id, "in_progress")
-                    fleet_manager.update_agent_session(agent_id, session_id, "stuck")
+                        if self.session:
+                            try:
+                                asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
+                            except Exception as e:
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
+                    elif new_state == "PAUSED":
+                        agent_status = "stuck"
+                    
+                    fleet_manager.update_agent_session(agent_id, session_id, agent_status)
 
                 # Emit update
                 await sio.emit('fleet_state_update', fleet_manager.get_state())

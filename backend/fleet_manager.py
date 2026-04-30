@@ -240,6 +240,13 @@ class FleetManager:
             self.save_state()
 
     def get_by_session(self, session_id):
+        # 1. Search by task's session_id (preferred, most reliable for newly spawned tasks)
+        for repo_name, repo_data in self.repos.items():
+            for task in repo_data.get("queue", []):
+                if task.get("session_id") == session_id and task.get("status") not in ["completed", "failed"]:
+                    return task.get("agent_id"), repo_name, task["id"]
+
+        # 2. Search by agent (legacy / fallback)
         for agent_id, agent in self.agents.items():
             if agent.get("current_session") == session_id:
                 for repo_name, repo_data in self.repos.items():
