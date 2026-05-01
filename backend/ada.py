@@ -334,12 +334,6 @@ class AudioLoop:
                 if new_state in ["COMPLETED", "FAILED"] and agent_id:
                     await asyncio.sleep(1)
                     await check_and_start_next_task(repo_name, agent_id)
-                elif new_state not in ["COMPLETED", "FAILED"] and not agent_id:
-                    # Task was resurrected but its agent was unassigned when it completed.
-                    # Ensure its status is not completed so check_and_start_next_task picks it up.
-                    fleet_manager.update_task_status(repo_name, task_id, "pending")
-                    await asyncio.sleep(1)
-                    await check_and_start_next_task(repo_name)
 
             else:
                 # Session not yet mapped — return False so the monitoring loop retries next poll.
@@ -1269,20 +1263,6 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
             self.jules_agent.start_polling(session_id, callback=_jules_update_callback, interceptor_callback=self._handle_jules_triage)
-
-        # If the task was completed and feedback is sent, try to make it pending again
-        # so check_and_start_next_task can assign an agent to it.
-        try:
-            from backend.server import fleet_manager, check_and_start_next_task
-            agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-            if repo_name and task_id:
-                task = fleet_manager.get_task(repo_name, task_id)
-                if task and task.get("status") in ["completed", "failed"]:
-                    fleet_manager.update_task_status(repo_name, task_id, "pending")
-                    await check_and_start_next_task(repo_name)
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to requeue task for feedback: {e}")
 
         response = await self.jules_agent.send_message(session_id, feedback)
         if response:

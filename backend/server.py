@@ -2265,7 +2265,7 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                 # Callback wrapper that looks for completion/failure signals
                 # JulesAgent sends generic messages through callback
                 # NOTE: We look for exact specific signal strings that JulesAgent emits
-                if "Jules has completed the session" in message or "Session Completed." in message or "Assuming task completed." in message or "Jules task appears completed" in message:
+                if "Jules has completed the session" in message or "Session Completed." in message:
                     print(f"[SERVER] Jules session completed for task {current_task['id']}")
                     fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
                     fleet_manager.update_agent_session(current_agent_id, None, "idle")

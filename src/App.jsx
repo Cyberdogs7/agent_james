@@ -39,7 +39,6 @@ import Suggestion from "./components/Suggestion";
 import WarRoomDashboard from "./components/WarRoomDashboard";
 import ProjectWindow from "./components/ProjectWindow";
 import WinampVisualizer from "./components/WinampVisualizer";
-import AppLiveClock from "./components/AppLiveClock";
 import MusicPlayerBar from "./components/MusicPlayerBar";
 
 const port = import.meta.env.SERVER_PORT || 8180;
@@ -106,6 +105,7 @@ function App() {
   });
   const [activePrintStatus, setActivePrintStatus] = useState(null); // {printer, progress_percent, time_elapsed, state}
   const [printerCount, setPrinterCount] = useState(0); // Count of connected printers
+  const [currentTime, setCurrentTime] = useState(new Date()); // Live clock
   const [timers, setTimers] = useState([]); // Timers and Reminders
   const [notificationHistory, setNotificationHistory] = useState([]);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
@@ -254,6 +254,14 @@ function App() {
     cursorSensitivity,
     isCameraFlipped,
   ]);
+
+  // Live Clock Update
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Centering Logic (Startup & Resize)
   useEffect(() => {
@@ -1812,7 +1820,15 @@ function App() {
           </button>
 
           {/* Live Clock */}
-          <AppLiveClock />
+          <div className="flex items-center gap-1.5 text-[11px] text-gold9/70 font-sans px-2">
+            <Clock size={12} className="text-gold9/50" />
+            <span>
+              {currentTime.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
           <button
             onClick={handleMinimize}
             className="p-1 hover:bg-gold9/20 rounded text-gold9 transition-colors"
