@@ -417,7 +417,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             >
                                                 <option value="">No dependencies</option>
                                                 {repo.queue.map(t => (
-                                                    <option key={t.id} value={t.id}>
+                                                    <option key={t.id} value={t.id} title={t.prompt}>
                                                         Depends on: {t.prompt.substring(0, 30)}{t.prompt.length > 30 ? '...' : ''}
                                                     </option>
                                                 ))}
