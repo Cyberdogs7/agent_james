@@ -97,8 +97,12 @@ class JulesAgent:
                 else:
                     print(f"HTTP error occurred: {e}")
                     return None
+            except httpx.RequestError as e:
+                delay = base_delay * (2 ** attempt)
+                print(f"Network error ({repr(e)}) for Jules API at {url}. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(delay)
             except Exception as e:
-                print(f"An error occurred during request for {tool_name}: {repr(e)}")
+                print(f"An unexpected error occurred during request for {tool_name}: {repr(e)}")
                 return None
         print(f"[JULES_AGENT] Request failed for {tool_name} after {max_retries} retries.")
         return None
