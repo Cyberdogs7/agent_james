@@ -351,7 +351,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                             >
                                                 {expandedQueues[repo.name] ? 'COLLAPSE' : 'EXPAND'}
                                             </button>
-                                            {repo.queue?.some(t => t.status === 'completed') && (
+                                            {repo.queue?.some(t => t.status === 'completed' || t.status === 'merged') && (
                                                 <button
                                                     onClick={() => onClearCompleted && onClearCompleted(repo.name)}
                                                     className="text-[9px] bg-gold9/5 hover:bg-[#2A2A2A] text-gold9/60 px-2 py-1 rounded transition-colors"
@@ -469,6 +469,12 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 statusText = 'COMPLETED';
                                                 textStyle = 'text-green-500/70 line-through';
                                                 statusTextColor = 'text-green-500';
+                                            } else if (task.status === 'merged') {
+                                                taskBorder = 'border-purple-500/30';
+                                                taskBg = 'bg-purple-500/5';
+                                                statusText = 'MERGED';
+                                                textStyle = 'text-purple-500/70 line-through';
+                                                statusTextColor = 'text-purple-500';
                                             } else if (task.status === 'failed') {
                                                 taskBorder = 'border-red-500/30';
                                                 taskBg = 'bg-red-500/5';

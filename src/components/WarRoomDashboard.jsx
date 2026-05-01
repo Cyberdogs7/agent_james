@@ -589,6 +589,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                                         <span className="text-gold9/40 block text-xs mb-1">STATUS</span>
                                         <span className={`px-2 py-1 rounded text-xs ${
                                             selectedTask.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                            selectedTask.status === 'merged' ? 'bg-purple-500/20 text-purple-400' :
                                             selectedTask.status === 'failed' ? 'bg-red-500/20 text-red-400' :
                                             selectedTask.status === 'in_progress' ? 'bg-cyan-500/20 text-cyan-400' :
                                             selectedTask.status === 'planning' ? 'bg-blue-500/20 text-blue-400 animate-pulse' :

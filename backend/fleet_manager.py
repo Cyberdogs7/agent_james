@@ -256,14 +256,14 @@ class FleetManager:
 
     def clear_completed_tasks(self, repo_name):
         if repo_name in self.repos:
-            self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t.get("status") != "completed"]
+            self.repos[repo_name]["queue"] = [t for t in self.repos[repo_name]["queue"] if t.get("status") not in ["completed", "merged"]]
             self.save_state()
 
     def get_by_session(self, session_id):
         # 1. Search by task's session_id (preferred, most reliable for newly spawned tasks)
         for repo_name, repo_data in self.repos.items():
             for task in repo_data.get("queue", []):
-                if task.get("session_id") == session_id and task.get("status") not in ["completed", "failed"]:
+                if task.get("session_id") == session_id and task.get("status") not in ["completed", "merged", "failed"]:
                     return task.get("agent_id"), repo_name, task["id"]
 
         # 2. Search by agent (legacy / fallback)
@@ -271,7 +271,7 @@ class FleetManager:
             if agent.get("current_session") == session_id:
                 for repo_name, repo_data in self.repos.items():
                     for task in repo_data["queue"]:
-                        if task.get("agent_id") == agent_id and task.get("status") not in ["completed", "failed"]:
+                        if task.get("agent_id") == agent_id and task.get("status") not in ["completed", "merged", "failed"]:
                             return agent_id, repo_name, task["id"]
         return None, None, None
 
@@ -319,9 +319,9 @@ class FleetManager:
                 if (status in ["received", "pending", "in_progress", "submitting", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]) and task.get("agent_id") is None:
                     depends_on = task.get("depends_on")
                     # Task is unblocked if it has no dependency, OR
-                    # if the dependency is completed, OR
+                    # if the dependency is merged, OR
                     # if the dependency is no longer in the queue (was cleared).
-                    if not depends_on or task_status.get(depends_on) == "completed" or depends_on not in task_status:
+                    if not depends_on or task_status.get(depends_on) == "merged" or depends_on not in task_status:
                         return task
         return None
 
