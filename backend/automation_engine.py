@@ -428,7 +428,7 @@ class AutomationEngine:
 
         # 1. Check Jules Sessions
         if self.ada and self.ada.jules_agent:
-            sessions = await self.ada.jules_agent.list_sessions()
+            sessions = await self.ada.jules_agent.list_sessions() or []
             for session in sessions:
                 state = session.get('state')
                 if state in ['COMPLETED', 'FAILED']:
