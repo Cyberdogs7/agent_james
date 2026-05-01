@@ -263,7 +263,7 @@ class FleetManager:
         # 1. Search by task's session_id (preferred, most reliable for newly spawned tasks)
         for repo_name, repo_data in self.repos.items():
             for task in repo_data.get("queue", []):
-                if task.get("session_id") == session_id and task.get("status") not in ["completed", "failed"]:
+                if task.get("session_id") == session_id:
                     return task.get("agent_id"), repo_name, task["id"]
 
         # 2. Search by agent (legacy / fallback)
@@ -271,7 +271,7 @@ class FleetManager:
             if agent.get("current_session") == session_id:
                 for repo_name, repo_data in self.repos.items():
                     for task in repo_data["queue"]:
-                        if task.get("agent_id") == agent_id and task.get("status") not in ["completed", "failed"]:
+                        if task.get("agent_id") == agent_id:
                             return agent_id, repo_name, task["id"]
         return None, None, None
 
