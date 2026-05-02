@@ -2,6 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Activity, AlertTriangle, Plus, ChevronRight, Server, Play, Clock, Inbox, X, RefreshCw, Paperclip } from 'lucide-react';
 
+
+const getStatusClasses = (status) => {
+    switch (status) {
+        case 'working':
+            return 'shadow-[0_0_8px_rgba(34,197,94,0.15)] border-green-500/50';
+        case 'needing_feedback':
+            return 'shadow-[0_0_8px_rgba(234,179,8,0.15)] border-yellow-500/50';
+        case 'error':
+        case 'stuck':
+            return 'shadow-[0_0_8px_rgba(239,68,68,0.15)] border-red-500/50';
+        default:
+            return 'border-gold9/30';
+    }
+};
+
+const getStatusColor = (status) => {
+    switch (status) {
+        case 'working': return 'bg-green-500';
+        case 'needing_feedback': return 'bg-yellow-500';
+        case 'error':
+        case 'stuck': return 'bg-red-500';
+        default: return 'bg-gold9';
+    }
+};
+
 const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster, onReorderRepos }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
@@ -317,11 +342,11 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                                 key={agent.id}
                                                 draggable
                                                 onDragStart={(e) => handleDragStart(e, agent.id)}
-                                                className={`px-2 py-1 rounded bg-gold9/5 border border-gold9/20 flex flex-col cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${agent.status === 'working' ? 'shadow-[0_0_8px_rgba(255,215,0,0.15)] border-gold9/30' : (agent.status === 'needing_feedback' ? 'shadow-[0_0_8px_rgba(234,179,8,0.15)] border-yellow-500/30' : '')}`}
+                                                className={`px-2 py-1 rounded bg-gold9/5 border flex flex-col cursor-pointer hover:border-gold9 hover:bg-gold9/20 ${getStatusClasses(agent.status)}`}
                                                 onClick={() => onAgentClick && onAgentClick(agent)}
                                             >
                                                 <div className="flex items-center gap-2 text-xs font-mono">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'working' ? 'bg-gold9 animate-pulse' : (agent.status === 'needing_feedback' ? 'bg-yellow-500 animate-pulse' : (agent.status === 'stuck' ? 'bg-red-500' : 'bg-gray-500'))}`} />
+                                                    <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'idle' ? 'bg-gray-500' : getStatusColor(agent.status)} ${agent.status !== 'idle' && agent.status !== 'error' && agent.status !== 'stuck' ? 'animate-pulse' : ''}`} />
                                                     <span>{agent.id.replace('agent_', 'A-')}</span>
                                                     {(agent.status === 'working' || agent.status === 'needing_feedback') && (
                                                         <span className="text-[9px] text-gold9 ml-1">{formatTime(agent.last_active)}</span>
