@@ -2353,16 +2353,17 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         clean_title_prompt = current_prompt.replace('\\n', ' ').replace('\\r', ' ').strip()[:40]
                         try:
                             existing_sessions = await agent_instance.list_sessions()
-                            for s in existing_sessions:
-                                s_title = s.get('title', '')
-                                if not s_title: continue
-                                if clean_title_prompt in s_title or s_title in clean_title_prompt:
-                                    if s.get("state") not in ["COMPLETED", "FAILED"]:
-                                        session_to_resume = s.get('name')
-                                        print(f"[SERVER] Found matching title active session {session_to_resume} for task {current_task['id']}")
-                                        # Save it to the task so we don't have to search next time
-                                        fleet_manager.update_task_session(repo_name, current_task["id"], session_to_resume)
-                                        break
+                            if existing_sessions is not None:
+                                for s in existing_sessions:
+                                    s_title = s.get('title', '')
+                                    if not s_title: continue
+                                    if clean_title_prompt in s_title or s_title in clean_title_prompt:
+                                        if s.get("state") not in ["COMPLETED", "FAILED"]:
+                                            session_to_resume = s.get('name')
+                                            print(f"[SERVER] Found matching title active session {session_to_resume} for task {current_task['id']}")
+                                            # Save it to the task so we don't have to search next time
+                                            fleet_manager.update_task_session(repo_name, current_task["id"], session_to_resume)
+                                            break
                         except Exception as e:
                             print(f"[SERVER] Failed to list sessions for deduplication: {e}")
 

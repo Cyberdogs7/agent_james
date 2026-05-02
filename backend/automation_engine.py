@@ -428,45 +428,46 @@ class AutomationEngine:
 
         # 1. Check Jules Sessions
         if self.ada and self.ada.jules_agent:
-            sessions = await self.ada.jules_agent.list_sessions() or []
-            for session in sessions:
-                state = session.get('state')
-                if state in ['COMPLETED', 'FAILED']:
-                    continue
+            sessions = await self.ada.jules_agent.list_sessions()
+            if sessions is not None:
+                for session in sessions:
+                    state = session.get('state')
+                    if state in ['COMPLETED', 'FAILED']:
+                        continue
 
-                # Check updateTime
-                update_time_str = session.get('updateTime') or session.get('createTime')
-                if not update_time_str:
-                    continue
+                    # Check updateTime
+                    update_time_str = session.get('updateTime') or session.get('createTime')
+                    if not update_time_str:
+                        continue
 
-                try:
-                     # Handle Z suffix
-                    if update_time_str.endswith('Z'):
-                         update_time_str = update_time_str[:-1]
+                    try:
+                         # Handle Z suffix
+                        if update_time_str.endswith('Z'):
+                             update_time_str = update_time_str[:-1]
 
-                    # Simple parsing (assuming UTC for Z or local if no Z, but API usually returns UTC)
-                    last_update_dt = datetime.fromisoformat(update_time_str)
+                        # Simple parsing (assuming UTC for Z or local if no Z, but API usually returns UTC)
+                        last_update_dt = datetime.fromisoformat(update_time_str)
 
-                    # datetime.utcnow() returns naive UTC. If parsed date is naive and came from 'Z', it is UTC.
-                    time_diff = (datetime.utcnow() - last_update_dt).total_seconds()
+                        # datetime.utcnow() returns naive UTC. If parsed date is naive and came from 'Z', it is UTC.
+                        time_diff = (datetime.utcnow() - last_update_dt).total_seconds()
 
-                    if time_diff > self.STALL_THRESHOLD:
-                        session_id = session.get('name')
-                        title = session.get('title', 'Untitled Task')
+                        if time_diff > self.STALL_THRESHOLD:
+                            session_id = session.get('name')
+                            title = session.get('title', 'Untitled Task')
 
-                        # Check cooldown
-                        last_nag = self.last_nag_times.get(session_id, 0)
-                        if now - last_nag > self.NAG_COOLDOWN:
-                            msg = f"Sir, Jules session '{title}' has been stalling for over 2 hours. Shall I intervene?"
-                            print(f"[AutomationEngine] NAGGING: {msg}")
-                            await self.ada.handle_external_event({
-                                "type": "notification",
-                                "message": msg
-                            })
-                            self.last_nag_times[session_id] = now
+                            # Check cooldown
+                            last_nag = self.last_nag_times.get(session_id, 0)
+                            if now - last_nag > self.NAG_COOLDOWN:
+                                msg = f"Sir, Jules session '{title}' has been stalling for over 2 hours. Shall I intervene?"
+                                print(f"[AutomationEngine] NAGGING: {msg}")
+                                await self.ada.handle_external_event({
+                                    "type": "notification",
+                                    "message": msg
+                                })
+                                self.last_nag_times[session_id] = now
 
-                except Exception as e:
-                    print(f"[AutomationEngine] Error checking session {session.get('name')}: {e}")
+                    except Exception as e:
+                        print(f"[AutomationEngine] Error checking session {session.get('name')}: {e}")
 
         # 2. Check Pull Requests
         token = self.project_manager.get_github_token()
