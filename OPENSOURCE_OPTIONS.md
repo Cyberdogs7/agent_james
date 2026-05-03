@@ -58,6 +58,20 @@ Running Whisper (small/turbo), an 8B LLM (4-bit quantized), and a lightweight st
 *   **TTS (Kokoro/F5-TTS):** ~1-2 GB VRAM (Kokoro is exceptionally light).
 *   **Total:** ~8-11 GB VRAM, leaving a large, comfortable margin.
 
+## Comparison vs. Current Gemini Implementation
+
+Switching from Gemini's cloud-based multimodal API to local open-source models introduces distinct tradeoffs in cost and latency.
+
+**Cost:**
+*   **Gemini:** Operates on a pay-per-token/second model. High-frequency real-time audio interaction can quickly become expensive due to the dense data rate of streaming audio and continuous API polling.
+*   **Local Open Source:** Essentially **free** to operate after the initial hardware investment (NVIDIA RTX 4060 Ti). This allows for unlimited, continuous 24/7 interaction without recurring API costs.
+
+**Latency:**
+*   **Gemini:** Heavily dependent on network conditions and Google's server load. While the Gemini 1.5 Pro/Flash models are fast, round-trip audio transmission introduces unavoidable base latency (often 500ms - 1s+).
+*   **Local Open Source:** Eliminates network transport latency entirely.
+    *   **Unified Models (Moshi/Qwen2-Audio):** Can achieve sub-300ms Time-To-First-Byte (TTFB) since the audio is processed directly on the GPU. Moshi, designed for full-duplex, is nearly indistinguishable from human response times.
+    *   **Chained Architecture:** Introduces minor pipelining latency (ASR -> LLM -> TTS). However, using heavily optimized local components (e.g., Whisper Turbo + Llama-3 8B + Kokoro), total TTFB can still realistically be kept under 500ms-800ms, rivaling or beating standard cloud API calls depending on the user's internet connection.
+
 ## Recommendation
 
 **For the lowest latency, most natural voice interaction:** Investigate **Moshi** (`kyutai/moshiko-pytorch-bf16`). It is designed specifically for the real-time, full-duplex voice use case.
