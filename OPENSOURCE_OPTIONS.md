@@ -18,8 +18,8 @@ The ideal solution is a single model capable of processing and generating both t
 ### 2. Moshi
 **Model:** `kyutai/moshiko-pytorch-bf16`
 *   **Capabilities:** Full duplex, real-time voice-to-voice interaction.
-*   **Pros:** Specifically designed for real-time speech interaction. It can listen and speak simultaneously (full duplex), making it extremely natural. It's built to run locally and is relatively efficient.
-*   **Cons:** It's heavily focused on voice-to-voice. Handling mixed text/voice inputs and structured text outputs might require more complex integration compared to standard text LLMs.
+*   **Pros:** Specifically designed for real-time speech interaction. It can listen and speak simultaneously (full duplex), prioritizing absolute minimum latency. It's built to run locally and is relatively efficient.
+*   **Cons:** **Poor Audio Quality.** While it achieves low latency, the generated voice quality, emotional expressiveness, and overall naturalness are significantly lacking compared to dedicated TTS models. It also struggles with mixed text/voice inputs and structured text outputs compared to standard text LLMs.
 
 ### 3. GLM-4-Voice
 **Model:** `zai-org/glm-4-voice-9b`
@@ -74,8 +74,14 @@ Switching from Gemini's cloud-based multimodal API to local open-source models i
 
 ## Recommendation
 
-**For the lowest latency, most natural voice interaction:** Investigate **Moshi** (`kyutai/moshiko-pytorch-bf16`). It is designed specifically for the real-time, full-duplex voice use case.
+**For the Best Quality and Overall Naturalness (Recommended):** Implement a **Chained Architecture**.
+*   **ASR:** `distil-whisper` or `whisper-large-v3-turbo`
+*   **LLM:** Quantized `Llama-3.1-8B-Instruct` (or `Qwen2-VL-7B` if image input is needed)
+*   **TTS:** **Kokoro-82M** or **F5-TTS**
+*   **Why:** This approach provides the highest quality output. Models like Kokoro deliver state-of-the-art voice naturalness that unified models currently cannot match. It easily fits in 16GB VRAM and allows independent upgrades as the open-source ecosystem rapidly evolves.
 
-**For maximum flexibility and reasoning capability:** Implement a **Chained Architecture** using `distil-whisper`, a quantized `Llama-3.1-8B-Instruct` (or a VL variant if images are needed), and a SOTA lightweight TTS like **Kokoro**. This allows upgrading individual components as better open-source models are released, while maintaining incredible TTS naturalness and minimal VRAM usage.
+**For Native Audio Understanding (Low Latency Input):** Use **Qwen2-Audio** or **Ultravox**.
+*   These natively process audio input (skipping ASR latency) but output text, which must still be passed to a high-quality TTS like Kokoro. This is an excellent middle ground, preserving strong LLM reasoning and top-tier voice output while reducing input latency.
 
-**For a middle ground (Native Audio Understanding + TTS):** Use **Qwen2-Audio** or **Ultravox** for native audio-in/text-out, and chain it with a fast TTS engine. This eliminates the latency of the ASR step while maintaining strong LLM reasoning.
+**For Extreme Low Latency (At the Cost of Quality):** Investigate **Moshi** (`kyutai/moshiko-pytorch-bf16`).
+*   **Warning:** While Moshi offers full-duplex, near-zero latency interaction, its voice generation quality sounds robotic and poor compared to the alternatives. It should only be chosen if sub-300ms latency is the singular priority over user experience and audio fidelity.
