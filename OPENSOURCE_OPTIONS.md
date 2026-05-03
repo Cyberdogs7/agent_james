@@ -5,6 +5,15 @@ This document explores options for replacing Gemini with a local, open-source vo
 - Output Voice and Text.
 - Capable of running in 'realtime' on an NVIDIA RTX 4060 Ti with 16GB VRAM.
 
+## Current Implementation Context
+
+The current voice agent implementation (`backend/ada.py`) relies entirely on Google's cloud infrastructure, specifically:
+*   **Model:** `gemini-2.5-flash-native-audio-preview-12-2025`
+*   **Architecture:** It utilizes the **Gemini Multimodal Live API**.
+*   **ASR / TTS / LLM:** Because the current Gemini implementation is an end-to-end native audio model, there is currently **no distinct local ASR (Speech-to-Text), Text-only LLM, or TTS (Text-to-Speech) pipeline** in place for the voice agent. Audio PCM data is streamed directly to Google, and audio PCM data is streamed back.
+
+Replacing this means we must either adopt another end-to-end unified model (like Moshi) or manually construct the missing ASR, LLM, and TTS pipeline components locally.
+
 ## Unified Multimodal Models (Any-to-Any / Omni)
 
 The ideal solution is a single model capable of processing and generating both text and audio end-to-end, minimizing latency compared to chained models.
