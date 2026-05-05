@@ -62,8 +62,16 @@ try:
 except ImportError:
     from automation_engine import AutomationEngine
 
-# Create a Socket.IO server
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+# Define allowed origins for security
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8180",
+    "http://127.0.0.1:8180",
+]
+
+# Create a Socket.IO server with restricted CORS
+sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=ALLOWED_ORIGINS)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -77,7 +85,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
