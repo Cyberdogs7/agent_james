@@ -117,6 +117,7 @@ class PrinterAgent:
         self._zeroconf: Optional[Zeroconf] = None
         self._error_tracker = set() # Track hosts with errors to prevent log spam
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
+        self.printer_discovered = asyncio.Event()
         
         # Detect slicer path and profiles directory
         self.slicer_path = self._detect_slicer_path()
@@ -396,29 +397,42 @@ class PrinterAgent:
         # Cleanup
         self._zeroconf.close()
         
-        # PROBE UNKNOWN PRINTERS
-        # Many printers show up as _http._tcp with generic names
-        # We try to identify them by hitting known endpoints
-        for printer in listener.printers:
-            if printer.printer_type == PrinterType.UNKNOWN:
-                self._log(f"[PRINTER] Probing unknown printer: {printer.host}...")
-                ptype = await self._probe_printer_type(printer.host, printer.port)
-                if ptype != PrinterType.UNKNOWN:
-                    printer.printer_type = ptype
-                    self._log(f"[PRINTER] Identified {printer.name} as {ptype.value}")
-        
-        # PROBE CAMERAS
-        for printer in listener.printers:
-            if not printer.camera_url:
-                # Try discovery
-                cam_url = await self._probe_camera(printer.host, printer.port)
-                if cam_url:
-                    printer.camera_url = cam_url
+        # PROBE UNKNOWN PRINTERS AND CAMERAS CONCURRENTLY
+        probe_tasks = []
+        unknown_printers = [p for p in listener.printers if p.printer_type == PrinterType.UNKNOWN]
+        for printer in unknown_printers:
+            probe_tasks.append(self._probe_printer_type(printer.host, printer.port))
+
+        camera_printers = [p for p in listener.printers if not p.camera_url]
+        for printer in camera_printers:
+            probe_tasks.append(self._probe_camera(printer.host, printer.port))
+
+        if probe_tasks:
+            self._log(f"[PRINTER] Probing {len(unknown_printers)} unknown printers and {len(camera_printers)} cameras...")
+            results = await asyncio.gather(*probe_tasks, return_exceptions=True)
+
+            # Match results back to printers
+            res_idx = 0
+            for printer in unknown_printers:
+                res = results[res_idx]
+                if not isinstance(res, Exception) and res != PrinterType.UNKNOWN:
+                    printer.printer_type = res
+                    self._log(f"[PRINTER] Identified {printer.name} as {res.value}")
+                res_idx += 1
+
+            for printer in camera_printers:
+                res = results[res_idx]
+                if not isinstance(res, Exception) and res:
+                    printer.camera_url = res
+                    self._log(f"[PRINTER] Found camera for {printer.name}")
+                res_idx += 1
         
         # Store discovered printers
         for printer in listener.printers:
             # Avoid duplicates if we found same host on multiple services
-            self.printers[printer.host] = printer
+            if printer.host not in self.printers:
+                self.printers[printer.host] = printer
+                self.printer_discovered.set()
         
         self._log(f"[PRINTER] Discovery complete. Found {len(self.printers)} printers.")
         return [p.to_dict() for p in self.printers.values()]
@@ -519,7 +533,12 @@ class PrinterAgent:
         """Manually add a printer (useful when mDNS discovery fails)."""
         ptype = PrinterType(printer_type) if printer_type in [e.value for e in PrinterType] else PrinterType.UNKNOWN
         printer = Printer(name=name, host=host, port=port, printer_type=ptype, api_key=api_key, camera_url=camera_url)
-        self.printers[host] = printer
+        if host not in self.printers:
+            self.printers[host] = printer
+            self.printer_discovered.set()
+        else:
+            self.printers[host] = printer
+
         print(f"[PRINTER] Manually added: {name} at {host}:{port}")
         return printer
     
@@ -886,29 +905,32 @@ class PrinterAgent:
         
         try:
             async with aiohttp.ClientSession() as session:
-                # Fetch Job Status
-                job_data = {}
-                async with session.get(job_url, headers=headers) as resp:
-                    if resp.status == 200:
-                        job_data = await resp.json()
+                # Fetch Job and Printer Status concurrently
+                job_coro = session.get(job_url, headers=headers)
+                printer_coro = session.get(printer_url, headers=headers)
+
+                results = await asyncio.gather(job_coro, printer_coro, return_exceptions=True)
                 
-                # Fetch Printer Status (Temps)
+                job_data = {}
                 temps = {}
-                async with session.get(printer_url, headers=headers) as resp:
-                    if resp.status == 200:
-                        printer_data = await resp.json()
-                        # OctoPrint structure: temperature -> tool0, bed
-                        temp_data = printer_data.get("temperature", {})
-                        if "tool0" in temp_data:
-                            temps["hotend"] = {
-                                "current": temp_data["tool0"].get("actual", 0),
-                                "target": temp_data["tool0"].get("target", 0)
-                            }
-                        if "bed" in temp_data:
-                            temps["bed"] = {
-                                "current": temp_data["bed"].get("actual", 0),
-                                "target": temp_data["bed"].get("target", 0)
-                            }
+
+                if not isinstance(results[0], Exception) and results[0].status == 200:
+                    job_data = await results[0].json()
+
+                if not isinstance(results[1], Exception) and results[1].status == 200:
+                    printer_data = await results[1].json()
+                    # OctoPrint structure: temperature -> tool0, bed
+                    temp_data = printer_data.get("temperature", {})
+                    if "tool0" in temp_data:
+                        temps["hotend"] = {
+                            "current": temp_data["tool0"].get("actual", 0),
+                            "target": temp_data["tool0"].get("target", 0)
+                        }
+                    if "bed" in temp_data:
+                        temps["bed"] = {
+                            "current": temp_data["bed"].get("actual", 0),
+                            "target": temp_data["bed"].get("target", 0)
+                        }
 
                 if job_data:
                     progress = job_data.get("progress", {})
