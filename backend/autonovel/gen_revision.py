@@ -6,10 +6,8 @@ Usage: python gen_revision.py <chapter_num> <brief_file>
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 BASE_DIR = Path.cwd()
-pass
 
 WRITER_MODEL = os.environ.get("AUTONOVEL_WRITER_MODEL", "claude-sonnet-4-6")
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
