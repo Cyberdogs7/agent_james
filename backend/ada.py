@@ -1354,9 +1354,37 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         # 1. Project Info
         project = self.project_manager.current_project
 
-        # 2. Jules Data (Fetch early for stats)
-        jules_sessions = await self.jules_agent.list_sessions() or []
-        ollama_sessions = await self.ollama_agent.list_sessions() or []
+        # 2. Data Gathering (Parallelized)
+        repo_path = self.project_manager.get_current_project_path()
+
+        tasks = {
+            "jules": self.jules_agent.list_sessions(),
+            "ollama": self.ollama_agent.list_sessions(),
+            "trello_boards": self.trello_agent.list_boards(),
+            "git_branch": self.git_agent.get_current_branch(repo_path),
+            "git_branches": self.git_agent.get_branches_list(repo_path),
+            "git_status": self.git_agent.get_status_raw(repo_path)
+        }
+
+        printer_hosts = []
+        if self.printer_agent:
+            printer_hosts = list(self.printer_agent.printers.keys())
+            for host in printer_hosts:
+                tasks[f"printer_{host}"] = self.printer_agent.get_print_status(host)
+
+        keys = list(tasks.keys())
+        results = await asyncio.gather(*[tasks[k] for k in keys], return_exceptions=True)
+        res_dict = dict(zip(keys, results))
+
+        # Log and handle task errors
+        for k in keys:
+            if isinstance(res_dict[k], Exception):
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Dashboard task {k} failed: {res_dict[k]}")
+                res_dict[k] = None
+
+        jules_sessions = res_dict.get("jules") or []
+        ollama_sessions = res_dict.get("ollama") or []
 
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [DASHBOARD] Jules sessions: {len(jules_sessions)}, Ollama sessions: {len(ollama_sessions)}")
@@ -1388,7 +1416,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         trello_cards = []
         try:
             # Attempt to get the first board and its cards
-            boards = await self.trello_agent.list_boards()
+            boards = res_dict.get("trello_boards")
             if boards:
                 board_id = boards[0]['id']
                 lists = await self.trello_agent.list_lists(board_id)
@@ -1498,8 +1526,9 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         # 7. Printer Data
         printers = []
         if self.printer_agent:
-            for host, p in self.printer_agent.printers.items():
-                status = await self.printer_agent.get_print_status(host)
+            for host in printer_hosts:
+                p = self.printer_agent.printers[host]
+                status = res_dict.get(f"printer_{host}")
                 p_data = {
                     "name": p.name,
                     "state": status.state if status else "OFFLINE",
@@ -1509,11 +1538,10 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                 printers.append(p_data)
 
         # 8. Git Ops Data
-        repo_path = self.project_manager.get_current_project_path()
         git_status = {
-            "branch": await self.git_agent.get_current_branch(repo_path) or "unknown",
-            "branches": await self.git_agent.get_branches_list(repo_path),
-            "status": await self.git_agent.get_status_raw(repo_path)
+            "branch": res_dict.get("git_branch") or "unknown",
+            "branches": res_dict.get("git_branches") or [],
+            "status": res_dict.get("git_status") or ""
         }
 
         return {

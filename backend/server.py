@@ -644,7 +644,12 @@ async def monitor_printers_loop():
         try:
             agent = audio_loop.printer_agent
             if not agent.printers:
-                await asyncio.sleep(5)
+                # Wait for a printer to be discovered or 10 seconds
+                try:
+                    agent.printer_discovered.clear()
+                    await asyncio.wait_for(agent.printer_discovered.wait(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    pass
                 continue
                 
             tasks = []
@@ -1152,14 +1157,16 @@ async def add_printer(sid, data):
         ports_to_try = [80, 7125, 4408]
         
         actual_type = "unknown"
-        for port in ports_to_try:
-             found_type = await audio_loop.printer_agent._probe_printer_type(host, port)
-             if found_type.value != "unknown":
-                 actual_type = found_type
-                 # Update port if different
-                 if port != 80:
-                     printer.port = port
-                 break
+        probe_tasks = [audio_loop.printer_agent._probe_printer_type(host, p) for p in ports_to_try]
+        results = await asyncio.gather(*probe_tasks, return_exceptions=True)
+
+        for i, res in enumerate(results):
+            if not isinstance(res, Exception) and res.value != "unknown":
+                actual_type = res
+                # Update port if different from default
+                if ports_to_try[i] != 80:
+                    printer.port = ports_to_try[i]
+                break
         
         if actual_type != "unknown" and actual_type != printer.printer_type:
              printer.printer_type = actual_type
