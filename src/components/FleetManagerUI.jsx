@@ -27,6 +27,113 @@ const getStatusColor = (status) => {
     }
 };
 
+const TaskInputForm = ({ repo, onAddTask }) => {
+    const [prompt, setPrompt] = useState('');
+    const [dependency, setDependency] = useState('');
+    const [attachments, setAttachments] = useState([]);
+
+    const handleFileChange = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        Promise.all(files.map(file => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve({
+                    name: file.name,
+                    type: file.type,
+                    content: reader.result // base64 string
+                });
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        })).then(newAttachments => {
+            setAttachments(prev => [...prev, ...newAttachments]);
+        }).catch(err => {
+            console.error("Failed to read files:", err);
+        });
+        e.target.value = null; // reset input
+    };
+
+    const removeAttachment = (index) => {
+        setAttachments(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleAddTask = () => {
+        if (prompt && prompt.trim()) {
+            onAddTask(repo.name, prompt.trim(), dependency, attachments);
+            setPrompt('');
+            setDependency('');
+            setAttachments([]);
+        }
+    };
+
+    return (
+        <div className="flex flex-col gap-2 mb-4">
+            {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-1">
+                    {attachments.map((file, i) => (
+                        <div key={i} className="flex items-center gap-1 bg-gold9/10 text-gold9 text-xs rounded px-2 py-1 border border-gold9/30">
+                            <span className="truncate max-w-[150px]">{file.name}</span>
+                            <button onClick={() => removeAttachment(i)} className="text-gold9/50 hover:text-gold9">
+                                <X size={12} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div className="flex gap-2 items-start">
+                <input
+                    type="file"
+                    id={`file-upload-${repo.name}`}
+                    multiple
+                    className="hidden"
+                    onChange={handleFileChange}
+                />
+                <button
+                    onClick={() => document.getElementById(`file-upload-${repo.name}`).click()}
+                    className="bg-transparent text-gold9/50 hover:text-gold9 p-2 transition-colors"
+                    title="Attach files"
+                >
+                    <Paperclip size={18} />
+                </button>
+                <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleAddTask();
+                        }
+                    }}
+                    placeholder="Assign new task..."
+                    className="flex-1 bg-transparent border-b-2 border-gold9/20 focus:border-gold9 text-sm text-gray-100 font-mono px-3 py-2 outline-none transition-all placeholder-[#474746] resize-none min-h-[40px] focus:min-h-[96px] scrollbar-hide"
+                />
+                <button
+                    onClick={handleAddTask}
+                    className="bg-gold9/10 text-gold9 border border-gold9/30 hover:bg-gold9 hover:text-black p-2 rounded transition-all"
+                >
+                    <Plus size={18} />
+                </button>
+            </div>
+            {repo.queue?.length > 0 && (
+                <select
+                    value={dependency}
+                    onChange={(e) => setDependency(e.target.value)}
+                    className="bg-[#111111] text-xs font-mono text-gold9/60 border border-gold9/20 rounded p-1 outline-none scrollbar-hide"
+                >
+                    <option value="">No dependencies</option>
+                    {repo.queue.map(t => (
+                        <option key={t.id} value={t.id} title={t.prompt}>
+                            Depends on: {t.prompt.substring(0, 30)}{t.prompt.length > 30 ? '...' : ''}
+                        </option>
+                    ))}
+                </select>
+            )}
+        </div>
+    );
+};
+
 const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster, onReorderRepos }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
@@ -130,55 +237,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
         setDraggedAgentId(null);
     };
 
-    const [newTaskPrompts, setNewTaskPrompts] = useState({});
-    const [newTaskDependencies, setNewTaskDependencies] = useState({});
     const [expandedQueues, setExpandedQueues] = useState({});
-    const [newTaskAttachments, setNewTaskAttachments] = useState({});
-
-    const handleFileChange = (e, repoName) => {
-        const files = Array.from(e.target.files);
-        if (files.length === 0) return;
-
-        Promise.all(files.map(file => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve({
-                    name: file.name,
-                    type: file.type,
-                    content: reader.result // base64 string
-                });
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        })).then(attachments => {
-            setNewTaskAttachments(prev => ({
-                ...prev,
-                [repoName]: [...(prev[repoName] || []), ...attachments]
-            }));
-        }).catch(err => {
-            console.error("Failed to read files", err);
-        });
-    };
-
-    const removeAttachment = (repoName, index) => {
-        setNewTaskAttachments(prev => ({
-            ...prev,
-            [repoName]: prev[repoName].filter((_, i) => i !== index)
-        }));
-    };
-
-    const handleAddTask = (repoName) => {
-        const prompt = newTaskPrompts[repoName];
-        const dependsOn = newTaskDependencies[repoName];
-        const attachments = newTaskAttachments[repoName] || [];
-
-        if (prompt && prompt.trim()) {
-            onAddTask(repoName, prompt.trim(), dependsOn, attachments);
-            setNewTaskPrompts(prev => ({ ...prev, [repoName]: '' }));
-            setNewTaskDependencies(prev => ({ ...prev, [repoName]: '' }));
-            setNewTaskAttachments(prev => ({ ...prev, [repoName]: [] }));
-        }
-    };
 
     const formatTime = (ts) => {
         const diff = Math.floor(Date.now() / 1000) - ts;
@@ -387,68 +446,7 @@ const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAs
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col gap-2 mb-4">
-                                        {newTaskAttachments[repo.name] && newTaskAttachments[repo.name].length > 0 && (
-                                            <div className="flex flex-wrap gap-2 mb-1">
-                                                {newTaskAttachments[repo.name].map((file, i) => (
-                                                    <div key={i} className="flex items-center gap-1 bg-gold9/10 text-gold9 text-xs rounded px-2 py-1 border border-gold9/30">
-                                                        <span className="truncate max-w-[150px]">{file.name}</span>
-                                                        <button onClick={() => removeAttachment(repo.name, i)} className="text-gold9/50 hover:text-gold9">
-                                                            <X size={12} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="flex gap-2 items-start">
-                                            <input
-                                                type="file"
-                                                id={`file-upload-${repo.name}`}
-                                                multiple
-                                                className="hidden"
-                                                onChange={(e) => handleFileChange(e, repo.name)}
-                                            />
-                                            <button
-                                                onClick={() => document.getElementById(`file-upload-${repo.name}`).click()}
-                                                className="bg-transparent text-gold9/50 hover:text-gold9 p-2 transition-colors"
-                                                title="Attach files"
-                                            >
-                                                <Paperclip size={18} />
-                                            </button>
-                                            <textarea
-                                                value={newTaskPrompts[repo.name] || ''}
-                                                onChange={(e) => setNewTaskPrompts({...newTaskPrompts, [repo.name]: e.target.value})}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        handleAddTask(repo.name);
-                                                    }
-                                                }}
-                                                placeholder="Assign new task..."
-                                                className="flex-1 bg-transparent border-b-2 border-gold9/20 focus:border-gold9 text-sm text-gray-100 font-mono px-3 py-2 outline-none transition-all placeholder-[#474746] resize-none min-h-[40px] focus:min-h-[96px] scrollbar-hide"
-                                            />
-                                            <button
-                                                onClick={() => handleAddTask(repo.name)}
-                                                className="bg-gold9/10 text-gold9 border border-gold9/30 hover:bg-gold9 hover:text-black p-2 rounded transition-all"
-                                            >
-                                                <Plus size={18} />
-                                            </button>
-                                        </div>
-                                        {repo.queue?.length > 0 && (
-                                            <select
-                                                value={newTaskDependencies[repo.name] || ''}
-                                                onChange={(e) => setNewTaskDependencies({...newTaskDependencies, [repo.name]: e.target.value})}
-                                                className="bg-[#111111] text-xs font-mono text-gold9/60 border border-gold9/20 rounded p-1 outline-none scrollbar-hide"
-                                            >
-                                                <option value="">No dependencies</option>
-                                                {repo.queue.map(t => (
-                                                    <option key={t.id} value={t.id} title={t.prompt}>
-                                                        Depends on: {t.prompt.substring(0, 30)}{t.prompt.length > 30 ? '...' : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </div>
+                                    <TaskInputForm repo={repo} onAddTask={onAddTask} />
 
                                     <div className={`flex-1 overflow-y-auto space-y-2 scrollbar-thin ${expandedQueues[repo.name] ? 'max-h-[800px]' : 'max-h-48'}`}>
                                         {repo.queue?.map((task, i) => {
