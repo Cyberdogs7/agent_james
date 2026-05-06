@@ -2177,18 +2177,18 @@ function App() {
 
         {/* Memory Prompt removed - memory is now actively saved to project */}
 
-        {/* Tool Confirmation Modal */}
-        <ConfirmationPopup
-          request={confirmationRequest}
-          onConfirm={handleConfirmTool}
-          onDeny={handleDenyTool}
-        />
-
         <Suggestion
           suggestion={suggestion}
           onClose={() => setSuggestion(null)}
         />
       </div>
+
+      {/* Tool Confirmation Modal */}
+      <ConfirmationPopup
+        request={confirmationRequest}
+        onConfirm={handleConfirmTool}
+        onDeny={handleDenyTool}
+      />
 
       {/* War Room Dashboard Overlay */}
       {showWarRoom && (

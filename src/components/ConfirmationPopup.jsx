@@ -4,7 +4,7 @@ const ConfirmationPopup = ({ request, onConfirm, onDeny }) => {
     if (!request) return null;
 
     return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80  animate-fade-in">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80  animate-fade-in">
             <div className="relative w-full max-w-lg p-8 bg-black/90 border border-gold9/30 rounded-3xl shadow-[0_0_50px_rgba(255,215,0,0.15)]  transform transition-all scale-100">
 
                 {/* Header with Icon */}
