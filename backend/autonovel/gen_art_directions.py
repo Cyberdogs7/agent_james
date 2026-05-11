@@ -6,6 +6,8 @@ Called by gen_art.py curate to produce genuinely different variants.
 import os
 import json
 import re
+import asyncio
+import httpx
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -17,9 +19,8 @@ ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_BASE = os.environ.get("AUTONOVEL_API_BASE_URL", "https://api.anthropic.com")
 
 
-def call_claude(prompt, max_tokens=3000):
-    import httpx
-    resp = httpx.post(
+async def call_claude(prompt, client, max_tokens=3000):
+    resp = await client.post(
         f"{ANTHROPIC_BASE}/v1/messages",
         headers={
             "x-api-key": ANTHROPIC_KEY,
@@ -38,7 +39,7 @@ def call_claude(prompt, max_tokens=3000):
     return resp.json()["content"][0]["text"]
 
 
-def generate_directions(art_type, style, n=6, world_excerpt=""):
+async def generate_directions(art_type, style, client, n=6, world_excerpt=""):
     """Generate N fundamentally different art direction prompts."""
 
     if art_type == "cover":
@@ -132,7 +133,7 @@ JSON array only."""
     else:
         raise ValueError(f"Unknown art type: {art_type}")
 
-    result = call_claude(task)
+    result = await call_claude(task, client)
     text = result.strip()
     if text.startswith("```"):
         text = re.sub(r'^```\w*\n?', '', text)
@@ -141,7 +142,7 @@ JSON array only."""
     return json.loads(text)
 
 
-if __name__ == "__main__":
+async def main():
     import sys
     style_file = BASE_DIR / "art" / "visual_style.json"
     if not style_file.exists():
@@ -156,9 +157,14 @@ if __name__ == "__main__":
     if (BASE_DIR / "world.md").exists():
         world = (BASE_DIR / "world.md").read_text()[:3000]
 
-    directions = generate_directions(art_type, style, n, world)
-    for i, d in enumerate(directions, 1):
-        print(f"\n--- Direction {i}: {d['direction'].upper()} ---")
-        print(f"  Concept: {d['concept']}")
-        print(f"  Medium:  {d['medium']}")
-        print(f"  Prompt:  {d['prompt'][:150]}...")
+    async with httpx.AsyncClient() as client:
+        directions = await generate_directions(art_type, style, client, n, world)
+        for i, d in enumerate(directions, 1):
+            print(f"\n--- Direction {i}: {d['direction'].upper()} ---")
+            print(f"  Concept: {d['concept']}")
+            print(f"  Medium:  {d['medium']}")
+            print(f"  Prompt:  {d['prompt'][:150]}...")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
