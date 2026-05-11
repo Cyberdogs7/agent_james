@@ -11,17 +11,45 @@ backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
-# Mock dotenv before it's imported by anything
-sys.modules['cv2'] = MagicMock()
-sys.modules['pyaudio'] = MagicMock()
-sys.modules['mss'] = MagicMock()
-sys.modules['PIL'] = MagicMock()
-sys.modules['PIL.Image'] = MagicMock()
-sys.modules['google'] = MagicMock()
-sys.modules['google.genai'] = MagicMock()
-sys.modules['google.genai.types'] = MagicMock()
-sys.modules['tzlocal'] = MagicMock()
-sys.modules['pydantic'] = MagicMock()
+# Mock dependencies that might be missing in the environment
+mock_modules = [
+    'dotenv',
+    'cv2',
+    'pyaudio',
+    'mss',
+    'PIL',
+    'PIL.Image',
+    'google',
+    'google.genai',
+    'google.genai.types',
+    'tzlocal',
+    'pydantic',
+    'httpx',
+    'psutil',
+    'numpy',
+    'requests',
+    'slack_sdk',
+    'slack_sdk.web',
+    'slack_sdk.web.async_client',
+    'slack_sdk.socket_mode',
+    'slack_sdk.socket_mode.request',
+    'slack_sdk.socket_mode.async_client',
+    'mediapipe',
+    'ytmusicapi',
+    'yt_dlp',
+    'build123d',
+    'playwright',
+    'playwright.async_api',
+    'kasa',
+    'zeroconf',
+    'aiohttp',
+    'beautifulsoup4',
+    'bs4',
+    'imageio_ffmpeg'
+]
+
+for module in mock_modules:
+    sys.modules[module] = MagicMock()
 
 @pytest.fixture(autouse=True)
 def mock_api_keys(monkeypatch):
@@ -34,15 +62,6 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
-
-# If you need to change the scope of the event_loop fixture, you can do so.
-# For example, to have a new event loop for each function:
-# @pytest.fixture(scope="function")
-# def event_loop(request):
-#     """Create an instance of the default event loop for each test function."""
-#     loop = asyncio.get_event_loop_policy().new_event_loop()
-#     yield loop
-#     loop.close()
 
 @pytest.fixture(scope="session", autouse=True)
 def default_asyncio_loop_scope():
