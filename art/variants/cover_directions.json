@@ -1,0 +1,26 @@
+[
+  {
+    "num": 1,
+    "direction": "d1",
+    "concept": "c1",
+    "medium": "m",
+    "file": "cover_01.png",
+    "size": 1024
+  },
+  {
+    "num": 2,
+    "direction": "d2",
+    "concept": "c2",
+    "medium": "m",
+    "file": "cover_02.png",
+    "size": 1024
+  },
+  {
+    "num": 3,
+    "direction": "d3",
+    "concept": "c3",
+    "medium": "m",
+    "file": "cover_03.png",
+    "size": 1024
+  }
+]

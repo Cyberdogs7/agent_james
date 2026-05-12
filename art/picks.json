@@ -1,0 +1,26 @@
+{
+  "variant_cover_1": {
+    "url": "http://example.com/image.png",
+    "path": "/app/art/variants/cover_01.png",
+    "direction": "d1",
+    "concept": "c1",
+    "medium": "m",
+    "prompt": "p1 No text, no title, no lettering. Pure illustration."
+  },
+  "variant_cover_2": {
+    "url": "http://example.com/image.png",
+    "path": "/app/art/variants/cover_02.png",
+    "direction": "d2",
+    "concept": "c2",
+    "medium": "m",
+    "prompt": "p2 No text, no title, no lettering. Pure illustration."
+  },
+  "variant_cover_3": {
+    "url": "http://example.com/image.png",
+    "path": "/app/art/variants/cover_03.png",
+    "direction": "d3",
+    "concept": "c3",
+    "medium": "m",
+    "prompt": "p3 No text, no title, no lettering. Pure illustration."
+  }
+}

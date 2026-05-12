@@ -25,10 +25,11 @@ import os
 import sys
 import json
 import re
-import time
+import asyncio
 import shutil
 import argparse
 import subprocess
+import httpx
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -49,13 +50,15 @@ WRITER_MODEL = os.environ.get("AUTONOVEL_WRITER_MODEL", "claude-sonnet-4-6")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_BASE = os.environ.get("AUTONOVEL_API_BASE_URL", "https://api.anthropic.com")
 
+# Concurrency control
+api_semaphore = asyncio.Semaphore(2)
+picks_lock = asyncio.Lock()
 
 # ============================================================
 # API HELPERS
 # ============================================================
 
-def fal_generate(prompt, resolution="1K", aspect_ratio="auto", seed=None):
-    import httpx
+async def fal_generate(prompt, client, resolution="1K", aspect_ratio="auto", seed=None):
     payload = {
         "prompt": prompt,
         "num_images": 1,
@@ -68,18 +71,19 @@ def fal_generate(prompt, resolution="1K", aspect_ratio="auto", seed=None):
     }
     if seed is not None:
         payload["seed"] = seed
-    resp = httpx.post(
-        FAL_URL,
-        headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
-        json=payload, timeout=300,
-    )
+
+    async with api_semaphore:
+        resp = await client.post(
+            FAL_URL,
+            headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
+            json=payload, timeout=300,
+        )
     resp.raise_for_status()
     data = resp.json()
     return data["images"][0]["url"], data.get("description", "")
 
 
-def fal_edit(prompt, image_urls, resolution="1K", aspect_ratio="1:1", seed=None):
-    import httpx
+async def fal_edit(prompt, image_urls, client, resolution="1K", aspect_ratio="1:1", seed=None):
     payload = {
         "prompt": prompt,
         "image_urls": image_urls,
@@ -93,42 +97,43 @@ def fal_edit(prompt, image_urls, resolution="1K", aspect_ratio="1:1", seed=None)
     }
     if seed is not None:
         payload["seed"] = seed
-    resp = httpx.post(
-        FAL_EDIT_URL,
-        headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
-        json=payload, timeout=300,
-    )
+
+    async with api_semaphore:
+        resp = await client.post(
+            FAL_EDIT_URL,
+            headers={"Authorization": f"Key {FAL_KEY}", "Content-Type": "application/json"},
+            json=payload, timeout=300,
+        )
     resp.raise_for_status()
     data = resp.json()
     return data["images"][0]["url"], data.get("description", "")
 
 
-def download_image(url, dest_path):
-    import httpx
-    resp = httpx.get(url, timeout=60, follow_redirects=True)
+async def download_image(url, dest_path, client):
+    resp = await client.get(url, timeout=60, follow_redirects=True)
     resp.raise_for_status()
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     dest_path.write_bytes(resp.content)
     return len(resp.content)
 
 
-def call_claude(prompt, max_tokens=1500):
-    import httpx
-    resp = httpx.post(
-        f"{ANTHROPIC_BASE}/v1/messages",
-        headers={
-            "x-api-key": ANTHROPIC_KEY,
-            "anthropic-version": "2023-06-01",
-            "content-type": "application/json",
-        },
-        json={
-            "model": WRITER_MODEL,
-            "max_tokens": max_tokens,
-            "temperature": 0.3,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=120,
-    )
+async def call_claude(prompt, client, max_tokens=1500):
+    async with api_semaphore:
+        resp = await client.post(
+            f"{ANTHROPIC_BASE}/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": WRITER_MODEL,
+                "max_tokens": max_tokens,
+                "temperature": 0.3,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=120,
+        )
     resp.raise_for_status()
     return resp.json()["content"][0]["text"]
 
@@ -146,23 +151,26 @@ def load_picks():
     return {}
 
 
-def save_picks(picks):
-    PICKS_FILE.write_text(json.dumps(picks, indent=2))
+async def save_picks_async(picks):
+    async with picks_lock:
+        PICKS_FILE.write_text(json.dumps(picks, indent=2))
 
 
-def get_reference_url(art_type):
+def get_reference_url():
     """Get the URL of the picked reference image for a type."""
     picks = load_picks()
-    if art_type in picks:
-        return picks[art_type].get("url")
-    return None
+    def inner(art_type):
+        if art_type in picks:
+            return picks[art_type].get("url")
+        return None
+    return inner
 
 
 # ============================================================
 # STYLE
 # ============================================================
 
-def cmd_style(args):
+async def cmd_style(args, client):
     world = (BASE_DIR / "world.md").read_text()[:5000]
     voice = (BASE_DIR / "voice.md").read_text()[:3000]
     title = "Unknown"
@@ -197,7 +205,7 @@ Define a VISUAL STYLE for all art in this novel. Output valid JSON:
 JSON only."""
 
     print("Deriving visual style from world + voice...")
-    result = call_claude(prompt)
+    result = await call_claude(prompt, client)
     text = result.strip()
     if text.startswith("```"):
         text = re.sub(r'^```\w*\n?', '', text)
@@ -217,7 +225,7 @@ JSON only."""
 # CURATE: generate N variants, human picks
 # ============================================================
 
-def cmd_curate(args):
+async def cmd_curate(args, client):
     style = load_style()
     art_type = args.art_type
     n = args.n
@@ -232,7 +240,7 @@ def cmd_curate(args):
         world = (BASE_DIR / "world.md").read_text()[:3000]
 
     print(f"Generating {n} radically different {art_type} directions...")
-    directions = generate_directions(art_type, style, n, world)
+    directions = await generate_directions(art_type, style, client, n, world)
 
     # Resolution/aspect per type
     resolutions = {
@@ -245,7 +253,8 @@ def cmd_curate(args):
 
     # Step 2: Generate one image per direction
     directions_log = []
-    for i, d in enumerate(directions, 1):
+
+    async def generate_and_download(i, d):
         prompt = d["prompt"]
         # Append universal constraints
         if art_type == "cover":
@@ -254,35 +263,44 @@ def cmd_curate(args):
             prompt += " White background. No text."
 
         label = d.get("direction", f"variant_{i}")
-        print(f"\n  [{i}/{n}] {label.upper()}: {d.get('concept', '')[:80]}")
-        print(f"    Medium: {d.get('medium', 'N/A')}")
 
-        url, desc = fal_generate(prompt, resolution=resolution, aspect_ratio=aspect)
+        url, desc = await fal_generate(prompt, client, resolution=resolution, aspect_ratio=aspect)
         dest = VARIANTS_DIR / f"{art_type}_{i:02d}.png"
-        size = download_image(url, dest)
+        size = await download_image(url, dest, client)
 
-        # Cache URL and direction info
-        picks = load_picks()
-        picks[f"variant_{art_type}_{i}"] = {
-            "url": url,
-            "path": str(dest),
-            "direction": label,
-            "concept": d.get("concept", ""),
-            "medium": d.get("medium", ""),
-            "prompt": prompt,
-        }
-        save_picks(picks)
+        # Cache URL and direction info incrementally
+        async with picks_lock:
+            picks = load_picks()
+            picks[f"variant_{art_type}_{i}"] = {
+                "url": url,
+                "path": str(dest),
+                "direction": label,
+                "concept": d.get("concept", ""),
+                "medium": d.get("medium", ""),
+                "prompt": prompt,
+            }
+            PICKS_FILE.write_text(json.dumps(picks, indent=2))
 
-        directions_log.append({
+        output = [
+            f"\n  [{i}/{n}] {label.upper()}: {d.get('concept', '')[:80]}",
+            f"    → {dest.name} ({size:,} bytes)"
+        ]
+        print("\n".join(output))
+
+        if i < n:
+            await asyncio.sleep(1)
+
+        return {
             "num": i, "direction": label,
             "concept": d.get("concept", ""),
             "medium": d.get("medium", ""),
             "file": dest.name, "size": size,
-        })
+        }
 
-        print(f"    → {dest.name} ({size:,} bytes)")
-        if i < n:
-            time.sleep(1)
+    # Parallelize image generation and download with semaphore control
+    tasks = [generate_and_download(i, d) for i, d in enumerate(directions, 1)]
+    results = await asyncio.gather(*tasks)
+    directions_log = sorted(results, key=lambda x: x["num"])
 
     # Save directions log for reference
     log_path = VARIANTS_DIR / f"{art_type}_directions.json"
@@ -326,7 +344,7 @@ def _extract_geography(world_text):
 # PICK: select a variant as the final
 # ============================================================
 
-def cmd_pick(args):
+async def cmd_pick(args, client):
     art_type = args.art_type
     number = args.number
 
@@ -350,12 +368,13 @@ def cmd_pick(args):
 
     shutil.copy2(variant_path, final)
 
-    # Save the pick with its URL for reference
-    picks = load_picks()
-    variant_key = f"variant_{art_type}_{number}"
-    url = picks.get(variant_key, {}).get("url", "")
-    picks[art_type] = {"variant": number, "url": url, "path": str(final)}
-    save_picks(picks)
+    # Save the pick with its URL for reference incrementally
+    async with picks_lock:
+        picks = load_picks()
+        variant_key = f"variant_{art_type}_{number}"
+        url = picks.get(variant_key, {}).get("url", "")
+        picks[art_type] = {"variant": number, "url": url, "path": str(final)}
+        PICKS_FILE.write_text(json.dumps(picks, indent=2))
 
     print(f"Selected variant {number} as final {art_type}")
     print(f"  {variant_path} → {final}")
@@ -367,16 +386,16 @@ def cmd_pick(args):
 # BATCH ORNAMENTS (use reference)
 # ============================================================
 
-def cmd_ornaments_all(args):
+async def cmd_ornaments_all(args, client):
     style = load_style()
-    ref_url = get_reference_url("ornament")
+    ref_url = get_reference_url()("ornament")
 
     chapters = sorted(BASE_DIR.glob("chapters/ch_*.md"))
     print(f"Generating ornaments for {len(chapters)} chapters...")
     if ref_url:
         print(f"  Using ornament reference for style consistency")
 
-    for ch_path in chapters:
+    async def process_chapter(ch_path, i, total):
         num = int(ch_path.stem.split("_")[1])
         title = ch_path.read_text().split("\n")[0].lstrip("# ").strip()
         if ": " in title:
@@ -389,29 +408,37 @@ def cmd_ornaments_all(args):
             f"Simple, symbolic. White background. No text."
         )
 
-        print(f"  Ch {num}: '{title}'", end="", flush=True)
-
         if ref_url:
-            url, _ = fal_edit(prompt, [ref_url], resolution="0.5K", aspect_ratio="1:1")
+            url, _ = await fal_edit(prompt, [ref_url], client, resolution="0.5K", aspect_ratio="1:1")
         else:
-            url, _ = fal_generate(prompt, resolution="0.5K", aspect_ratio="1:1")
+            url, _ = await fal_generate(prompt, client, resolution="0.5K", aspect_ratio="1:1")
 
         dest = ART_DIR / f"ornament_ch{num:02d}.png"
-        size = download_image(url, dest)
-        print(f" → {dest.name} ({size:,} bytes)")
-        time.sleep(1)
+        size = await download_image(url, dest, client)
+
+        output = [
+            f"  Ch {num}: '{title}' → {dest.name} ({size:,} bytes)"
+        ]
+        print("\n".join(output))
+
+        if i < total:
+            await asyncio.sleep(1)
+        return dest.name
+
+    tasks = [process_chapter(ch_path, i, len(chapters)) for i, ch_path in enumerate(chapters, 1)]
+    await asyncio.gather(*tasks)
 
 
-def cmd_scene_break(args):
+async def cmd_scene_break(args, client):
     style = load_style()
     prompt = (
         f"Minimal decorative scene break. {style['scene_break_concept']}. "
         f"Style: {style['art_style']}. Very simple. White background. No text."
     )
     print("Generating scene break...")
-    url, _ = fal_generate(prompt, resolution="0.5K", aspect_ratio="4:1")
+    url, _ = await fal_generate(prompt, client, resolution="0.5K", aspect_ratio="4:1")
     dest = ART_DIR / "scene_break.png"
-    size = download_image(url, dest)
+    size = await download_image(url, dest, client)
     print(f"  Saved: {dest} ({size:,} bytes)")
 
 
@@ -419,7 +446,7 @@ def cmd_scene_break(args):
 # VECTORIZE: raster → SVG via potrace
 # ============================================================
 
-def cmd_vectorize(args):
+async def cmd_vectorize(args, client=None):
     target = args.target if args.target else "all"
 
     # Check potrace is available
@@ -458,20 +485,22 @@ def cmd_vectorize(args):
             bw.save(pbm_path)
 
             # Step 2: Run potrace
-            result = subprocess.run(
-                [potrace, str(pbm_path), "-s", "-o", str(svg_path),
-                 "--turdsize", "4", "--opttolerance", "0.2"],
-                capture_output=True, text=True
+            process = await asyncio.create_subprocess_exec(
+                potrace, str(pbm_path), "-s", "-o", str(svg_path),
+                "--turdsize", "4", "--opttolerance", "0.2",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
+            stdout, stderr = await process.communicate()
 
             # Cleanup temp file
             pbm_path.unlink(missing_ok=True)
 
-            if result.returncode == 0 and svg_path.exists():
+            if process.returncode == 0 and svg_path.exists():
                 svg_size = svg_path.stat().st_size
                 print(f"  {png_path.name} → {svg_path.name} ({svg_size:,} bytes)")
             else:
-                print(f"  {png_path.name} → FAILED: {result.stderr[:100]}")
+                print(f"  {png_path.name} → FAILED: {stderr.decode()[:100]}")
 
         except Exception as e:
             print(f"  {png_path.name} → ERROR: {e}")
@@ -483,14 +512,14 @@ def cmd_vectorize(args):
 # ALL: full pipeline with human curation points
 # ============================================================
 
-def cmd_all(args):
+async def cmd_all(args, client):
     print("=" * 60)
     print("AUTONOVEL ART PIPELINE (interactive)")
     print("=" * 60)
 
     print("\n--- Step 1: Visual Style ---")
     if not STYLE_FILE.exists():
-        cmd_style(args)
+        await cmd_style(args, client)
     else:
         print(f"  Using existing style from {STYLE_FILE}")
 
@@ -500,38 +529,38 @@ def cmd_all(args):
     ca = CurateArgs()
     ca.art_type = "cover"
     ca.n = 4
-    cmd_curate(ca)
+    await cmd_curate(ca, client)
     print("\n>>> HUMAN ACTION: Review art/variants/cover_*.png")
     print(">>> Then run: gen_art.py pick cover <number>")
     print(">>> Then re-run: gen_art.py all")
 
-    if not get_reference_url("cover"):
+    if not get_reference_url()("cover"):
         print("\n(Stopping here — pick a cover first)")
         return
 
     print("\n--- Step 3: Generate Ornament Style Variants ---")
     ca.art_type = "ornament"
-    cmd_curate(ca)
+    await cmd_curate(ca, client)
     print("\n>>> HUMAN ACTION: Review art/variants/ornament_*.png")
     print(">>> Then run: gen_art.py pick ornament <number>")
 
-    if not get_reference_url("ornament"):
+    if not get_reference_url()("ornament"):
         print("\n(Stopping here — pick an ornament style first)")
         return
 
     print("\n--- Step 4: Generate All Chapter Ornaments ---")
-    cmd_ornaments_all(args)
+    await cmd_ornaments_all(args, client)
 
     print("\n--- Step 5: Scene Break ---")
-    cmd_scene_break(args)
+    await cmd_scene_break(args, client)
 
     print("\n--- Step 6: Map Variants ---")
     ca.art_type = "map"
     ca.n = 3
-    cmd_curate(ca)
+    await cmd_curate(ca, client)
 
     print("\n--- Step 7: Vectorize ---")
-    cmd_vectorize(args)
+    await cmd_vectorize(args, client)
 
     print("\n" + "=" * 60)
     print("ART PIPELINE COMPLETE")
@@ -545,7 +574,7 @@ def cmd_all(args):
 # MAIN
 # ============================================================
 
-def main():
+async def main_async():
     parser = argparse.ArgumentParser(description="Generate novel art via Nano Banana 2")
     sub = parser.add_subparsers(dest="command")
 
@@ -589,7 +618,12 @@ def main():
         "all": cmd_all,
     }
 
-    commands[args.command](args)
+    async with httpx.AsyncClient() as client:
+        await commands[args.command](args, client)
+
+
+def main():
+    asyncio.run(main_async())
 
 
 if __name__ == "__main__":
