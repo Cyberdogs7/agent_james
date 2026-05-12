@@ -1,5 +1,4 @@
 import sys
-import threading
 import hashlib
 import time
 import asyncio
