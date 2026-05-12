@@ -120,5 +120,12 @@ class TestAutomation(unittest.IsolatedAsyncioTestCase):
         await self.engine.trigger_event("git_commit", {"repo": "other/repo", "message": "fix"})
         self.engine._execute_task.assert_not_called()
 
+    async def test_stop(self):
+        self.engine.running = True
+        self.engine.stop_event.clear()
+        self.engine.stop()
+        self.assertFalse(self.engine.running)
+        self.assertTrue(self.engine.stop_event.is_set())
+
 if __name__ == '__main__':
     unittest.main()
