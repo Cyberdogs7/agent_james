@@ -1,5 +1,5 @@
 import os
-import requests
+import httpx
 import time
 import asyncio
 
@@ -29,30 +29,35 @@ class TrelloAgent:
 
         max_retries = 3
         base_delay = 1
-        for attempt in range(max_retries):
-            try:
-                response = await asyncio.to_thread(requests.request, method, url, **kwargs)
-                response.raise_for_status()
-                data = response.json()
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for attempt in range(max_retries):
+                try:
+                    response = await client.request(method, url, **kwargs)
+                    response.raise_for_status()
+                    data = response.json()
 
-                # Set Cache
-                if method == "GET" and cache_key:
-                    self._cache[cache_key] = data
-                    self._cache_expiry[cache_key] = time.time() + self._cache_ttl
+                    # Set Cache
+                    if method == "GET" and cache_key:
+                        self._cache[cache_key] = data
+                        self._cache_expiry[cache_key] = time.time() + self._cache_ttl
 
-                return data
-            except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 429:
+                    return data
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        delay = base_delay * (2 ** attempt)
+                        print(f"Rate limited (429) for Trello API at {url}. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
+                    else:
+                        print(f"HTTP error occurred: {e}")
+                        return None
+                except httpx.RequestError as e:
                     delay = base_delay * (2 ** attempt)
-                    print(f"Rate limited (429) for Trello API at {url}. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    print(f"Network error ({repr(e)}) for Trello API at {url}. Retrying in {delay} seconds... (Attempt {attempt + 1}/{max_retries})")
                     await asyncio.sleep(delay)
-                else:
-                    print(f"HTTP error occurred: {e}")
+                except Exception as e:
+                    print(f"An error occurred: {repr(e)}")
                     return None
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                return None
-        return None
+            return None
 
     def invalidate_cache(self, key_pattern=None):
         """Invalidates cache. If pattern provided, removes matching keys."""

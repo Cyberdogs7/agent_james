@@ -34,6 +34,7 @@ mock_modules = [
     'slack_sdk.socket_mode',
     'slack_sdk.socket_mode.request',
     'slack_sdk.socket_mode.async_client',
+    'slack_sdk.socket_mode.aiohttp',
     'mediapipe',
     'ytmusicapi',
     'yt_dlp',

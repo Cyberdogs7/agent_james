@@ -26,7 +26,8 @@ class TestTrelloAgent(unittest.IsolatedAsyncioTestCase):
         mock_request.assert_called_with(
             "GET",
             "https://api.trello.com/1/members/me/boards",
-            params={"key": "test_key", "token": "test_token"}
+            params={"key": "test_key", "token": "test_token"},
+            cache_key="list_boards"
         )
 
     @patch('backend.trello_agent.TrelloAgent._request', new_callable=AsyncMock)
@@ -37,7 +38,8 @@ class TestTrelloAgent(unittest.IsolatedAsyncioTestCase):
         mock_request.assert_called_with(
             "GET",
             "https://api.trello.com/1/boards/1",
-            params={"key": "test_key", "token": "test_token"}
+            params={"key": "test_key", "token": "test_token"},
+            cache_key="get_board_1"
         )
 
     @patch('backend.trello_agent.TrelloAgent._request', new_callable=AsyncMock)
@@ -49,7 +51,8 @@ class TestTrelloAgent(unittest.IsolatedAsyncioTestCase):
         mock_request.assert_called_with(
             "GET",
             "https://api.trello.com/1/boards/1/lists",
-            params={"key": "test_key", "token": "test_token"}
+            params={"key": "test_key", "token": "test_token"},
+            cache_key="list_lists_1"
         )
 
     @patch('backend.trello_agent.TrelloAgent._request', new_callable=AsyncMock)
@@ -61,7 +64,8 @@ class TestTrelloAgent(unittest.IsolatedAsyncioTestCase):
         mock_request.assert_called_with(
             "GET",
             "https://api.trello.com/1/lists/1/cards",
-            params={"key": "test_key", "token": "test_token"}
+            params={"key": "test_key", "token": "test_token"},
+            cache_key="list_cards_1"
         )
 
     @patch('backend.trello_agent.TrelloAgent._request', new_callable=AsyncMock)
@@ -72,7 +76,8 @@ class TestTrelloAgent(unittest.IsolatedAsyncioTestCase):
         mock_request.assert_called_with(
             "GET",
             "https://api.trello.com/1/cards/1",
-            params={"key": "test_key", "token": "test_token"}
+            params={"key": "test_key", "token": "test_token"},
+            cache_key="get_card_1"
         )
 
     @patch('backend.trello_agent.TrelloAgent._request', new_callable=AsyncMock)
@@ -84,7 +89,8 @@ class TestTrelloAgent(unittest.IsolatedAsyncioTestCase):
         mock_request.assert_called_with(
             "GET",
             "https://api.trello.com/1/cards/1/actions",
-            params={"key": "test_key", "token": "test_token", "filter": "commentCard"}
+            params={"key": "test_key", "token": "test_token", "filter": "commentCard"},
+            cache_key="list_comments_1"
         )
 
     @patch('backend.trello_agent.TrelloAgent._request', new_callable=AsyncMock)
