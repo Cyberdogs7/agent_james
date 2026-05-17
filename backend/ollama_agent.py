@@ -31,13 +31,24 @@ class OllamaAgent:
 
         activities = []
 
-        # User Prompt
+        # History (Previous turns)
+        for item in session.get("history", []):
+            activities.append({
+                "userMessage": {"content": item["prompt"]},
+                "createTime": item["createTime"]
+            })
+            activities.append({
+                "agentMessage": {"content": item["response"]},
+                "createTime": item["updateTime"]
+            })
+
+        # Current User Prompt
         activities.append({
             "userMessage": {"content": session["prompt"]},
             "createTime": session["createTime"]
         })
 
-        # Agent Response (Streaming update)
+        # Current Agent Response (Streaming update)
         if session["response"]:
             activities.append({
                 "agentMessage": {"content": session["response"]},
@@ -48,8 +59,34 @@ class OllamaAgent:
 
     async def send_message(self, session_id, message):
         """Handles user feedback/messages for the session."""
-        # TODO: Implement interactive chat loop
-        return "Interactive chat is not yet supported for local Ollama agents."
+        if session_id not in self.sessions:
+            return {"error": "Session not found"}
+
+        session = self.sessions[session_id]
+
+        # Save previous turn to history
+        session.setdefault("history", []).append({
+            "prompt": session["prompt"],
+            "response": session["response"],
+            "createTime": session["createTime"],
+            "updateTime": session["updateTime"]
+        })
+
+        # Update for new turn
+        session["prompt"] = message
+        session["response"] = ""
+        session["createTime"] = datetime.now().isoformat()
+        session["updateTime"] = datetime.now().isoformat()
+        session["state"] = "RUNNING"
+
+        self.insights[session_id] = "Thinking..."
+
+        # Restart generation task
+        asyncio.create_task(self._run_generation(
+            session_id, message, session["source"], session["role"], session["model"]
+        ))
+
+        return {"status": "message sent"}
 
     async def spawn_agent(self, prompt, source=None, role=None, model="llama3"):
         """Starts a new Ollama agent session in the background."""
@@ -74,7 +111,8 @@ class OllamaAgent:
             "source": source,
             "model": model,
             "createTime": datetime.now().isoformat(),
-            "updateTime": datetime.now().isoformat()
+            "updateTime": datetime.now().isoformat(),
+            "history": []
         }
 
         self.sessions[session_id] = session_obj
@@ -89,18 +127,23 @@ class OllamaAgent:
         """Background task to run the LLM generation."""
         try:
             # 1. Build Context from Source (if provided)
-            context_str = ""
+            parts = []
+            if role:
+                parts.append(f"You are a {role}.")
+
             if source:
                 context_str = await self._build_context(source)
                 if context_str:
-                    full_prompt = f"Context:\n{context_str}\n\nTask:\n{prompt}"
-                else:
-                    full_prompt = prompt
-            else:
-                full_prompt = prompt
+                    parts.append(f"Context:\n{context_str}")
 
-            if role:
-                full_prompt = f"You are a {role}. {full_prompt}"
+            history = self.sessions[session_id].get("history", [])
+            if history:
+                history_text = "".join([f"User: {turn['prompt']}\nAssistant: {turn['response']}\n\n" for turn in history])
+                parts.append(f"History:\n{history_text.strip()}")
+
+            parts.append(f"Task:\n{prompt}")
+
+            full_prompt = "\n\n".join(parts)
 
             # 2. Call Ollama API
             url = f"{self.base_url}/api/generate"
