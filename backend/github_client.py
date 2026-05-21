@@ -1,5 +1,4 @@
 import httpx
-import os
 import json
 
 class GitHubClient:
