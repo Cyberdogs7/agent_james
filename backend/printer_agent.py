@@ -635,7 +635,11 @@ class PrinterAgent:
         
         if is_orca:
             # OrcaSlicer CLI: orca-slicer [OPTIONS] [file.stl]
-            output_dir = os.path.dirname(output_path) or "."
+            output_dir = os.path.dirname(output_path)
+
+            # FIX: Handle empty output_dir (when output_path has no directory prefix)
+            if not output_dir:
+                output_dir = "."
             
             cmd = [
                 self.slicer_path,
@@ -736,7 +740,11 @@ class PrinterAgent:
                 # Handle OrcaSlicer output naming
                 # OrcaSlicer outputs as "plate_1.gcode", "plate_2.gcode" etc.
                 if is_orca:
-                    output_dir = os.path.dirname(output_path) or "."
+                    output_dir = os.path.dirname(output_path)
+
+                    # FIX: Handle empty output_dir (when output_path has no directory prefix)
+                    if not output_dir:
+                        output_dir = "."
                     
                     # Look for plate_*.gcode files (OrcaSlicer naming convention)
                     import glob
