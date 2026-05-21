@@ -811,6 +811,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
+        self.tool_registry.register("update_user_preferences", self.update_user_preferences)
+
         # Tools returning simple strings from simple project interactions
 
         self.tool_registry.register("assign_agent_to_repo", self.handle_assign_agent)
@@ -1558,6 +1560,12 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
 
 
 
+    def update_user_preferences(self, preferences: dict):
+        if not self.project_manager:
+            return {"status": "error", "message": "ProjectManager not initialized"}
+        success, msg = self.project_manager.update_user_profile(preferences)
+        return {"status": "success" if success else "error", "message": msg}
+
     async def handle_assign_agent(self, agent_id, repo_name):
         from backend.server import fleet_manager, sio
         if fleet_manager.assign_agent(agent_id, repo_name):
@@ -1651,6 +1659,12 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 
         # Combine prompts
         system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}"
+
+        # Inject User Profile
+        user_profile = self.project_manager.get_user_profile()
+        if user_profile:
+            profile_str = "\n".join([f"- {k}: {v}" for k, v in user_profile.items()])
+            system_prompt += f"\n\nHere are known User Preferences and Constraints:\n{profile_str}"
 
         voice_name = project_config.get("voice_name", "Sadaltager")
 
@@ -2280,6 +2294,9 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
                     threading.Thread(target=self.play_audio, daemon=True).start()
                     tasks.append(asyncio.create_task(self.proactive_agent.run()))
 
+                    # Start Implicit Learning Engine
+                    tasks.append(asyncio.create_task(self._implicit_learning_task()))
+
                     # Start the Jules session monitoring task
                     tasks.append(asyncio.create_task(self.jules_agent.start_monitoring(self._handle_jules_status_change)))
 
@@ -2406,6 +2423,82 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
             self.close()
 
         return False
+
+    async def _implicit_learning_task(self):
+        """Periodically scans chat history to update the user profile."""
+        if not self.project_manager:
+            return
+
+        client = genai.Client()
+        last_processed_line = 0
+        last_processed_project = None
+
+        while not self.stop_event.is_set():
+            try:
+                # Wait 5 minutes between checks
+                await asyncio.sleep(300)
+
+                current_project_path = self.project_manager.get_current_project_path()
+
+                # Reset line counter if we switched projects
+                if last_processed_project != current_project_path:
+                    last_processed_line = 0
+                    last_processed_project = current_project_path
+
+                chat_file = current_project_path / "chat_history.jsonl"
+                if not chat_file.exists():
+                    continue
+
+                # Read new lines since last check
+                new_lines = []
+                with open(chat_file, "r", encoding="utf-8") as f:
+                    for i, line in enumerate(f):
+                        if i >= last_processed_line:
+                            try:
+                                entry = json.loads(line)
+                                new_lines.append(f"{entry.get('sender', 'Unknown')}: {entry.get('text', '')}")
+                            except json.JSONDecodeError:
+                                pass
+                        last_processed_line = i + 1
+
+                if not new_lines:
+                    continue
+
+                # Summarize and extract preferences
+                transcript = "\n".join(new_lines)
+                prompt = (
+                    "Analyze the following conversation transcript and extract any new or updated user preferences, "
+                    "constraints, goals, or important contextual details about the user.\n"
+                    "Return ONLY a valid JSON object representing key-value pairs of these preferences. "
+                    "If no new preferences are found, return an empty JSON object {}.\n\n"
+                    f"Transcript:\n{transcript}"
+                )
+
+                try:
+                    response = await asyncio.to_thread(
+                        client.models.generate_content,
+                        model='gemini-2.5-flash',
+                        contents=prompt
+                    )
+
+                    if response and response.text:
+                        text = response.text.strip()
+                        if text.startswith("```json"):
+                            text = text[7:]
+                        if text.endswith("```"):
+                            text = text[:-3]
+
+                        new_prefs = json.loads(text.strip())
+                        if new_prefs and isinstance(new_prefs, dict):
+                            self.project_manager.update_user_profile(new_prefs)
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] Updated user profile with new preferences: {new_prefs}")
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Implicit learning task genai failure: {e}")
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Implicit learning task failed: {e}")
 
     async def run(self, start_message=None):
         self._main_task = asyncio.current_task()

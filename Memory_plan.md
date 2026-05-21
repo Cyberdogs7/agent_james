@@ -2,15 +2,15 @@
 
 This document outlines the strategy to integrate "grows with you" capabilities into A.D.A V2, inspired by Hermes Agent. The goal is to evolve A.D.A from a reactive assistant to a proactive, learning system with persistent memory and autonomous routines.
 
-## 1. Learning About the User (User Modeling & Persistence)
+## 1. Learning About the User (User Modeling & Persistence) [DONE]
 
 **Goal:** Build a deepening model of the user across sessions, capturing preferences, constraints, and implicit feedback to personalize interactions.
 
 **Implementation Plan:**
-1.  **User Profile Schema:** Extend `ProjectManager` to include a persistent user profile (e.g., `user_profile.json`). This will store key-value pairs representing user preferences (e.g., tone, preferred communication channels, technical proficiency).
-2.  **Implicit Learning Engine:** Create an internal background task within `Ada` that periodically summarizes conversational transcripts to extract new user preferences. This could be triggered at the end of a session or when explicitly flagged by the LLM.
-3.  **Dialectic User Modeling:** Implement a mechanism (similar to Honcho) where the agent actively maintains and updates a model of the user's current goals and state of mind, reconciling new information with past observations.
-4.  **Integration with Agent Context:** Inject a summarized version of the user profile into the `system_prompt` during session initialization in `ada.py`.
+1.  **User Profile Schema [DONE]:** Extended `ProjectManager` to include `get_user_profile` and `update_user_profile` to store and load `user_profile.json` in the root workspace.
+2.  **Implicit Learning Engine [DONE]:** Added `_implicit_learning_task` in `Ada` (AudioLoop) that runs every 5 minutes, reading `chat_history.jsonl` since the last check and summarizing new insights into `ProjectManager.update_user_profile` using `gemini-2.5-flash`.
+3.  **Dialectic User Modeling [DONE]:** Implemented an `update_user_preferences` tool, allowing the agent to actively reconcile and explicitly persist stated preferences to the user profile via user instruction.
+4.  **Integration with Agent Context [DONE]:** Modified `_get_live_connect_config` in `ada.py` to dynamically load the `user_profile.json` and append the user's constraints and preferences directly into the system prompt.
 
 **Expected Benefits:**
 *   More personalized and relevant responses.
