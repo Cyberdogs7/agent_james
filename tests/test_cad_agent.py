@@ -127,6 +127,6 @@ class TestBuild123dImport:
         """Test if build123d is installed."""
         try:
             import build123d
-            print(f"build123d version: {build123d.__version__}")
+            pass
         except ImportError:
             pytest.skip("build123d not installed")
