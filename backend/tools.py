@@ -1780,6 +1780,28 @@ all_tools_list = [
         }
     },
     {
+        "name": "schedule_routine",
+        "description": "Schedules an unattended, automated routine to run at a specific time using a cron expression. The routine will trigger a Jules background task with the provided prompt.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "title": {
+                    "type": "STRING",
+                    "description": "A short, descriptive title for the scheduled routine."
+                },
+                "cron_expression": {
+                    "type": "STRING",
+                    "description": "The cron expression defining when the routine should run (e.g., '0 8 * * *' for every day at 8 AM, '*/5 * * * *' for every 5 minutes)."
+                },
+                "prompt": {
+                    "type": "STRING",
+                    "description": "The natural language prompt or instructions that the background Jules agent should execute when the routine triggers."
+                }
+            },
+            "required": ["title", "cron_expression", "prompt"]
+        }
+    },
+    {
         "name": "create_new_skill",
         "description": "Generates a new python script skill that is dynamically added to your tools. Use this to permanently learn how to solve complex requests after you figure them out. Provide the name, description, and the python code containing a `tool_declaration` dict and an `async def execute(**kwargs)` function.",
         "parameters": {

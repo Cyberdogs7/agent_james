@@ -31,15 +31,15 @@ This document outlines the strategy to integrate "grows with you" capabilities i
 *   Complex, multi-step tasks become single-command executions.
 *   Reduces the need for manual tool authoring by human developers.
 
-## 3. Daily Routines (Natural Language Cron Scheduling)
+## 3. Daily Routines (Natural Language Cron Scheduling) [DONE]
 
 **Goal:** Implement scheduled, unattended automations managed entirely via natural language.
 
 **Implementation Plan:**
-1.  **Cron Scheduler Integration:** Integrate a lightweight Python cron library (e.g., `APScheduler`) into `backend/server.py` or as a standalone `CronAgent`.
-2.  **Natural Language Parsing:** Create a tool (e.g., `schedule_routine`) that accepts natural language (e.g., "Every morning at 8 AM, summarize my unread PRs") and converts it into a cron expression and an executable task payload.
-3.  **Unattended Execution Context:** Allow the `AutomationEngine` to spin up headless, isolated agent instances to run these scheduled tasks without interrupting the user's active UI session.
-4.  **Cross-Platform Delivery:** Ensure routine outputs (e.g., "Daily Briefing") can be routed to the appropriate channel (UI dashboard, Slack, Voice via `notify_user`).
+1.  **Cron Scheduler Integration [DONE]:** Added `croniter` to parse and evaluate cron expressions. Modified `TaskManager` to support `cron` mode validation.
+2.  **Natural Language Parsing [DONE]:** Created the `schedule_routine` tool in `backend/tools.py` that handles parsing a natural language request into a cron expression via the LLM and scheduling a `jules_task`.
+3.  **Unattended Execution Context [DONE]:** Implemented the `cron` execution logic in `AutomationEngine._check_schedules()`, where tasks are checked every minute and fired if they match the cron expression. Duplicate runs are prevented by checking the `last_run` timestamp.
+4.  **Cross-Platform Delivery:** (Deferred/Handled naturally by `AutomationEngine._execute_task` when running `jules_task` with notifications).
 
 **Expected Benefits:**
 *   Proactive assistance without prompting.

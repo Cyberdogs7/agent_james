@@ -812,6 +812,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
         self.tool_registry.register("update_user_preferences", self.update_user_preferences)
+        self.tool_registry.register("schedule_routine", self.handle_schedule_routine)
         self.tool_registry.register("create_new_skill", self.handle_create_new_skill)
 
         # Load dynamically generated skills
@@ -1569,6 +1570,22 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             return {"status": "error", "message": "ProjectManager not initialized"}
         success, msg = self.project_manager.update_user_profile(preferences)
         return {"status": "success" if success else "error", "message": msg}
+
+    def handle_schedule_routine(self, title: str, cron_expression: str, prompt: str):
+        try:
+            from backend.task_manager import TaskManager
+            project_path = self.project_manager.get_current_project_path()
+            task_mgr = TaskManager(project_path)
+            task_mgr.create_task(
+                title=title,
+                trigger_type="schedule",
+                trigger_value={"mode": "cron", "expression": cron_expression},
+                action_type="jules_task",
+                action_value=prompt
+            )
+            return f"Successfully scheduled routine '{title}' with cron expression '{cron_expression}'."
+        except Exception as e:
+            return f"Failed to schedule routine '{title}': {str(e)}"
 
     def handle_create_new_skill(self, name: str, description: str, code: str):
         try:

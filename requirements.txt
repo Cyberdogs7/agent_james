@@ -35,3 +35,4 @@ pyperclip
 ytmusicapi
 yt-dlp
 imageio-ffmpeg
+croniter

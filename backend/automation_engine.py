@@ -597,6 +597,30 @@ class AutomationEngine:
                             else:
                                 should_run = True
 
+            # --- CRON MODE ---
+            elif value.get('mode') == 'cron':
+                expression = value.get('expression')
+                if expression:
+                    try:
+                        from croniter import croniter
+                        # Check if the current minute matches the cron expression
+                        if croniter.match(expression, now_dt):
+                            last_run = task.get('last_run')
+                            # Prevent running multiple times within the same minute
+                            if last_run:
+                                last_run_dt = datetime.fromtimestamp(last_run)
+                                # If last run was within the last 60 seconds and in the same minute
+                                if (now_dt - last_run_dt).total_seconds() < 60 and last_run_dt.minute == now_dt.minute:
+                                    should_run = False
+                                else:
+                                    should_run = True
+                            else:
+                                should_run = True
+                    except ImportError:
+                        print("[AutomationEngine] croniter not installed, cannot evaluate cron task.")
+                    except ValueError as e:
+                        print(f"[AutomationEngine] Invalid cron expression for task {task['title']}: {e}")
+
             if should_run:
                 print(f"[AutomationEngine] Triggering scheduled task: {task['title']}")
                 await self._execute_task(task)
