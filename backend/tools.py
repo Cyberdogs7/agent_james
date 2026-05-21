@@ -1327,7 +1327,23 @@ run_ollama_agent_tool = {
     }
 }
 
+update_user_preferences_tool = {
+    "name": "update_user_preferences",
+    "description": "Updates the persistent user profile with new preferences, constraints, or goals based on user instructions.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "preferences": {
+                "type": "OBJECT",
+                "description": "A JSON object containing key-value pairs of the user preferences to update or add."
+            }
+        },
+        "required": ["preferences"]
+    }
+}
+
 all_tools_list = [
+    update_user_preferences_tool,
     generate_cad_tool,
     run_web_agent_tool,
     create_project_tool,

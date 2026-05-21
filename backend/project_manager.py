@@ -17,6 +17,7 @@ class ProjectManager:
         self.workspace_root = Path(workspace_root)
         self.projects_dir = self.workspace_root / "projects"
         self.current_project = "temp"
+        self.user_profile_file = self.workspace_root / "user_profile.json"
         
         # Ensure projects root exists
         if not self.projects_dir.exists():
@@ -204,6 +205,28 @@ class ProjectManager:
                 return json.load(f)
         except json.JSONDecodeError:
             return {}
+
+    def get_user_profile(self) -> dict:
+        """Loads and returns the user profile from the workspace root."""
+        if not self.user_profile_file.exists():
+            return {}
+        try:
+            with open(self.user_profile_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[ProjectManager] Failed to load user profile: {e}")
+            return {}
+
+    def update_user_profile(self, new_data: dict) -> tuple[bool, str]:
+        """Updates and saves the user profile with new data."""
+        profile = self.get_user_profile()
+        profile.update(new_data)
+        try:
+            with open(self.user_profile_file, "w", encoding="utf-8") as f:
+                json.dump(profile, f, indent=4)
+            return True, "User profile updated successfully."
+        except Exception as e:
+            return False, f"Failed to update user profile: {e}"
 
     def update_project_config(self, new_config: dict):
         """Updates and saves the config for the current project."""
