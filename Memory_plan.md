@@ -17,15 +17,14 @@ This document outlines the strategy to integrate "grows with you" capabilities i
 *   Reduced need for the user to repeat constraints or preferences.
 *   A feeling of continuity and a deeper relationship with the agent.
 
-## 2. The Core Agent (Autonomous Skill Generation & Learning Loop)
+## 2. The Core Agent (Autonomous Skill Generation & Learning Loop) [DONE]
 
 **Goal:** Enable A.D.A to autonomously create, refine, and persist new skills based on successful complex task resolutions.
 
 **Implementation Plan:**
-1.  **Trajectory Capture & Compression:** Implement a system to record the exact sequence of tools and prompts used to solve a complex problem (e.g., in `TaskManager` or `JulesAgent`). Use an LLM to compress these successful trajectories into reusable "Skill" definitions.
-2.  **Procedural Memory (Skills Hub):** Create a dedicated directory (`projects/skills/`) to store these generated skills (e.g., as Python scripts or JSON workflow definitions).
-3.  **Dynamic Tool Registration:** Extend `ToolRegistry` to dynamically load and expose these newly generated skills as available tools during a live session.
-4.  **Self-Improvement Loop:** Add a feedback mechanism where the agent evaluates the success of a generated skill after it's used. If it fails or is inefficient, prompt the agent to rewrite and optimize the skill code automatically.
+1.  **Procedural Memory (Skills Hub) [DONE]:** Created a dedicated directory (`projects/skills/`) to store these generated skills as Python scripts.
+2.  **Dynamic Tool Registration [DONE]:** Extended `ToolRegistry` in `backend/tool_registry.py` to dynamically load (`load_skills`) and expose these newly generated skills as available tools (`get_dynamic_tool_declarations`). Added `create_new_skill` tool to `backend/tools.py`.
+3.  **Self-Improvement Loop [DONE]:** Added a feedback mechanism in `ToolRegistry.dispatch` where exceptions from dynamic skills are caught and returned with a stack trace and a prompt encouraging the LLM to rewrite the code.
 
 **Expected Benefits:**
 *   A.D.A becomes exponentially more capable over time.

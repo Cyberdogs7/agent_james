@@ -812,6 +812,10 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
         self.tool_registry.register("update_user_preferences", self.update_user_preferences)
+        self.tool_registry.register("create_new_skill", self.handle_create_new_skill)
+
+        # Load dynamically generated skills
+        self.tool_registry.load_skills()
 
         # Tools returning simple strings from simple project interactions
 
@@ -1566,6 +1570,13 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         success, msg = self.project_manager.update_user_profile(preferences)
         return {"status": "success" if success else "error", "message": msg}
 
+    def handle_create_new_skill(self, name: str, description: str, code: str):
+        try:
+            self.tool_registry.add_skill(name, description, code)
+            return f"Successfully created skill '{name}'. To use this new tool, you must restart the session."
+        except Exception as e:
+            return f"Failed to create skill '{name}': {str(e)}"
+
     async def handle_assign_agent(self, agent_id, repo_name):
         from backend.server import fleet_manager, sio
         if fleet_manager.assign_agent(agent_id, repo_name):
@@ -1657,8 +1668,16 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 - Once music is paused or stopped, you may resume normal voice communication.
 """
 
+        # Skill Generation Prompt
+        skill_prompt = """
+**Skill Generation & Self-Improvement:**
+You have the ability to autonomously learn new skills by writing Python scripts and registering them as tools using `create_new_skill`.
+If a user asks you to do something complex or repetitive that you don't have a direct tool for, you can write the logic as a new skill.
+Important: After creating a new skill, you must inform the user that the session needs to be restarted (e.g., using `restart_application`) in order for the new tool to become available.
+"""
+
         # Combine prompts
-        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}"
+        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{skill_prompt}"
 
         # Inject User Profile
         user_profile = self.project_manager.get_user_profile()
@@ -1673,12 +1692,20 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
             print(f"[ADA DEBUG] [CONFIG] Using System Prompt: '{system_prompt[:80]}...'")
             print(f"[ADA DEBUG] [CONFIG] Using Voice: '{voice_name}'")
 
+        dynamic_declarations = self.tool_registry.get_dynamic_tool_declarations()
+
+        # Deep copy tools so we don't modify the global tools list permanently
+        import copy
+        current_tools = copy.deepcopy(tools)
+        if current_tools and len(current_tools) > 0 and 'function_declarations' in current_tools[0]:
+            current_tools[0]['function_declarations'].extend(dynamic_declarations)
+
         return types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction=system_prompt,
-            tools=tools,
+            tools=current_tools,
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
                     prebuilt_voice_config=types.PrebuiltVoiceConfig(
