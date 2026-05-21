@@ -1778,6 +1778,28 @@ all_tools_list = [
             },
             "required": ["action"]
         }
+    },
+    {
+        "name": "create_new_skill",
+        "description": "Generates a new python script skill that is dynamically added to your tools. Use this to permanently learn how to solve complex requests after you figure them out. Provide the name, description, and the python code containing a `tool_declaration` dict and an `async def execute(**kwargs)` function.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {
+                    "type": "STRING",
+                    "description": "The name of the tool (e.g. 'my_new_tool')."
+                },
+                "description": {
+                    "type": "STRING",
+                    "description": "The description of what the tool does."
+                },
+                "code": {
+                    "type": "STRING",
+                    "description": "The python code string for the new skill. Must define `tool_declaration` and `execute`."
+                }
+            },
+            "required": ["name", "description", "code"]
+        }
     }
 ]
 
