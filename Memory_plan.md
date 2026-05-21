@@ -1,0 +1,63 @@
+# A.D.A V2: "Grows With You" Implementation Plan
+
+This document outlines the strategy to integrate "grows with you" capabilities into A.D.A V2, inspired by Hermes Agent. The goal is to evolve A.D.A from a reactive assistant to a proactive, learning system with persistent memory and autonomous routines.
+
+## 1. Learning About the User (User Modeling & Persistence)
+
+**Goal:** Build a deepening model of the user across sessions, capturing preferences, constraints, and implicit feedback to personalize interactions.
+
+**Implementation Plan:**
+1.  **User Profile Schema:** Extend `ProjectManager` to include a persistent user profile (e.g., `user_profile.json`). This will store key-value pairs representing user preferences (e.g., tone, preferred communication channels, technical proficiency).
+2.  **Implicit Learning Engine:** Create an internal background task within `Ada` that periodically summarizes conversational transcripts to extract new user preferences. This could be triggered at the end of a session or when explicitly flagged by the LLM.
+3.  **Dialectic User Modeling:** Implement a mechanism (similar to Honcho) where the agent actively maintains and updates a model of the user's current goals and state of mind, reconciling new information with past observations.
+4.  **Integration with Agent Context:** Inject a summarized version of the user profile into the `system_prompt` during session initialization in `ada.py`.
+
+**Expected Benefits:**
+*   More personalized and relevant responses.
+*   Reduced need for the user to repeat constraints or preferences.
+*   A feeling of continuity and a deeper relationship with the agent.
+
+## 2. The Core Agent (Autonomous Skill Generation & Learning Loop)
+
+**Goal:** Enable A.D.A to autonomously create, refine, and persist new skills based on successful complex task resolutions.
+
+**Implementation Plan:**
+1.  **Trajectory Capture & Compression:** Implement a system to record the exact sequence of tools and prompts used to solve a complex problem (e.g., in `TaskManager` or `JulesAgent`). Use an LLM to compress these successful trajectories into reusable "Skill" definitions.
+2.  **Procedural Memory (Skills Hub):** Create a dedicated directory (`projects/skills/`) to store these generated skills (e.g., as Python scripts or JSON workflow definitions).
+3.  **Dynamic Tool Registration:** Extend `ToolRegistry` to dynamically load and expose these newly generated skills as available tools during a live session.
+4.  **Self-Improvement Loop:** Add a feedback mechanism where the agent evaluates the success of a generated skill after it's used. If it fails or is inefficient, prompt the agent to rewrite and optimize the skill code automatically.
+
+**Expected Benefits:**
+*   A.D.A becomes exponentially more capable over time.
+*   Complex, multi-step tasks become single-command executions.
+*   Reduces the need for manual tool authoring by human developers.
+
+## 3. Daily Routines (Natural Language Cron Scheduling)
+
+**Goal:** Implement scheduled, unattended automations managed entirely via natural language.
+
+**Implementation Plan:**
+1.  **Cron Scheduler Integration:** Integrate a lightweight Python cron library (e.g., `APScheduler`) into `backend/server.py` or as a standalone `CronAgent`.
+2.  **Natural Language Parsing:** Create a tool (e.g., `schedule_routine`) that accepts natural language (e.g., "Every morning at 8 AM, summarize my unread PRs") and converts it into a cron expression and an executable task payload.
+3.  **Unattended Execution Context:** Allow the `AutomationEngine` to spin up headless, isolated agent instances to run these scheduled tasks without interrupting the user's active UI session.
+4.  **Cross-Platform Delivery:** Ensure routine outputs (e.g., "Daily Briefing") can be routed to the appropriate channel (UI dashboard, Slack, Voice via `notify_user`).
+
+**Expected Benefits:**
+*   Proactive assistance without prompting.
+*   Seamless handling of repetitive maintenance tasks (backups, audits, daily summaries).
+*   Transforms A.D.A into a true background collaborator.
+
+## 4. Context Keeping Memory into Everyday Interactions
+
+**Goal:** Provide the agent with instantaneous, deep recall of past conversations and project decisions, eliminating the "blank slate" problem.
+
+**Implementation Plan:**
+1.  **SQLite/FTS5 Implementation:** Migrate chat logs and architectural decisions from flat text/JSON files to a local SQLite database utilizing FTS5 (Full-Text Search).
+2.  **Vector/Semantic Search (Optional Enhancement):** Supplement FTS5 with local embeddings (using `OllamaAgent`) for semantic retrieval of past context.
+3.  **Autonomous Context Nudging:** Implement a background observer that monitors the current conversation stream. When it detects topics discussed previously, it silently retrieves the historical context and "nudges" the main agent by injecting it into the context window.
+4.  **Cross-Session Search Tool:** Provide a specific tool (`search_memory`) allowing the agent to explicitly query its own historical database when uncertain.
+
+**Expected Benefits:**
+*   Eliminates repetitive context-setting by the user.
+*   Prevents the agent from contradicting past architectural decisions.
+*   Creates a seamless, ongoing dialogue that truly feels like working with a long-term colleague.
