@@ -1693,8 +1693,14 @@ If a user asks you to do something complex or repetitive that you don't have a d
 Important: After creating a new skill, you must inform the user that the session needs to be restarted (e.g., using `restart_application`) in order for the new tool to become available.
 """
 
+        # Memory/Context Nudging Prompt
+        memory_prompt = """
+**Historical Context & Memory Recall:**
+If the user asks about past conversations, decisions, or if you feel you lack historical context to properly answer a question, you MUST use the `search_memory` tool to recall it.
+"""
+
         # Combine prompts
-        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{skill_prompt}"
+        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{skill_prompt}\n{memory_prompt}"
 
         # Inject User Profile
         user_profile = self.project_manager.get_user_profile()
@@ -2341,6 +2347,9 @@ Important: After creating a new skill, you must inform the user that the session
                     # Start Implicit Learning Engine
                     tasks.append(asyncio.create_task(self._implicit_learning_task()))
 
+                    # Start Context Nudging Engine
+                    tasks.append(asyncio.create_task(self._context_nudging_task()))
+
                     # Start the Jules session monitoring task
                     tasks.append(asyncio.create_task(self.jules_agent.start_monitoring(self._handle_jules_status_change)))
 
@@ -2467,6 +2476,39 @@ Important: After creating a new skill, you must inform the user that the session
             self.close()
 
         return False
+
+    async def _context_nudging_task(self):
+        """Periodically checks recent messages and nudges the agent with relevant past context."""
+        last_checked_msg = None
+        while self.is_running and not self.stop_event.is_set():
+            try:
+                await asyncio.sleep(60) # Run every 60 seconds
+                if not self.session or not self.project_manager:
+                    continue
+
+                recent_history = self.project_manager.get_recent_chat_history(limit=1)
+                if not recent_history:
+                    continue
+
+                latest_msg = recent_history[0].get("text", "")
+                sender = recent_history[0].get("sender", "")
+
+                # Only trigger on new User messages
+                if sender == "User" and latest_msg and latest_msg != last_checked_msg:
+                    last_checked_msg = latest_msg
+
+                    # Search memory
+                    results = self.project_manager.memory_manager.search_memory(latest_msg, limit=2)
+                    if results:
+                        nudge_text = f"System Notification: Silent context retrieval based on the user's last message. You do NOT need to mention this unless relevant to the conversation. Found historical context:\n{results[0]}"
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [NUDGE] Injecting context for message: '{latest_msg[:20]}...'")
+                        await self.session.send(input=nudge_text, end_of_turn=False)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[ADA DEBUG] [ERR] Context nudging task failed: {e}")
 
     async def _implicit_learning_task(self):
         """Periodically scans chat history to update the user profile."""

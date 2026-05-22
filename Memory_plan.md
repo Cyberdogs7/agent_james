@@ -46,15 +46,15 @@ This document outlines the strategy to integrate "grows with you" capabilities i
 *   Seamless handling of repetitive maintenance tasks (backups, audits, daily summaries).
 *   Transforms A.D.A into a true background collaborator.
 
-## 4. Context Keeping Memory into Everyday Interactions
+## 4. Context Keeping Memory into Everyday Interactions [DONE]
 
 **Goal:** Provide the agent with instantaneous, deep recall of past conversations and project decisions, eliminating the "blank slate" problem.
 
 **Implementation Plan:**
-1.  **SQLite/FTS5 Implementation:** Migrate chat logs and architectural decisions from flat text/JSON files to a local SQLite database utilizing FTS5 (Full-Text Search).
-2.  **Vector/Semantic Search (Optional Enhancement):** Supplement FTS5 with local embeddings (using `OllamaAgent`) for semantic retrieval of past context.
-3.  **Autonomous Context Nudging:** Implement a background observer that monitors the current conversation stream. When it detects topics discussed previously, it silently retrieves the historical context and "nudges" the main agent by injecting it into the context window.
-4.  **Cross-Session Search Tool:** Provide a specific tool (`search_memory`) allowing the agent to explicitly query its own historical database when uncertain.
+1.  **SQLite/FTS5 Implementation [DONE]:** Migrated chat logs from flat text/JSON files to a local SQLite database utilizing FTS5 (Full-Text Search) by editing `backend/db.py` to create a virtual FTS table and modifying `ProjectManager` to insert chat history into the SQLite DB while retaining `jsonl` logs.
+2.  **Vector/Semantic Search (Optional Enhancement) [DONE]:** Vector embeddings already exist via `MemoryManager`. We tapped into this for unified context retrieval across chat logs and architectural history.
+3.  **Autonomous Context Nudging [DONE]:** Implemented a background observer `_context_nudging_task` in `ada.py` that periodically queries the `MemoryManager` using the latest chat messages and explicitly retrieves the historical context, sending a silent nudge if an insight is found. Additionally, modified the system prompt to instruct the agent to use `search_memory` when lacking historical context.
+4.  **Cross-Session Search Tool [DONE]:** Added a specific tool (`search_memory`) in `backend/tools.py` allowing the agent to explicitly query both the FTS5 chat history and the vector-based architectural memory when uncertain.
 
 **Expected Benefits:**
 *   Eliminates repetitive context-setting by the user.
