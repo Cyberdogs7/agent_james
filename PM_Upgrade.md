@@ -63,8 +63,10 @@ Refactor the existing `FleetManager` and `WarRoomDashboard` to implement Routa's
    - **Reviewer Prompt:** "You are the Review Guard. Independently verify the acceptance criteria. If tests fail, transition the task status back to `dev_implementation` with a `Blocked Analysis`."
 
 ### Phase 3: Frontend Refactor (`src/components/WarRoomDashboard.jsx`)
-1. **Kanban View:**
-   - Transform the generic "Task Queue" list into a visual Kanban board with columns: Backlog, Todo, Dev, Review, Done.
+1. **Kanban View (Space-Constrained UI):**
+   - Given the limited horizontal space in the WarRoom modal, a traditional 5-column Kanban board will be too crowded. Instead, we will implement one of two approaches:
+     - **Tabbed Lane View:** A horizontal tab bar at the top (`Backlog` | `Planning` | `Dev` | `Review` | `Done`). Selecting a tab filters the single-column list below to only show tasks currently in that lane.
+     - **In-Card Pipeline Stepper:** Keep the vertical list, but add a horizontal progress stepper inside each task card (e.g., `[Plan] -> [*Dev*] -> [Review]`).
 2. **Visualizing Contracts:**
    - Display the *Evidence* and *Review Findings* required for a card to move forward.
    - When a task is clicked, show its `docs/exec-plans/...` and `docs/issues/...` artifacts explicitly instead of just showing a generic prompt.
