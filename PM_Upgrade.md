@@ -62,16 +62,18 @@ Refactor the existing `FleetManager` and `WarRoomDashboard` to implement Routa's
    - **Crafter Prompt:** "You are the Dev Crafter. Read the execution plan. Implement the code. Run tests. Update the task state with Dev Evidence."
    - **Reviewer Prompt:** "You are the Review Guard. Independently verify the acceptance criteria. If tests fail, transition the task status back to `dev_implementation` with a `Blocked Analysis`."
 
-### Phase 3: Frontend Refactor (`src/components/WarRoomDashboard.jsx`)
-1. **Kanban View (Space-Constrained UI):**
-   - Given the limited horizontal space in the WarRoom modal, a traditional 5-column Kanban board will be too crowded. Instead, we will implement one of two approaches:
-     - **Tabbed Lane View:** A horizontal tab bar at the top (`Backlog` | `Planning` | `Dev` | `Review` | `Done`). Selecting a tab filters the single-column list below to only show tasks currently in that lane.
-     - **In-Card Pipeline Stepper:** Keep the vertical list, but add a horizontal progress stepper inside each task card (e.g., `[Plan] -> [*Dev*] -> [Review]`).
-2. **Visualizing Contracts:**
-   - Display the *Evidence* and *Review Findings* required for a card to move forward.
-   - When a task is clicked, show its `docs/exec-plans/...` and `docs/issues/...` artifacts explicitly instead of just showing a generic prompt.
-3. **Blocked State UI:**
-   - If a task is returned to `Dev` by the `Review` agent, highlight it in red (`bg-red-500/20`) and display the "Blocker Analysis" front and center for the user or the Dev agent to see.
+### Phase 3: Frontend Refactor (New Dedicated UI Route)
+Given that the existing `WarRoomDashboard` is a global, space-constrained modal overlay designed for quick, transient interactions, forcing a complex Kanban board into it is fundamentally flawed. Instead, we should introduce a **dedicated full-screen route**.
+
+1. **New Workspace Route (`src/components/WorkspaceBoard.jsx`):**
+   - Create a separate, full-page UI (e.g., accessible via a new sidebar icon or a button in the WarRoom).
+   - This full-screen view naturally accommodates a traditional 5-column Kanban board (`Backlog`, `Todo`, `Dev`, `Review`, `Done`), exactly mirroring Routa's UI.
+2. **Visualizing Contracts in the New UI:**
+   - Because we have more screen real estate, clicking a card opens a wide detail panel.
+   - This panel must display the *Evidence* and *Review Findings* required for a card to move forward.
+   - Surface the actual artifacts (`docs/exec-plans/...` and `docs/issues/...`) instead of just hiding everything behind the original user prompt.
+3. **Blocked State Visuals:**
+   - If a task is returned to `Dev` by the `Review` agent, highlight the card in red and immediately show the "Blocker Analysis" summary on the card face.
 
 ### Phase 4: Enforcing Durable Knowledge
 1. **System Directives:**
