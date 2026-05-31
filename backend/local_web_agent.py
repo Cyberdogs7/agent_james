@@ -61,6 +61,10 @@ class LocalWebAgent:
             browser_click_tool
         ]
         self.openai_tools = convert_gemini_to_openai(raw_tools)
+        self._is_interrupted = False
+
+    def interrupt(self):
+        self._is_interrupted = True
 
     async def _send_screenshot(self, update_callback, log_msg=""):
         if not update_callback:
@@ -78,6 +82,7 @@ class LocalWebAgent:
             await update_callback(None, f"Screenshot error: {e}")
 
     async def run_task(self, prompt, update_callback=None):
+        self._is_interrupted = False
         print(f"[LocalWebAgent] Starting task with prompt: {prompt}")
         await self._send_screenshot(update_callback, "Initializing Local Web Agent...")
         
@@ -86,7 +91,13 @@ class LocalWebAgent:
             {"role": "user", "content": prompt}
         ]
         
-        for i in range(20): # Max 20 turns
+        while True:
+            if self._is_interrupted:
+                msg = "Task interrupted by user."
+                print(f"[LocalWebAgent] {msg}")
+                await self._send_screenshot(update_callback, msg)
+                return msg
+
             try:
                 response = await self.client.chat.completions.create(
                     model=self.model,
@@ -135,5 +146,3 @@ class LocalWebAgent:
                 print(f"[LocalWebAgent] {error_msg}")
                 await self._send_screenshot(update_callback, error_msg)
                 return error_msg
-                
-        return "Max turns reached."

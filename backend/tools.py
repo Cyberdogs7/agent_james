@@ -379,6 +379,15 @@ run_web_agent_tool = {
     "behavior": "NON_BLOCKING"
 }
 
+stop_web_agent_tool = {
+    "name": "stop_web_agent",
+    "description": "Stops the currently running web browser agent task.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
 create_project_tool = {
     "name": "create_project",
     "description": "Creates a new project folder to organize files.",
@@ -1397,6 +1406,7 @@ all_tools_list = [
     browser_click_tool,
     generate_cad_tool,
     run_web_agent_tool,
+    stop_web_agent_tool,
     create_project_tool,
     switch_project_tool,
     list_projects_tool,

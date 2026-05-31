@@ -733,6 +733,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         # Explicit Registrations
         self.tool_registry.register("generate_cad", self.handle_cad_request)
         self.tool_registry.register("run_web_agent", self.handle_web_agent_request)
+        self.tool_registry.register("stop_web_agent", self.handle_stop_web_agent_request)
         self.tool_registry.register("browser_navigate", self.browser_agent.browser_navigate)
         self.tool_registry.register("browser_execute_javascript", self.browser_agent.browser_execute_javascript)
         self.tool_registry.register("browser_get_dom", self.browser_agent.browser_get_dom)
@@ -1113,6 +1114,13 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         else:
             return "No display content handler registered."
 
+    def handle_stop_web_agent_request(self):
+        if hasattr(self, 'web_agent') and hasattr(self.web_agent, 'interrupt'):
+            self.web_agent.interrupt()
+            if INCLUDE_RAW_LOGS:
+                print("[ADA DEBUG] [WEB AGENT] Sent interrupt signal to Web Agent via tool.")
+            return "Successfully interrupted the web agent task."
+        return "No web agent is currently running or it does not support interruption."
 
     async def _run_web_agent_task(self, prompt):
         if INCLUDE_RAW_LOGS:
