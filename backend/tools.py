@@ -1327,6 +1327,21 @@ run_ollama_agent_tool = {
     }
 }
 
+update_user_preferences_tool = {
+    "name": "update_user_preferences",
+    "description": "Updates the persistent user profile with new preferences, constraints, or goals based on user instructions.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "preferences": {
+                "type": "OBJECT",
+                "description": "A JSON object containing key-value pairs of the user preferences to update or add."
+            }
+        },
+        "required": ["preferences"]
+    }
+}
+
 browser_navigate_tool = {
     "name": "browser_navigate",
     "description": "Programmatically navigates the browser to a specific URL.",
@@ -1375,6 +1390,7 @@ browser_click_tool = {
 }
 
 all_tools_list = [
+    update_user_preferences_tool,
     browser_navigate_tool,
     browser_execute_javascript_tool,
     browser_get_dom_tool,
@@ -1812,6 +1828,50 @@ all_tools_list = [
                 }
             },
             "required": ["action"]
+        }
+    },
+    {
+        "name": "schedule_routine",
+        "description": "Schedules an unattended, automated routine to run at a specific time using a cron expression. The routine will trigger a Jules background task with the provided prompt.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "title": {
+                    "type": "STRING",
+                    "description": "A short, descriptive title for the scheduled routine."
+                },
+                "cron_expression": {
+                    "type": "STRING",
+                    "description": "The cron expression defining when the routine should run (e.g., '0 8 * * *' for every day at 8 AM, '*/5 * * * *' for every 5 minutes)."
+                },
+                "prompt": {
+                    "type": "STRING",
+                    "description": "The natural language prompt or instructions that the background Jules agent should execute when the routine triggers."
+                }
+            },
+            "required": ["title", "cron_expression", "prompt"]
+        }
+    },
+    {
+        "name": "create_new_skill",
+        "description": "Generates a new python script skill that is dynamically added to your tools. Use this to permanently learn how to solve complex requests after you figure them out. Provide the name, description, and the python code containing a `tool_declaration` dict and an `async def execute(**kwargs)` function.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {
+                    "type": "STRING",
+                    "description": "The name of the tool (e.g. 'my_new_tool')."
+                },
+                "description": {
+                    "type": "STRING",
+                    "description": "The description of what the tool does."
+                },
+                "code": {
+                    "type": "STRING",
+                    "description": "The python code string for the new skill. Must define `tool_declaration` and `execute`."
+                }
+            },
+            "required": ["name", "description", "code"]
         }
     }
 ]

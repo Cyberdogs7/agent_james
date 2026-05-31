@@ -61,6 +61,9 @@ class TaskManager:
         elif mode == "cron":
             if "expression" not in trigger_value:
                 raise ValueError("Cron mode requires 'expression'")
+            from croniter import croniter
+            if not croniter.is_valid(trigger_value["expression"]):
+                raise ValueError(f"Invalid cron expression: {trigger_value['expression']}")
 
         return True
 
