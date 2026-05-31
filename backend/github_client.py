@@ -62,7 +62,22 @@ class GitHubClient:
     async def merge_pull_request(self, owner, repo, pull_number, merge_method="merge"):
         # merge_method can be "merge", "squash", or "rebase"
         data = {"merge_method": merge_method}
-        return await self._request("PUT", f"/repos/{owner}/{repo}/pulls/{pull_number}/merge", json=data)
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.request(
+                    "PUT",
+                    f"{self.base_url}/repos/{owner}/{repo}/pulls/{pull_number}/merge",
+                    headers=self.headers,
+                    json=data
+                )
+                if response.status_code == 204:
+                    return {"merged": True}
+                try:
+                    return response.json()
+                except ValueError:
+                    return {"message": f"HTTP {response.status_code}: {response.text}"}
+            except Exception as e:
+                return {"message": str(e)}
 
     async def get_pull_request(self, owner, repo, pull_number):
         return await self._request("GET", f"/repos/{owner}/{repo}/pulls/{pull_number}")
