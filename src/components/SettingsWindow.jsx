@@ -38,10 +38,13 @@ const SettingsWindow = ({
 }) => {
     const [permissions, setPermissions] = useState({});
     const [faceAuthEnabled, setFaceAuthEnabled] = useState(false);
+    const [apiKeys, setApiKeys] = useState({});
+    const [showKey, setShowKey] = useState({});
 
     useEffect(() => {
-        // Request initial permissions
+        // Request initial permissions and keys
         socket.emit('get_settings');
+        socket.emit('get_api_keys');
 
         // Listen for updates
         const handleSettings = (settings) => {
@@ -55,12 +58,16 @@ const SettingsWindow = ({
             }
         };
 
+        const handleApiKeys = (keys) => {
+            if (keys) setApiKeys(keys);
+        };
+
         socket.on('settings', handleSettings);
-        // Also listen for legacy tool_permissions if needed, but 'settings' covers it
-        // socket.on('tool_permissions', handlePermissions); 
+        socket.on('api_keys', handleApiKeys);
 
         return () => {
             socket.off('settings', handleSettings);
+            socket.off('api_keys', handleApiKeys);
         };
     }, [socket]);
 
@@ -190,6 +197,38 @@ const SettingsWindow = ({
                         <div
                             className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${isCameraFlipped ? 'translate-x-4' : 'translate-x-0'}`}
                         />
+                    </button>
+                </div>
+            </div>
+
+            {/* API Configuration Section */}
+            <div className="mb-6">
+                <h3 className="text-gold9 font-bold mb-3 text-xs uppercase tracking-wider opacity-80">API Configuration</h3>
+                <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                    {['GEMINI_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'JULES_API_KEY', 'TRELLO_API_KEY', 'GIPHY_API_KEY'].map(keyName => (
+                        <div key={keyName} className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gold8/60 uppercase">{keyName.replace(/_/g, ' ')}</label>
+                            <div className="flex gap-2">
+                                <input
+                                    type={showKey[keyName] ? "text" : "password"}
+                                    value={apiKeys[keyName] || ''}
+                                    onChange={(e) => setApiKeys(prev => ({ ...prev, [keyName]: e.target.value }))}
+                                    className="w-full bg-gray-900 border border-gold8 rounded p-2 text-xs text-gold9 focus:border-gold9 outline-none font-mono"
+                                />
+                                <button
+                                    onClick={() => setShowKey(prev => ({ ...prev, [keyName]: !prev[keyName] }))}
+                                    className="text-gold8 hover:text-gold9 px-2 bg-gray-900 border border-gold8 rounded text-[10px] uppercase tracking-wider"
+                                >
+                                    {showKey[keyName] ? 'Hide' : 'Show'}
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                    <button
+                        onClick={() => socket.emit('update_api_keys', apiKeys)}
+                        className="w-full mt-2 py-2 bg-gold9/20 hover:bg-gold9/30 text-gold9 border border-gold9/50 rounded text-xs uppercase tracking-wider font-bold transition-colors"
+                    >
+                        Save API Keys
                     </button>
                 </div>
             </div>

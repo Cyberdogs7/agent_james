@@ -15,9 +15,8 @@ class ProgrammaticBrowserAgent:
         async with self._init_lock:
             if not self.playwright:
                 self.playwright = await async_playwright().start()
-                # Run headless=True for typical background use, but False can be useful for debugging.
-                # Keeping it headless for programmatic access.
-                self.browser = await self.playwright.chromium.launch(headless=True)
+                # Run headless=False so the user can visually monitor what the agent is doing
+                self.browser = await self.playwright.chromium.launch(headless=False)
                 self.context = await self.browser.new_context(
                     viewport={"width": 1440, "height": 900},
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

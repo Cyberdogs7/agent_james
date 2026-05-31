@@ -1367,6 +1367,33 @@ async def update_settings(sid, data):
     # Broadcast new full settings
     await sio.emit('settings', SETTINGS)
 
+import dotenv
+
+@sio.event
+async def get_api_keys(sid):
+    env_path = os.path.join(project_root, ".env")
+    keys = dotenv.dotenv_values(env_path)
+    await sio.emit('api_keys', keys)
+
+@sio.event
+async def update_api_keys(sid, data):
+    print(f"Updating API keys...")
+    env_path = os.path.join(project_root, ".env")
+    
+    # Ensure .env exists
+    if not os.path.exists(env_path):
+        with open(env_path, 'w') as f:
+            f.write("")
+            
+    for key, val in data.items():
+        if val is not None:
+            dotenv.set_key(env_path, key, str(val))
+            os.environ[key] = str(val)
+    
+    keys = dotenv.dotenv_values(env_path)
+    await sio.emit('api_keys', keys)
+    await sio.emit('status', {'msg': 'API Keys saved successfully'})
+
 @sio.event
 async def delete_timer(sid, data):
     """Handles request from frontend to delete a timer or reminder."""
