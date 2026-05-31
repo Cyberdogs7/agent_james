@@ -13,14 +13,27 @@ class ProgrammaticBrowserAgent:
     async def _ensure_browser(self):
         """Lazily initialize the browser."""
         async with self._init_lock:
+            if self.browser and not self.browser.is_connected():
+                self.browser = None
+                self.context = None
+                self.page = None
+            if self.page and self.page.is_closed():
+                self.page = None
+
             if not self.playwright:
                 self.playwright = await async_playwright().start()
+                
+            if not self.browser:
                 # Run headless=False so the user can visually monitor what the agent is doing
                 self.browser = await self.playwright.chromium.launch(headless=False)
+                
+            if not self.context or self.context not in self.browser.contexts:
                 self.context = await self.browser.new_context(
                     viewport={"width": 1440, "height": 900},
                     user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 )
+                
+            if not self.page:
                 self.page = await self.context.new_page()
 
     async def browser_navigate(self, url: str):

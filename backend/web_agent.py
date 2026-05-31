@@ -17,7 +17,7 @@ if not API_KEY:
 SCREEN_WIDTH = 1440
 SCREEN_HEIGHT = 900
 # UPDATED: Use the specific Computer Use preview model
-MODEL_ID = "gemini-2.5-computer-use-preview-10-2025"
+MODEL_ID = "gemini-2.5-flash"
 
 class WebAgent:
     def __init__(self):

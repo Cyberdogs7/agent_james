@@ -63,7 +63,7 @@ else:
     pya = None
 
 from backend.cad_agent import CadAgent
-from backend.web_agent import WebAgent
+from backend.local_web_agent import LocalWebAgent
 from backend.browser_agent import ProgrammaticBrowserAgent
 from backend.kasa_agent import KasaAgent
 from backend.printer_agent import PrinterAgent
@@ -150,7 +150,6 @@ class AudioLoop:
                 self.on_cad_status(status_info)
         
         self.cad_agent = CadAgent(on_thought=handle_cad_thought, on_status=handle_cad_status)
-        self.web_agent = WebAgent()
         self.browser_agent = ProgrammaticBrowserAgent()
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.kasa_agent.set_on_update(self.on_device_update)
@@ -220,6 +219,7 @@ class AudioLoop:
         # Initialize Tool Registry
         self.tool_registry = ToolRegistry()
         self._register_tools()
+        self.web_agent = LocalWebAgent(self.browser_agent, self.tool_registry)
 
         # Sync Initial Project State
         if self.on_project_update:
@@ -2492,7 +2492,7 @@ If the user asks about past conversations, decisions, or if you feel you lack hi
     async def _context_nudging_task(self):
         """Periodically checks recent messages and nudges the agent with relevant past context."""
         last_checked_msg = None
-        while self.is_running and not self.stop_event.is_set():
+        while not self.stop_event.is_set():
             try:
                 await asyncio.sleep(60) # Run every 60 seconds
                 if not self.session or not self.project_manager:

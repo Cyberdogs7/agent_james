@@ -44,7 +44,7 @@ const ConfirmationPopup = ({ request, onConfirm, onDeny }) => {
                                 <span className="text-xs text-gold9 font-bold uppercase tracking-wider">Parameters</span>
                                 <span className="text-xs text-white/50 font-sans">json.payload</span>
                             </div>
-                            <div className="p-4 bg-black/20">
+                            <div className="p-4 bg-black/20 max-h-[50vh] overflow-y-auto custom-scrollbar">
                                 <pre className="text-xs text-gray-300 font-sans overflow-x-auto whitespace-pre-wrap leading-relaxed">
                                     {JSON.stringify(request.args, null, 2)}
                                 </pre>

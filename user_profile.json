@@ -1,0 +1,9 @@
+{
+    "user_goal": "build a playtest for a mini-game",
+    "mini_game_name": "butterfly_botanist",
+    "mini_game_url": "https://nlevelsoftware.github.io/minigames/butterfly_botanist.html",
+    "playtest_comprehensiveness": "comprehensive",
+    "pull_request_663_priority": "user flagged it as requiring a merge decision and directly inquired about its status",
+    "pull_request_425_desired_action": "user was hoping for a merge of this PR",
+    "playtest_update_requested": true
+}

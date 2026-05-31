@@ -1,0 +1,2 @@
+Navigate to https://nlevelsoftware.github.io/minigames/butterfly_botanist.html. First use browser_execute_javascript or browser_get_dom to understand the game state if needed. Then write a javascript script to automatically click the butterflies and win the game. Return when you think you've won.
+quit
