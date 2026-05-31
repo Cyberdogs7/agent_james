@@ -1327,7 +1327,58 @@ run_ollama_agent_tool = {
     }
 }
 
+browser_navigate_tool = {
+    "name": "browser_navigate",
+    "description": "Programmatically navigates the browser to a specific URL.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "url": {"type": "STRING", "description": "The URL to navigate to."}
+        },
+        "required": ["url"]
+    }
+}
+
+browser_execute_javascript_tool = {
+    "name": "browser_execute_javascript",
+    "description": "Executes arbitrary JavaScript in the programmatic browser and returns the result.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "script": {"type": "STRING", "description": "The JavaScript code to execute."}
+        },
+        "required": ["script"]
+    }
+}
+
+browser_get_dom_tool = {
+    "name": "browser_get_dom",
+    "description": "Returns the HTML of the programmatic browser's current page, or a specific element if a selector is provided.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "selector": {"type": "STRING", "description": "Optional CSS selector to get the HTML of a specific element."}
+        }
+    }
+}
+
+browser_click_tool = {
+    "name": "browser_click",
+    "description": "Programmatically clicks an element matching the CSS selector.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "selector": {"type": "STRING", "description": "The CSS selector of the element to click."}
+        },
+        "required": ["selector"]
+    }
+}
+
 all_tools_list = [
+    browser_navigate_tool,
+    browser_execute_javascript_tool,
+    browser_get_dom_tool,
+    browser_click_tool,
     generate_cad_tool,
     run_web_agent_tool,
     create_project_tool,

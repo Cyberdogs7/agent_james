@@ -64,6 +64,7 @@ else:
 
 from backend.cad_agent import CadAgent
 from backend.web_agent import WebAgent
+from backend.browser_agent import ProgrammaticBrowserAgent
 from backend.kasa_agent import KasaAgent
 from backend.printer_agent import PrinterAgent
 from backend.trello_agent import TrelloAgent
@@ -150,6 +151,7 @@ class AudioLoop:
         
         self.cad_agent = CadAgent(on_thought=handle_cad_thought, on_status=handle_cad_status)
         self.web_agent = WebAgent()
+        self.browser_agent = ProgrammaticBrowserAgent()
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.kasa_agent.set_on_update(self.on_device_update)
         self.printer_agent = PrinterAgent()
@@ -270,6 +272,12 @@ class AudioLoop:
             try:
                 # If we are in the main thread (shutdown), we shouldn't create a task in the main loop for a sub-loop
                 asyncio.create_task(self.music_agent.stop())
+            except RuntimeError:
+                pass
+        
+        if hasattr(self, 'browser_agent') and self.browser_agent:
+            try:
+                asyncio.create_task(self.browser_agent.stop())
             except RuntimeError:
                 pass
 
@@ -725,6 +733,10 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         # Explicit Registrations
         self.tool_registry.register("generate_cad", self.handle_cad_request)
         self.tool_registry.register("run_web_agent", self.handle_web_agent_request)
+        self.tool_registry.register("browser_navigate", self.browser_agent.browser_navigate)
+        self.tool_registry.register("browser_execute_javascript", self.browser_agent.browser_execute_javascript)
+        self.tool_registry.register("browser_get_dom", self.browser_agent.browser_get_dom)
+        self.tool_registry.register("browser_click", self.browser_agent.browser_click)
         self.tool_registry.register("create_coding_task", self.handle_create_coding_task)
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_openhands_agent", self.handle_openhands_request)
