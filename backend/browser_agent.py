@@ -76,11 +76,33 @@ class ProgrammaticBrowserAgent:
             return f"Failed to get DOM: {e}"
 
     async def browser_click(self, selector: str):
-        """Clicks an element matching the selector."""
+        """Clicks an element matching the selector using actual mouse controls and tracking."""
         try:
             await self._ensure_browser()
-            await self.page.click(selector, timeout=5000)
-            return f"Successfully clicked element: {selector}"
+            element = await self.page.query_selector(selector)
+            if not element:
+                return f"Element with selector '{selector}' not found."
+            
+            await element.scroll_into_view_if_needed()
+            
+            # Track moving elements by updating position rapidly before clicking
+            x, y = 0, 0
+            for _ in range(5):
+                box = await element.bounding_box()
+                if not box:
+                    return f"Element '{selector}' is not visible or has no bounding box."
+                    
+                x = box['x'] + box['width'] / 2
+                y = box['y'] + box['height'] / 2
+                
+                await self.page.mouse.move(x, y)
+                await asyncio.sleep(0.02) # Short delay to allow tracking
+                
+            await self.page.mouse.down()
+            await asyncio.sleep(0.05) # Brief hold for the click
+            await self.page.mouse.up()
+            
+            return f"Successfully clicked element: {selector} at ({x}, {y})"
         except Exception as e:
             return f"Failed to click element '{selector}': {e}"
 
