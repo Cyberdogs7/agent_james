@@ -1380,25 +1380,25 @@ async def get_api_keys(sid):
     keys = await asyncio.to_thread(dotenv.dotenv_values, env_path)
     await sio.emit('api_keys', keys)
 
-def _sync_update_api_keys(data, env_path):
-    # Ensure .env exists
-    if not os.path.exists(env_path):
-        with open(env_path, 'w') as f:
-            f.write("")
-            
-    for key, val in data.items():
-        if val is not None:
-            dotenv.set_key(env_path, key, str(val))
-            os.environ[key] = str(val)
-    
-    return dotenv.dotenv_values(env_path)
-
 @sio.event
 async def update_api_keys(sid, data):
     print(f"Updating API keys...")
     env_path = os.path.join(project_root, ".env")
 
-    keys = await asyncio.to_thread(_sync_update_api_keys, data, env_path)
+    def _sync_update_api_keys():
+        # Ensure .env exists
+        if not os.path.exists(env_path):
+            with open(env_path, 'w') as f:
+                f.write("")
+
+        for key, val in data.items():
+            if val is not None:
+                dotenv.set_key(env_path, key, str(val))
+                os.environ[key] = str(val)
+
+        return dotenv.dotenv_values(env_path)
+
+    keys = await asyncio.to_thread(_sync_update_api_keys)
 
     await sio.emit('api_keys', keys)
     await sio.emit('status', {'msg': 'API Keys saved successfully'})
