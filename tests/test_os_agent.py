@@ -20,6 +20,15 @@ class TestOSAgent(unittest.TestCase):
         mock_popen.assert_called_with(["open", "-a", "Calculator"])
         self.assertIn("Launched Calculator", result)
 
+    @patch('backend.os_agent.sys.platform', 'linux')
+    @patch('backend.os_agent.shutil.which', return_value=None)
+    @patch('subprocess.Popen')
+    def test_launch_app_linux(self, mock_popen, mock_which):
+        self.agent.platform = 'linux'
+        result = self.agent.launch_app("google-chrome --incognito")
+        mock_popen.assert_called_with(["google-chrome", "--incognito"], start_new_session=True)
+        self.assertIn("Attempted to launch google-chrome --incognito", result)
+
     @patch('backend.os_agent.sys.platform', 'win32')
     def test_launch_app_windows(self):
         # We need to manually mock os.startfile because it doesn't exist on linux
@@ -32,6 +41,32 @@ class TestOSAgent(unittest.TestCase):
 
             mock_os.startfile.assert_called_with("Notepad")
             self.assertIn("Launched Notepad", result)
+
+    @patch('backend.os_agent.sys.platform', 'win32')
+    @patch('subprocess.Popen')
+    def test_launch_app_windows_fallback(self, mock_popen):
+        with patch('backend.os_agent.os') as mock_os:
+            self.agent.platform = 'win32'
+            mock_os.startfile = MagicMock(side_effect=FileNotFoundError)
+
+            result = self.agent.launch_app("Notepad")
+
+            mock_popen.assert_called_with(["cmd.exe", "/c", "start", '""', "Notepad"])
+            self.assertIn("Launched Notepad (via fallback)", result)
+
+    @patch('backend.os_agent.sys.platform', 'win32')
+    @patch('subprocess.run')
+    def test_lock_screen_windows(self, mock_run):
+        self.agent.platform = 'win32'
+        self.agent.lock_screen()
+        mock_run.assert_called_with(["rundll32.exe", "user32.dll,LockWorkStation"])
+
+    @patch('backend.os_agent.sys.platform', 'win32')
+    @patch('subprocess.run')
+    def test_sleep_windows(self, mock_run):
+        self.agent.platform = 'win32'
+        self.agent.sleep()
+        mock_run.assert_called_with(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
 
     @patch('backend.os_agent.sys.platform', 'darwin')
     @patch('subprocess.run')

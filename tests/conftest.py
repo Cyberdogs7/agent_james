@@ -23,7 +23,6 @@ mock_modules = [
     'google.genai',
     'google.genai.types',
     'tzlocal',
-    'pydantic',
     'httpx',
     'psutil',
     'numpy',

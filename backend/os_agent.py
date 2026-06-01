@@ -4,6 +4,7 @@ import logging
 import shutil
 import os
 import ctypes
+import shlex
 
 class OSAgent:
     def __init__(self):
@@ -21,9 +22,9 @@ class OSAgent:
                     os.startfile(app_name)
                     return f"Launched {app_name}"
                 except FileNotFoundError:
-                    # Fallback to shell execution if not found directly
-                    subprocess.Popen(f'start "" "{app_name}"', shell=True)
-                    return f"Launched {app_name} (via shell)"
+                    # Fallback to execution if not found directly
+                    subprocess.Popen(["cmd.exe", "/c", "start", '""', app_name])
+                    return f"Launched {app_name} (via fallback)"
             elif self.platform == "darwin":
                 subprocess.Popen(["open", "-a", app_name])
                 return f"Launched {app_name}"
@@ -32,7 +33,7 @@ class OSAgent:
                     subprocess.Popen([app_name], start_new_session=True)
                     return f"Launched {app_name}"
                 else:
-                    subprocess.Popen(app_name, shell=True, start_new_session=True)
+                    subprocess.Popen(shlex.split(app_name), start_new_session=True)
                     return f"Attempted to launch {app_name}"
             else:
                 return "Platform not supported"
@@ -112,7 +113,7 @@ class OSAgent:
         self.logger.info("Locking screen")
         try:
             if self.platform == "win32":
-                subprocess.run("rundll32.exe user32.dll,LockWorkStation", shell=True)
+                subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"])
                 return "Screen locked"
             elif self.platform == "darwin":
                 # MacOS High Sierra+
@@ -135,7 +136,7 @@ class OSAgent:
         try:
             if self.platform == "win32":
                 # Hibernate=0 -> Sleep
-                subprocess.run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", shell=True)
+                subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
                 return "System sleeping"
             elif self.platform == "darwin":
                 subprocess.run(["pmset", "sleepnow"])
