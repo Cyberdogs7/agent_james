@@ -1,6 +1,5 @@
 import os
 import random
-import traceback
 import asyncio
 import httpx
 from urllib.parse import quote
