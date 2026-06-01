@@ -1398,12 +1398,65 @@ browser_click_tool = {
     }
 }
 
+browser_type_tool = {
+    "name": "browser_type",
+    "description": "Types text into a specific element.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "selector": {"type": "STRING", "description": "The CSS selector of the element to type into."},
+            "text": {"type": "STRING", "description": "The text to type."}
+        },
+        "required": ["selector", "text"]
+    }
+}
+
+browser_press_tool = {
+    "name": "browser_press",
+    "description": "Presses a specific key on the keyboard.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "key": {"type": "STRING", "description": "The key to press (e.g., 'Enter', 'Escape', 'ArrowDown')."}
+        },
+        "required": ["key"]
+    }
+}
+
+browser_scroll_tool = {
+    "name": "browser_scroll",
+    "description": "Scrolls the page vertically.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "amount": {"type": "INTEGER", "description": "The amount to scroll in pixels. Positive goes down, negative goes up."}
+        },
+        "required": ["amount"]
+    }
+}
+
+browser_wait_tool = {
+    "name": "browser_wait",
+    "description": "Waits for a specific element to appear, or for a specific amount of time.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "selector": {"type": "STRING", "description": "Optional CSS selector to wait for."},
+            "time_ms": {"type": "INTEGER", "description": "Optional time to wait in milliseconds."}
+        }
+    }
+}
+
 all_tools_list = [
     update_user_preferences_tool,
     browser_navigate_tool,
     browser_execute_javascript_tool,
     browser_get_dom_tool,
     browser_click_tool,
+    browser_type_tool,
+    browser_press_tool,
+    browser_scroll_tool,
+    browser_wait_tool,
     generate_cad_tool,
     run_web_agent_tool,
     stop_web_agent_tool,

@@ -106,6 +106,52 @@ class ProgrammaticBrowserAgent:
         except Exception as e:
             return f"Failed to click element '{selector}': {e}"
 
+    async def browser_type(self, selector: str, text: str):
+        """Types text into an element."""
+        try:
+            await self._ensure_browser()
+            element = await self.page.query_selector(selector)
+            if not element:
+                return f"Element with selector '{selector}' not found."
+            await element.scroll_into_view_if_needed()
+            await element.fill(text)
+            return f"Successfully typed text into element: {selector}"
+        except Exception as e:
+            return f"Failed to type into element '{selector}': {e}"
+
+    async def browser_press(self, key: str):
+        """Presses a key on the keyboard."""
+        try:
+            await self._ensure_browser()
+            await self.page.keyboard.press(key)
+            return f"Successfully pressed key: {key}"
+        except Exception as e:
+            return f"Failed to press key '{key}': {e}"
+
+    async def browser_scroll(self, amount: int):
+        """Scrolls the page vertically by the specified amount (pixels)."""
+        try:
+            await self._ensure_browser()
+            await self.page.mouse.wheel(0, amount)
+            return f"Successfully scrolled page by {amount} pixels"
+        except Exception as e:
+            return f"Failed to scroll page: {e}"
+
+    async def browser_wait(self, selector: str = None, time_ms: int = None):
+        """Waits for an element to appear or waits for a specified time."""
+        try:
+            await self._ensure_browser()
+            if selector:
+                await self.page.wait_for_selector(selector, timeout=time_ms or 30000)
+                return f"Successfully waited for element: {selector}"
+            elif time_ms:
+                await self.page.wait_for_timeout(time_ms)
+                return f"Successfully waited for {time_ms} ms"
+            else:
+                return "Either selector or time_ms must be provided."
+        except Exception as e:
+            return f"Failed to wait: {e}"
+
     async def stop(self):
         """Closes the browser session."""
         if self.browser:

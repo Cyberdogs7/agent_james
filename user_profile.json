@@ -5,5 +5,24 @@
     "playtest_comprehensiveness": "comprehensive",
     "pull_request_663_priority": "user flagged it as requiring a merge decision and directly inquired about its status",
     "pull_request_425_desired_action": "user was hoping for a merge of this PR",
-    "playtest_update_requested": true
+    "playtest_update_requested": true,
+    "goal": "play the game",
+    "url": "https://nlevelsoftware.github.io/minigames/butterfly_botanist.html",
+    "agent_goal": "navigate to the correct URL and commence gameplay",
+    "goal_context": "as a prelude to a comprehensive playtest",
+    "goals": {
+        "initiate_gameplay_via_agent": "agent to navigate to the correct URL and commence gameplay",
+        "overall_playtest_objective": "conduct a comprehensive playtest",
+        "commitment_to_provide_update": true
+    },
+    "preferences": {
+        "preferred_web_agent_tool": "run_web_agent"
+    },
+    "constraints": {
+        "web_agent_instruction_quality": "useful and detailed"
+    },
+    "contextual_details": {
+        "active_playtest_id": "butterfly_botanist",
+        "current_web_agent_task_complexity": "high"
+    }
 }

@@ -7,7 +7,11 @@ from backend.tools import (
     browser_navigate_tool, 
     browser_execute_javascript_tool, 
     browser_get_dom_tool, 
-    browser_click_tool
+    browser_click_tool,
+    browser_type_tool,
+    browser_press_tool,
+    browser_scroll_tool,
+    browser_wait_tool
 )
 
 def convert_gemini_to_openai(gemini_tools):
@@ -58,7 +62,11 @@ class LocalWebAgent:
             browser_navigate_tool,
             browser_execute_javascript_tool,
             browser_get_dom_tool,
-            browser_click_tool
+            browser_click_tool,
+            browser_type_tool,
+            browser_press_tool,
+            browser_scroll_tool,
+            browser_wait_tool
         ]
         self.openai_tools = convert_gemini_to_openai(raw_tools)
         self._is_interrupted = False
@@ -87,7 +95,7 @@ class LocalWebAgent:
         await self._send_screenshot(update_callback, "Initializing Local Web Agent...")
         
         messages = [
-            {"role": "system", "content": "You are a web automation agent. You have tools to navigate, click, and evaluate javascript. Use them to fulfill the user's request. Provide a brief sentence of what you are doing before calling a tool. Call one tool at a time."},
+            {"role": "system", "content": "You are an advanced web automation agent. First, create a high-level plan for how you will achieve the user's request, breaking it down into specific steps. Then, execute the steps using your tools. You may execute multiple tools in sequence if it makes sense (like typing and pressing enter), but ensure you wait for elements to appear before interacting with them."},
             {"role": "user", "content": prompt}
         ]
         
