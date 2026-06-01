@@ -675,8 +675,11 @@ class AutomationEngine:
             if not os.path.exists(script_path):
                 return None
 
-            with open(script_path, 'r', encoding='utf-8') as f:
-                script_content = f.read()
+            def _read_script():
+                with open(script_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+
+            script_content = await asyncio.to_thread(_read_script)
 
             prompt = f"""
 You are an expert Python debugger.
