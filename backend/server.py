@@ -10,6 +10,7 @@ if sys.platform == 'win32':
 import socketio
 import uvicorn
 from backend.fleet_manager import FleetManager
+from backend.openai_agent import OpenAIAgent
 from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
 from backend.jules_agent import JulesAgent
 from fastapi import FastAPI
@@ -42,6 +43,7 @@ from project_manager import ProjectManager
 from slack_agent import SlackAgent
 from scraper_agent import ScraperAgent
 fleet_manager = FleetManager(data_file="projects/fleet_state.json")
+openai_agent = OpenAIAgent()
 try:
     from backend.message_deduplicator import MessageDeduplicator
 except ImportError:
@@ -2305,19 +2307,17 @@ async def check_and_start_next_task(repo_name, agent_id=None):
         def create_spawn_task(current_task, current_agent_id, current_prompt, current_source, was_in_progress):
             async def _on_jules_finished(message):
                 # Callback wrapper that looks for completion/failure signals
-                # JulesAgent sends generic messages through callback
-                # NOTE: We look for exact specific signal strings that JulesAgent emits
-                if "Jules has completed the session" in message or "Session Completed." in message or "Assuming task completed." in message or "Jules task appears completed" in message:
-                    print(f"[SERVER] Jules session completed for task {current_task['id']}")
+                if "Jules has completed the session" in message or "Session Completed." in message or "Assuming task completed." in message or "Jules task appears completed" in message or "Generation Complete" in message:
+                    print(f"[SERVER] Agent session completed for task {current_task['id']}")
                     fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
                     fleet_manager.update_agent_session(current_agent_id, None, "idle")
                     await sio.emit('fleet_state_update', fleet_manager.get_state())
                     # Check for next task recursively now that an agent is free
                     await check_and_start_next_task(repo_name, current_agent_id)
-                elif "Error polling" in message or "failed" in message.lower() and ("Task Execution Failed" in message or "Exception" in message):
-                    print(f"[SERVER] Jules session failed for task {current_task['id']}")
+                elif "Error polling" in message or "failed" in message.lower() and ("Task Execution Failed" in message or "Exception" in message or "Error" in message):
+                    print(f"[SERVER] Agent session failed for task {current_task['id']}")
                     if audio_loop:
-                        audio_loop.notify_user(f"Jules task in {repo_name} failed.")
+                        audio_loop.notify_user(f"Task in {repo_name} failed.")
                     fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error_message=message)
                     fleet_manager.update_agent_session(current_agent_id, None, "idle")
                     await sio.emit('fleet_state_update', fleet_manager.get_state())
@@ -2332,12 +2332,19 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     selected_api_key = agent_info.get("api_key") if agent_info else None
                     account_name = agent_info.get("account_name") if agent_info else "Unnamed"
 
-                    if selected_api_key:
-                        print(f"[SERVER] Spawning task using mapped Fleet Account: {account_name}")
-                        agent_instance = JulesAgent(api_key=selected_api_key, project_manager=audio_loop.project_manager)
+                    # Route to different agent based on task capability/lane requirement
+                    task_status = current_task.get("status")
+                    
+                    if task_status == "todo_planning":
+                        print("[SERVER] Routing task to OpenAIAgent for Planner role.")
+                        agent_instance = openai_agent
                     else:
-                        print("[SERVER] Falling back to default environment API key for task.")
-                        agent_instance = audio_loop.jules_agent
+                        if selected_api_key:
+                            print(f"[SERVER] Spawning task using mapped Fleet Account: {account_name}")
+                            agent_instance = JulesAgent(api_key=selected_api_key, project_manager=audio_loop.project_manager)
+                        else:
+                            print("[SERVER] Falling back to default environment API key for task.")
+                            agent_instance = audio_loop.jules_agent
 
                     existing_session_id = current_task.get("session_id")
                     session_to_resume = None
@@ -2433,12 +2440,36 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         await check_and_start_next_task(repo_name, current_agent_id)
                         return
 
+                    # Set specific role based on lane
+                    lane_role = "DEFAULT"
+                    if task_status == "todo_planning":
+                        lane_role = "Planner"
+                    elif task_status == "dev_implementation":
+                        lane_role = "Crafter"
+                    elif task_status == "review_verification":
+                        lane_role = "Reviewer"
+
                     session = await agent_instance.spawn_agent(
                         prompt=current_prompt,
                         source=current_source,
-                        callback=_on_jules_finished,
-                        role="DEFAULT"
+                        role=lane_role,
+                        callback=_on_jules_finished
                     )
+                    
+                    if isinstance(agent_instance, OpenAIAgent) and session:
+                        # For OpenAIAgent, the generation starts immediately in the background and doesn't need polling.
+                        # We just attach a lightweight watcher to bridge to the callback when it completes.
+                        async def _watch_openai(sess_id):
+                            while True:
+                                await asyncio.sleep(2)
+                                state = agent_instance.sessions.get(sess_id, {}).get("state")
+                                if state == "COMPLETED":
+                                    await _on_jules_finished("Generation Complete")
+                                    break
+                                elif state == "FAILED":
+                                    await _on_jules_finished("Error: Agent Execution Failed")
+                                    break
+                        asyncio.create_task(_watch_openai(session.get("id")))
                     if session:
                         session_id = session.get('name')
                         session_state = session.get('state', 'QUEUED')
@@ -2457,12 +2488,11 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                         fleet_manager.update_agent_session(current_agent_id, session_id, agent_status)
                         await sio.emit('fleet_state_update', fleet_manager.get_state())
 
-                        # Start a per-session watcher using agent_instance (correct API key).
-                        # start_monitoring() only sees the default-key sessions via list_sessions(),
-                        # so fleet-account sessions would otherwise stay stuck in 'queued'.
-                        asyncio.create_task(_watch_session_status(
-                            agent_instance, session_id, repo_name, current_task["id"], current_agent_id
-                        ))
+                        # Start a per-session watcher using agent_instance.
+                        if isinstance(agent_instance, JulesAgent):
+                            asyncio.create_task(_watch_session_status(
+                                agent_instance, session_id, repo_name, current_task["id"], current_agent_id
+                            ))
                         return
 
                 except Exception as e:
@@ -2561,6 +2591,18 @@ async def retry_task(sid, data):
     fleet_manager.retry_task(repo_name, task_id)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
     await check_and_start_next_task(repo_name)
+@sio.event
+async def update_task_status_lane(sid, data):
+    repo_name = data.get("repo_name")
+    task_id = data.get("task_id")
+    status = data.get("status")
+    if repo_name and task_id and status:
+        fleet_manager.update_task_status(repo_name, task_id, status)
+        await sio.emit('fleet_state_update', fleet_manager.get_state())
+        
+        # If moving to dev or review, check if an agent can be assigned
+        if status in ["dev_implementation", "review_verification", "todo_planning"]:
+            await check_and_start_next_task(repo_name)
 
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))

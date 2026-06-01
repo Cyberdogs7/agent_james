@@ -113,11 +113,11 @@ class FleetManager:
                     # Handle tasks from a previous run
                     for repo in self.repos.values():
                         for task in repo.get("queue", []):
-                            if task.get("status") in ["in_progress", "submitting", "pending", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]:
+                            if task.get("status") in ["todo_planning", "dev_implementation", "review_verification", "in_progress", "submitting", "pending", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]:
                                 # Keep as is but clear agent_id so it can be picked up for reconciliation/resumption
                                 task["agent_id"] = None
                                 modified = True
-                            elif task.get("status") == "pending":
+                            elif task.get("status") in ["backlog", "pending"]:
                                 task["agent_id"] = None # Just in case
 
                     if modified:
@@ -138,7 +138,7 @@ class FleetManager:
         agent_tasks = {}
         for repo_data in self.repos.values():
             for task in repo_data.get("queue", []):
-                if task.get("status") in ["in_progress", "pending"] and task.get("agent_id"):
+                if task.get("status") in ["todo_planning", "dev_implementation", "review_verification", "in_progress", "pending"] and task.get("agent_id"):
                     agent_tasks[task["agent_id"]] = task.get("prompt")
 
         agents_with_tasks = []
@@ -190,7 +190,7 @@ class FleetManager:
         self.repos[repo_name]["queue"].append({
             "id": task_id,
             "prompt": prompt,
-            "status": "received", # received, submitting, pending, in_progress, completed, failed
+            "status": "backlog", # backlog, todo_planning, dev_implementation, review_verification, completed, blocked
             "submitted": True,
             "received": True,
             "depends_on": depends_on,
@@ -245,7 +245,7 @@ class FleetManager:
                         if self.agents[agent_id_failed]["status"] == "error":
                             self.update_agent_session(agent_id_failed, None, "idle")
 
-                    task["status"] = "pending"
+                    task["status"] = "backlog"
                     task["agent_id"] = None
                     if "error_message" in task:
                         del task["error_message"]
@@ -314,9 +314,9 @@ class FleetManager:
             task_status = {t["id"]: t.get("status") for t in queue}
 
             for task in queue:
-                status = task.get("status", "pending")
+                status = task.get("status", "backlog")
                 # We pick up tasks that are received, pending, or were already active but lost their agent
-                if (status in ["received", "pending", "in_progress", "submitting", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]) and task.get("agent_id") is None:
+                if (status in ["backlog", "todo_planning", "dev_implementation", "review_verification", "received", "pending", "in_progress", "submitting", "queued", "planning", "awaiting_plan_approval", "awaiting_user_feedback"]) and task.get("agent_id") is None:
                     depends_on = task.get("depends_on")
                     # Task is unblocked if it has no dependency, OR
                     # if the dependency is completed, OR

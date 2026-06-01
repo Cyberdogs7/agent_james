@@ -24,5 +24,29 @@
     "contextual_details": {
         "active_playtest_id": "butterfly_botanist",
         "current_web_agent_task_complexity": "high"
-    }
+    },
+    "web_agent_task_goals": [
+        "navigate to the correct URL",
+        "commence gameplay"
+    ],
+    "overall_activity_purpose": "comprehensive playtest",
+    "specific_playtest_name": "butterfly_botanist",
+    "instruction_set_quality_preference": "useful and detailed",
+    "post_test_update_expectation": "detailed update as soon as the test is complete",
+    "preference_for_playtest_results": true,
+    "interest_in_system_memory_architecture": true,
+    "desire_for_transparency_on_system_mechanics": true,
+    "preference_task_visibility": "The user prefers that tasks created or initiated by ADA are visible and verifiable, either through a dashboard, a specific tool, or a clear explanation of where to find them. There's a strong preference for transparency regarding task status and location, as indicated by repeated difficulty in locating tasks ADA claims to have created.",
+    "task_visibility_desired": true,
+    "preferred_git_branch_name": "main",
+    "expected_long_term_memory_for_tasks": true,
+    "user_is_frustrated_with_agent_memory_and_task_tracking": true,
+    "task_visibility_preference": "Tasks, especially bug fixes, should be easily visible and discoverable to the user (e.g., in a dashboard, task queue, or as GitHub issues).",
+    "agent_activity_expectation": "Tasks should be actively worked on by agents, and the user expects to see evidence of this.",
+    "repository_branch_constraint": "When performing operations in the 'NLevelSoftware/minigames' repository, ADA must use the 'main' branch, not 'master'.",
+    "context_retention_preference": "ADA should maintain context and remember previous interactions, goals, and task details to avoid 'forgetting it all'.",
+    "issue_resolution_expectation": "Issues must be genuinely fixed and resolved, not just attempted or reported as 'in progress' without visible results.",
+    "preferred_coding_agent": "For coding and debugging tasks, the 'Jules' agent is the preferred or explicitly chosen agent.",
+    "playtest_goal": "Conduct a comprehensive playtest for 'butterfly_botanist'.",
+    "bug_resolution_goal": "Address bugs identified during the 'butterfly_botanist' playtest, specifically the 'watering mechanic unresponsive' issue."
 }

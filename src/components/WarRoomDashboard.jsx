@@ -29,11 +29,13 @@ import {
 import AutomationEditor from './AutomationEditor';
 import FleetManagerUI from './FleetManagerUI';
 import ClockDisplay from './ClockDisplay';
+import WorkspaceBoard from './WorkspaceBoard';
 
 
 const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, setInputValue, handleSend }) => {
     const [showCommandModal, setShowCommandModal] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
+    const [showWorkspaceBoard, setShowWorkspaceBoard] = useState(false);
         const [selectedSession, setSelectedSession] = useState(null);
     const [selectedArtifact, setSelectedArtifact] = useState(null);
     const [fleetStatus, setFleetStatus] = useState([]);
@@ -320,6 +322,14 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                             EDITOR
                         </button>
                         <button
+                            onClick={() => setShowWorkspaceBoard(true)}
+                            className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
+                            style={{ WebkitAppRegion: 'no-drag' }}
+                        >
+                            <Layers size={14} />
+                            BOARD
+                        </button>
+                        <button
                             data-testid="open-command-modal"
                             onClick={() => setShowCommandModal(true)}
                             className="px-4 py-2 bg-gold9/10 border border-gold9 hover:bg-gold9 hover:text-black rounded text-xs tracking-widest transition-all flex items-center gap-2"
@@ -519,6 +529,14 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                         tasks={tasks}
                         socket={socket}
                         onClose={() => setShowEditor(false)}
+                    />
+                )}
+
+                {/* WORKSPACE BOARD */}
+                {showWorkspaceBoard && (
+                    <WorkspaceBoard
+                        socket={socket}
+                        onClose={() => setShowWorkspaceBoard(false)}
                     />
                 )}
 

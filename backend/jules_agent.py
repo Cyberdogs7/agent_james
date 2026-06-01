@@ -167,14 +167,19 @@ class JulesAgent:
         # Sanitize title: remove newlines and limit length
         clean_title = prompt.replace("\n", " ").replace("\r", " ").strip()
         
-        # Format title with Role if provided
+        # Format title and inject strict role boundaries if provided
+        final_prompt = prompt
         if role:
             title = f"[{role.upper()}] {clean_title[:40]}"
+            if role == "Crafter":
+                final_prompt = f"[ROLE CONTRACT: CRAFTER]\nYou are a Crafter. Your ONLY job is to implement the provided plan. Do not deviate, do not over-engineer, and generate Dev Evidence upon completion.\n\n{prompt}"
+            elif role == "Reviewer":
+                final_prompt = f"[ROLE CONTRACT: REVIEWER]\nYou are a Reviewer. Your ONLY job is to verify the code against the acceptance criteria. DO NOT write or refactor implementation code yourself. If it fails, provide a Blocked Analysis.\n\n{prompt}"
         else:
             title = f"Jules: {clean_title[:50]}"
 
         data = {
-            "prompt": prompt,
+            "prompt": final_prompt,
             "automationMode": "AUTO_CREATE_PR",
             "title": title
         }

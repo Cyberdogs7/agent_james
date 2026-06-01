@@ -21,3 +21,9 @@ The primary user operates as "The Board", overseeing massive parallel engineerin
 - 🎨 Palette: [UX improvement]
 - 🧹 [code health improvement description]
 - 🧪 [testing improvement description]
+
+## Durable Knowledge Protocol
+Agents **MUST NOT** rely on conversational history to remember the state of a project, the architecture, or past decisions. 
+- The repository itself holds the working knowledge.
+- Agents must actively read `docs/ARCHITECTURE.md` or issues within `docs/issues/` before starting tasks.
+- When an architectural decision is made, or an issue is resolved, agents must update the corresponding markdown file in the repository to persist this knowledge for future fleet members.
