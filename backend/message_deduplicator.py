@@ -1,6 +1,5 @@
 import collections
 import logging
-import hashlib
 import time
 
 logger = logging.getLogger(__name__)
