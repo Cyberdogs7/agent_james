@@ -202,6 +202,55 @@ class TestSlicerProfiles:
                 print(f"  {key}: {path}")
 
 
+from unittest.mock import patch, MagicMock
+
+class TestSlicer:
+    """Test slicing operations."""
+
+    @pytest.mark.asyncio
+    @patch('asyncio.to_thread')
+    @patch('glob.glob')
+    @patch('os.path.exists')
+    async def test_slice_stl_empty_output_dir(self, mock_exists, mock_glob, mock_to_thread):
+        """Test slice_stl handles an output_path with no directory prefix."""
+        agent = PrinterAgent()
+        # Mock slicer_path to be "OrcaSlicer" to trigger is_orca logic
+        agent.slicer_path = "OrcaSlicer"
+
+        # Setup mock for subprocess.run returning success
+        mock_process = MagicMock()
+        mock_process.returncode = 0
+        mock_process.stdout = "Slicing complete\n"
+        mock_to_thread.return_value = mock_process
+
+        # Setup mock for glob returning a file in the expected output directory (".")
+        mock_glob.return_value = ["./plate_1.gcode"]
+
+        # Setup mock for os.path.exists to pass checks
+        mock_exists.return_value = True
+
+        # Mock shutil.move to prevent actually moving files
+        with patch('shutil.move') as mock_move:
+            result = await agent.slice_stl(stl_path="test.stl", output_path="test.gcode")
+
+            # The method returns output_path, not the matched file directly
+            assert result == "test.gcode"
+
+            # Verify shutil.move was called to rename "./plate_1.gcode" to "test.gcode"
+            mock_move.assert_called_with("./plate_1.gcode", "test.gcode")
+
+        # Validate that glob was called with the correct pattern in "."
+        mock_glob.assert_called_with("./plate_*.gcode")
+
+        # Validate that the outputdir parameter in the command passed to to_thread was "."
+        call_args = mock_to_thread.call_args
+        assert call_args is not None
+        cmd = call_args[0][1] # second positional arg to to_thread is the cmd list
+        assert "--outputdir" in cmd
+        idx = cmd.index("--outputdir")
+        assert cmd[idx+1] == "."
+
+
 class TestPrinterType:
     """Test PrinterType enum."""
     
