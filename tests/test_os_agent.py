@@ -20,6 +20,15 @@ class TestOSAgent(unittest.TestCase):
         mock_popen.assert_called_with(["open", "-a", "Calculator"])
         self.assertIn("Launched Calculator", result)
 
+    @patch('backend.os_agent.shutil.which', return_value=None)
+    @patch('backend.os_agent.sys.platform', 'linux')
+    @patch('subprocess.Popen')
+    def test_launch_app_linux_secure(self, mock_popen, mock_which):
+        self.agent.platform = 'linux'
+        result = self.agent.launch_app("gedit --new-window file.txt; rm -rf /")
+        mock_popen.assert_called_with(["gedit", "--new-window", "file.txt;", "rm", "-rf", "/"], start_new_session=True)
+        self.assertIn("Attempted to launch", result)
+
     @patch('backend.os_agent.sys.platform', 'win32')
     def test_launch_app_windows(self):
         # We need to manually mock os.startfile because it doesn't exist on linux

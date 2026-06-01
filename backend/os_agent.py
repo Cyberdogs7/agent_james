@@ -4,6 +4,7 @@ import logging
 import shutil
 import os
 import ctypes
+import shlex
 
 class OSAgent:
     def __init__(self):
@@ -32,8 +33,14 @@ class OSAgent:
                     subprocess.Popen([app_name], start_new_session=True)
                     return f"Launched {app_name}"
                 else:
-                    subprocess.Popen(app_name, shell=True, start_new_session=True)
-                    return f"Attempted to launch {app_name}"
+                    try:
+                        args = shlex.split(app_name)
+                        if not args:
+                            return f"Invalid app name: {app_name}"
+                        subprocess.Popen(args, start_new_session=True)
+                        return f"Attempted to launch {app_name}"
+                    except FileNotFoundError:
+                        return f"Failed to launch {app_name}: Executable not found"
             else:
                 return "Platform not supported"
         except Exception as e:
