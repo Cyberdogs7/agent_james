@@ -19,13 +19,11 @@ from enum import Enum
 import aiohttp
 from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
 
-
 class PrinterType(Enum):
     OCTOPRINT = "octoprint"
     MOONRAKER = "moonraker"
     PRUSALINK = "prusalink"
     UNKNOWN = "unknown"
-
 
 @dataclass
 class Printer:
@@ -42,7 +40,6 @@ class Printer:
         d["printer_type"] = self.printer_type.value
         return d
 
-
 @dataclass
 class PrintStatus:
     """Current status of a print job."""
@@ -56,7 +53,6 @@ class PrintStatus:
     
     def to_dict(self) -> dict:
         return asdict(self)
-
 
 class PrinterDiscoveryListener(ServiceListener):
     """mDNS listener for printer discovery."""
@@ -103,7 +99,6 @@ class PrinterDiscoveryListener(ServiceListener):
     
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         pass
-
 
 class PrinterAgent:
     """
@@ -637,7 +632,6 @@ class PrinterAgent:
             # OrcaSlicer CLI: orca-slicer [OPTIONS] [file.stl]
             output_dir = os.path.dirname(output_path)
 
-            # FIX: Handle empty output_dir (when output_path has no directory prefix)
             if not output_dir:
                 output_dir = "."
             
@@ -742,7 +736,6 @@ class PrinterAgent:
                 if is_orca:
                     output_dir = os.path.dirname(output_path)
 
-                    # FIX: Handle empty output_dir (when output_path has no directory prefix)
                     if not output_dir:
                         output_dir = "."
                     

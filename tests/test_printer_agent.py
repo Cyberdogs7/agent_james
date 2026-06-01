@@ -242,3 +242,41 @@ class TestPrinterDataclass:
         assert d['name'] == "Test"
         assert d['host'] == "192.168.1.1"
         assert 'printer_type' in d
+
+class TestPrinterSlicing:
+    """Test printer slicing functionality."""
+
+    @pytest.mark.asyncio
+    async def test_slice_stl_empty_output_dir(self):
+        """Test that slice_stl handles empty output directory for OrcaSlicer."""
+        from unittest.mock import MagicMock, patch
+        import os
+
+        agent = PrinterAgent()
+        agent.slicer_path = "OrcaSlicer"
+        agent._log = MagicMock()
+        agent._resolve_file_path = MagicMock(return_value="test.stl")
+
+        with patch("os.path.exists", return_value=True), \
+             patch("backend.printer_agent.asyncio.to_thread") as mock_to_thread, \
+             patch("glob.glob", return_value=["./plate_1.gcode"]) as mock_glob:
+
+            # mock subprocess result
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "done"
+            mock_to_thread.return_value = mock_result
+
+            # Test with no output_path (defaults to local .gcode without directory)
+            result = await agent.slice_stl("test.stl", output_path="test.gcode")
+
+            # In this case, os.path.dirname("test.gcode") is ""
+            # The code should use "." for outputdir
+
+            mock_to_thread.assert_called_once()
+            cmd = mock_to_thread.call_args[0][1]
+            assert "--outputdir" in cmd
+            idx = cmd.index("--outputdir")
+            assert cmd[idx+1] == "."
+
+            mock_glob.assert_called_once_with(os.path.join(".", "plate_*.gcode"))
