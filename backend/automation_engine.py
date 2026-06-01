@@ -4,6 +4,8 @@ import json
 import traceback
 import os
 import shutil
+import aiofiles
+import aiofiles.ospath
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -672,13 +674,11 @@ class AutomationEngine:
 
         try:
             # Read script
-            def _read_script():
-                if not os.path.exists(script_path):
-                    return None
-                with open(script_path, 'r', encoding='utf-8') as f:
-                    return f.read()
+            if not await aiofiles.ospath.exists(script_path):
+                return None
+            async with aiofiles.open(script_path, 'r', encoding='utf-8') as f:
+                script_content = await f.read()
 
-            script_content = await asyncio.to_thread(_read_script)
             if script_content is None:
                 return None
 
