@@ -13,6 +13,7 @@ if backend_path not in sys.path:
 
 # Mock dependencies that might be missing in the environment
 mock_modules = [
+    'openai',
     'dotenv',
     'cv2',
     'pyaudio',
