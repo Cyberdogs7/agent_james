@@ -1584,7 +1584,7 @@ async def apply_task_fix(sid, data):
     task_id = data.get('id')
     print(f"[SERVER] Apply Task Fix: {task_id}")
     if automation_engine:
-        success, msg = automation_engine.apply_fix(task_id)
+        success, msg = await automation_engine.apply_fix(task_id)
         if success:
             await sio.emit('status', {'msg': msg})
             # Force update
