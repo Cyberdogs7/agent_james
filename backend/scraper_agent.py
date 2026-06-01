@@ -2,7 +2,6 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 import json
-import urllib.parse
 import logging
 
 # Configure logging
@@ -14,11 +13,11 @@ class ScraperAgent:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
-    async def _fetch(self, url: str) -> str:
+    async def _fetch(self, url: str, params: dict = None) -> str:
         """Helper to fetch a URL with error handling."""
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True, headers=self.headers) as client:
             try:
-                response = await client.get(url)
+                response = await client.get(url, params=params)
                 response.raise_for_status()
                 return response.text
             except Exception as e:
@@ -31,10 +30,9 @@ class ScraperAgent:
         to avoid API keys/captchas) and returns a list of result URLs.
         """
         # Using DuckDuckGo HTML interface which is easier to scrape than Google
-        encoded_query = urllib.parse.quote_plus(query)
-        search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
+        search_url = "https://html.duckduckgo.com/html/"
 
-        html = await self._fetch(search_url)
+        html = await self._fetch(search_url, params={"q": query})
         if not html:
             return []
 

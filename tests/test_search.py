@@ -56,14 +56,17 @@ class TestSearch(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(results[0]['name'], 'Test Card')
 
     def test_search_agent_search(self):
-        # Mock the TrelloAgent and ProjectManager
+        # Mock the TrelloAgent, ProjectManager, and ScraperAgent
         trello_agent = TrelloAgent()
         project_manager = ProjectManager('.')
+        from backend.scraper_agent import ScraperAgent
+        scraper_agent = ScraperAgent()
 
         trello_agent.search_cards = AsyncMock(return_value=[{'name': 'Test Card'}])
         project_manager.search_files = MagicMock(return_value=[{'file': 'test.txt'}])
+        scraper_agent.search_and_scrape = AsyncMock(return_value=[{'url': 'http://example.com'}])
 
-        search_agent = SearchAgent(trello_agent, project_manager)
+        search_agent = SearchAgent(trello_agent, project_manager, scraper_agent)
 
         # Run the async search method
         loop = asyncio.get_event_loop()
