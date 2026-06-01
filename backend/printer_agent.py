@@ -816,20 +816,30 @@ class PrinterAgent:
         filename = os.path.basename(gcode_path)
         
         try:
+            async def file_sender():
+                f = await asyncio.to_thread(open, gcode_path, 'rb')
+                try:
+                    while True:
+                        chunk = await asyncio.to_thread(f.read, 1024 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    await asyncio.to_thread(f.close)
+
             async with aiohttp.ClientSession() as session:
-                with open(gcode_path, 'rb') as f:
-                    data = aiohttp.FormData()
-                    data.add_field('file', f, filename=filename)
-                    if start_print:
-                        data.add_field('print', 'true')
-                    
-                    async with session.post(url, data=data, headers=headers) as resp:
-                        if resp.status in (200, 201, 202, 204):
-                            self._log(f"[PRINTER] Uploaded {filename} to OctoPrint at {printer.host}")
-                            return True
-                        else:
-                            self._log(f"[PRINTER] OctoPrint upload failed ({resp.status})")
-                            return False
+                data = aiohttp.FormData()
+                data.add_field('file', file_sender(), filename=filename)
+                if start_print:
+                    data.add_field('print', 'true')
+
+                async with session.post(url, data=data, headers=headers) as resp:
+                    if resp.status in (200, 201, 202, 204):
+                        self._log(f"[PRINTER] Uploaded {filename} to OctoPrint at {printer.host}")
+                        return True
+                    else:
+                        self._log(f"[PRINTER] OctoPrint upload failed ({resp.status})")
+                        return False
         except Exception as e:
             self._log(f"[PRINTER] OctoPrint upload error: {e}")
             return False
@@ -842,37 +852,44 @@ class PrinterAgent:
         filename = os.path.basename(gcode_path)
         
         try:
+            async def file_sender():
+                f = await asyncio.to_thread(open, gcode_path, 'rb')
+                try:
+                    while True:
+                        chunk = await asyncio.to_thread(f.read, 1024 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    await asyncio.to_thread(f.close)
+
             async with aiohttp.ClientSession() as session:
-                with open(gcode_path, 'rb') as f:
-                    data = aiohttp.FormData()
-                    data.add_field('file', f, filename=filename)
-                    # Explicitly set root if needed, but default is usually fine?
-                    
-                    async with session.post(url, data=data) as resp:
-                        if resp.status in (200, 201):
-                            self._log(f"[PRINTER] Uploaded {filename} to Moonraker at {printer.host}")
-                            
-                            if start_print:
-                                # Trigger print
-                                print_url = f"http://{printer.host}:{printer.port}/printer/print/start"
-                                data_print = {"filename": filename}
-                                async with session.post(print_url, json=data_print) as resp_print:
-                                    if resp_print.status == 200:
-                                        self._log(f"[PRINTER] Started print on Moonraker")
-                                        return True
-                                    else:
-                                        self._log(f"[PRINTER] Moonraker start print failed ({resp_print.status})")
-                                        return False
-                            return True
-                        else:
-                            self._log(f"[PRINTER] Moonraker upload failed ({resp.status}). Trying OctoPrint compatibility layer...")
+                data = aiohttp.FormData()
+                data.add_field('file', file_sender(), filename=filename)
+                # Explicitly set root if needed, but default is usually fine?
+
+                async with session.post(url, data=data) as resp:
+                    if resp.status in (200, 201):
+                        self._log(f"[PRINTER] Uploaded {filename} to Moonraker at {printer.host}")
+
+                        if start_print:
+                            # Trigger print
+                            print_url = f"http://{printer.host}:{printer.port}/printer/print/start"
+                            data_print = {"filename": filename}
+                            async with session.post(print_url, json=data_print) as resp_print:
+                                if resp_print.status == 200:
+                                    self._log(f"[PRINTER] Started print on Moonraker")
+                                    return True
+                                else:
+                                    self._log(f"[PRINTER] Moonraker start print failed ({resp_print.status})")
+                                    return False
+                        return True
+                    else:
+                        self._log(f"[PRINTER] Moonraker upload failed ({resp.status}). Trying OctoPrint compatibility layer...")
 
             # Fallback to OctoPrint API (as Moonraker usually supports it and Creality K1 definitely does)
             return await self._upload_octoprint(printer, gcode_path, start_print)
             
-        except Exception as e:
-            self._log(f"[PRINTER] Moonraker upload error: {e}")
-            return False
         except Exception as e:
             self._log(f"[PRINTER] Moonraker upload error: {e}")
             return False
