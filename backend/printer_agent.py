@@ -637,7 +637,7 @@ class PrinterAgent:
             # OrcaSlicer CLI: orca-slicer [OPTIONS] [file.stl]
             output_dir = os.path.dirname(output_path)
 
-            # FIX: Handle empty output_dir (when output_path has no directory prefix)
+            # Handle empty output_dir (when output_path has no directory prefix)
             if not output_dir:
                 output_dir = "."
             
@@ -742,7 +742,7 @@ class PrinterAgent:
                 if is_orca:
                     output_dir = os.path.dirname(output_path)
 
-                    # FIX: Handle empty output_dir (when output_path has no directory prefix)
+                    # Handle empty output_dir (when output_path has no directory prefix)
                     if not output_dir:
                         output_dir = "."
                     
