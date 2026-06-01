@@ -1,5 +1,7 @@
 import asyncio
 import os
+import aiofiles
+import aiofiles.os
 from pathlib import Path
 
 class FileSystemAgent:
@@ -29,14 +31,13 @@ class FileSystemAgent:
         """Writes content to a file asynchronously."""
         final_path = self._resolve_path(path)
 
-        def _perform_write():
-            os.makedirs(os.path.dirname(final_path), exist_ok=True)
-            with open(final_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            return f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
-
         try:
-            return await asyncio.to_thread(_perform_write)
+            dirname = os.path.dirname(final_path)
+            if dirname:
+                await aiofiles.os.makedirs(dirname, exist_ok=True)
+            async with aiofiles.open(final_path, 'w', encoding='utf-8') as f:
+                await f.write(content)
+            return f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
         except Exception as e:
             return f"Failed to write file '{path}': {str(e)}"
 
@@ -44,14 +45,12 @@ class FileSystemAgent:
         """Reads content from a file asynchronously."""
         final_path = self._resolve_path(path)
 
-        def _perform_read():
-            if not os.path.exists(final_path):
-                return f"File '{final_path}' does not exist."
-            with open(final_path, 'r', encoding='utf-8') as f:
-                return f"Content of '{final_path}':\n{f.read()}"
-
         try:
-            return await asyncio.to_thread(_perform_read)
+            async with aiofiles.open(final_path, 'r', encoding='utf-8') as f:
+                content = await f.read()
+                return f"Content of '{final_path}':\n{content}"
+        except FileNotFoundError:
+            return f"File '{final_path}' does not exist."
         except Exception as e:
             return f"Failed to read file '{path}': {str(e)}"
 
@@ -59,15 +58,12 @@ class FileSystemAgent:
         """Lists contents of a directory asynchronously."""
         final_path = self._resolve_path(path)
 
-        def _perform_list():
-            if not os.path.exists(final_path):
-                return f"Directory '{final_path}' does not exist."
-            if not os.path.isdir(final_path):
-                return f"Path '{final_path}' is not a directory."
-            items = os.listdir(final_path)
-            return f"Contents of '{final_path}': {', '.join(items)}"
-
         try:
-            return await asyncio.to_thread(_perform_list)
+            items = await aiofiles.os.listdir(final_path)
+            return f"Contents of '{final_path}': {', '.join(items)}"
+        except FileNotFoundError:
+            return f"Directory '{final_path}' does not exist."
+        except NotADirectoryError:
+            return f"Path '{final_path}' is not a directory."
         except Exception as e:
             return f"Failed to read directory '{path}': {str(e)}"
