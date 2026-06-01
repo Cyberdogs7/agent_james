@@ -44,7 +44,7 @@ class TestOSAgent(unittest.TestCase):
     @patch('subprocess.run')
     def test_mute_mac(self, mock_run):
         self.agent.platform = 'darwin'
-        self.agent.mute()
+        self.agent._set_mute_state(True)
         mock_run.assert_called_with(["osascript", "-e", "set volume output muted true"])
 
     @patch('backend.os_agent.sys.platform', 'darwin')

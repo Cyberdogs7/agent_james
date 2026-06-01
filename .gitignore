@@ -40,3 +40,11 @@ Thumbs.db
 /fleet.json
 /settings.json
 settings.json
+test_workspace/
+test_workspace_aio/
+test_workspace_thread/
+test_workspace_aio_2/
+test_workspace_thread_small/
+test_workspace_aio_small/
+test_workspace_thread_large/
+test_workspace_aio_large/
