@@ -1885,6 +1885,27 @@ all_tools_list = [
                 "depends_on": {
                     "type": "STRING",
                     "description": "Optional: the ID of a task that must complete before this one starts."
+                },
+                "attachments": {
+                    "type": "ARRAY",
+                    "description": "Optional: A list of attachments.",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "name": {
+                                "type": "STRING",
+                                "description": "The name of the attachment."
+                            },
+                            "type": {
+                                "type": "STRING",
+                                "description": "The MIME type of the attachment."
+                            },
+                            "content": {
+                                "type": "STRING",
+                                "description": "The content of the attachment (e.g., base64 encoded string)."
+                            }
+                        }
+                    }
                 }
             },
             "required": ["repo_name", "prompt"]
