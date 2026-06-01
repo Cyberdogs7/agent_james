@@ -1227,9 +1227,13 @@ async def print_stl(sid, data):
             # Open the STL in the CAD module for preview
             try:
                 import base64
-                with open(resolved_stl, 'rb') as f:
-                    stl_data = f.read()
-                stl_b64 = base64.b64encode(stl_data).decode('utf-8')
+
+                def _read_and_encode_stl(filepath):
+                    with open(filepath, 'rb') as f:
+                        data = f.read()
+                    return base64.b64encode(data).decode('utf-8')
+
+                stl_b64 = await asyncio.to_thread(_read_and_encode_stl, resolved_stl)
                 stl_filename = os.path.basename(resolved_stl)
                 
                 print(f"[SERVER] Opening STL in CAD module: {stl_filename}")
