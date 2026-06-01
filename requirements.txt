@@ -36,3 +36,4 @@ ytmusicapi
 yt-dlp
 imageio-ffmpeg
 croniter
+aiofiles
