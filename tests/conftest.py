@@ -46,7 +46,8 @@ mock_modules = [
     'aiohttp',
     'beautifulsoup4',
     'bs4',
-    'imageio_ffmpeg'
+    'imageio_ffmpeg',
+    'openai'
 ]
 
 for module in mock_modules:
