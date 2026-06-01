@@ -40,19 +40,21 @@ class OpenAIAgent:
 
         return activities
 
-    async def send_message(self, session_id, message):
+    async def send_message(self, session_id, message, images=None):
         if session_id not in self.sessions:
             return {"error": "Session not found"}
 
         session = self.sessions[session_id]
         session.setdefault("history", []).append({
             "prompt": session["prompt"],
+            "images": session.get("images"),
             "response": session["response"],
             "createTime": session["createTime"],
             "updateTime": session["updateTime"]
         })
 
         session["prompt"] = message
+        session["images"] = images
         session["response"] = ""
         session["createTime"] = datetime.now().isoformat()
         session["updateTime"] = datetime.now().isoformat()
@@ -60,11 +62,11 @@ class OpenAIAgent:
         self.insights[session_id] = "Thinking..."
 
         asyncio.create_task(self._run_generation(
-            session_id, message, session["source"], session["role"], session["model"]
+            session_id, message, session["source"], session["role"], session["model"], images
         ))
         return {"status": "message sent"}
 
-    async def spawn_agent(self, prompt, source=None, role=None, model=None, **kwargs):
+    async def spawn_agent(self, prompt, source=None, role=None, model=None, images=None, **kwargs):
         model = model or self.default_model
         session_id = str(uuid.uuid4())
         clean_prompt = prompt.replace("\n", " ").strip()
@@ -76,6 +78,7 @@ class OpenAIAgent:
             "title": title,
             "state": "RUNNING",
             "prompt": prompt,
+            "images": images,
             "response": "",
             "role": role,
             "source": source,
@@ -87,10 +90,31 @@ class OpenAIAgent:
 
         self.sessions[session_id] = session_obj
         self.insights[session_id] = "Initializing..."
-        asyncio.create_task(self._run_generation(session_id, prompt, source, role, model))
+        asyncio.create_task(self._run_generation(session_id, prompt, source, role, model, images))
         return session_obj
 
-    async def _run_generation(self, session_id, prompt, source, role, model):
+    def _format_user_message(self, prompt, images):
+        if not images:
+            return {"role": "user", "content": prompt}
+        
+        content = [{"type": "text", "text": prompt}]
+        for img in images:
+            if img.startswith("http://") or img.startswith("https://"):
+                url = img
+            else:
+                if not img.startswith("data:image"):
+                    url = f"data:image/jpeg;base64,{img}"
+                else:
+                    url = img
+            content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": url
+                }
+            })
+        return {"role": "user", "content": content}
+
+    async def _run_generation(self, session_id, prompt, source, role, model, images=None):
         try:
             messages = []
             
@@ -108,10 +132,10 @@ class OpenAIAgent:
                 
             history = self.sessions[session_id].get("history", [])
             for turn in history:
-                messages.append({"role": "user", "content": turn['prompt']})
+                messages.append(self._format_user_message(turn['prompt'], turn.get('images')))
                 messages.append({"role": "assistant", "content": turn['response']})
 
-            messages.append({"role": "user", "content": f"Task:\n{prompt}"})
+            messages.append(self._format_user_message(prompt, images))
 
             url = f"{self.base_url}/chat/completions"
             headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
