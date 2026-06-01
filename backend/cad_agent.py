@@ -91,25 +91,29 @@ export_stl(result_part, 'output.stl')
             work_dir = tempfile.gettempdir()
         
         script_path = os.path.join(work_dir, "current_design.py")
-        existing_code = ""
         
-        if os.path.exists(script_path):
-            with open(script_path, "r") as f:
-                existing_code = f.read()
-            
+        def _read_and_sanitize(path: str) -> str:
+            if not os.path.exists(path):
+                return ""
+            with open(path, "r") as f:
+                code = f.read()
             # Sanitize existing code: replace any absolute paths with 'output.stl'
             import re
-            existing_code = re.sub(
+            code = re.sub(
                 r"['\"]C:\\\\?Users\\\\?[^'\"]+\\\\?output[^'\"]*\.stl['\"]",
                 "'output.stl'",
-                existing_code
+                code
             )
-            existing_code = re.sub(
+            code = re.sub(
                 r"['\"]C:/Users/[^'\"]+/output[^'\"]*\.stl['\"]",
                 "'output.stl'",
-                existing_code
+                code
             )
-        else:
+            return code
+
+        existing_code = await asyncio.to_thread(_read_and_sanitize, script_path)
+
+        if not existing_code:
              self._log("[CadAgent DEBUG] [WARN] No existing script found. Falling back to fresh generation.")
              return await self.generate_prototype(prompt, output_dir=output_dir)
 
@@ -198,9 +202,12 @@ Ensure you still export to 'output.stl'.
                 
                 safe_output_path = output_stl.replace("\\", "\\\\")
                 
-                with open(script_path, "w") as f:
-                    code_with_path = code.replace("output.stl", safe_output_path)
-                    f.write(code_with_path)
+                def _write_script():
+                    with open(script_path, "w") as f:
+                        code_with_path = code.replace("output.stl", safe_output_path)
+                        f.write(code_with_path)
+
+                await asyncio.to_thread(_write_script)
                     
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
@@ -258,8 +265,12 @@ Original request: {original_prompt}
                 
                 if os.path.exists(output_stl):
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
-                    with open(output_stl, "rb") as f:
-                        stl_data = f.read()
+
+                    def _read_stl():
+                        with open(output_stl, "rb") as f:
+                            return f.read()
+
+                    stl_data = await asyncio.to_thread(_read_stl)
                         
                     import base64
                     b64_stl = base64.b64encode(stl_data).decode('utf-8')
