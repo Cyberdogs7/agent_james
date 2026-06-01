@@ -79,6 +79,7 @@ from backend.os_agent import OSAgent
 from backend.music_agent import MusicAgent
 from backend.writing_agent import WritingAgent
 from backend.ollama_agent import OllamaAgent
+from backend.openai_agent import LMStudioAgent, OpenRouterAgent
 from backend.fs_agent import FileSystemAgent
 from backend.git_agent import GitAgent
 try:
@@ -197,6 +198,8 @@ class AudioLoop:
         self.os_agent = OSAgent()
         self.music_agent = MusicAgent(sio=self.sio)
         self.ollama_agent = OllamaAgent()
+        self.lm_studio_agent = LMStudioAgent()
+        self.openrouter_agent = OpenRouterAgent()
         self.fs_agent = FileSystemAgent(self.project_manager)
         self.git_agent = GitAgent(self.project_manager)
         self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
@@ -746,6 +749,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_openhands_agent", self.handle_openhands_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
+        self.tool_registry.register("run_lm_studio_agent", self.handle_lm_studio_request)
+        self.tool_registry.register("run_openrouter_agent", self.handle_openrouter_request)
         self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
         self.tool_registry.register("list_jules_sources", self.jules_agent.list_sources_formatted)
         self.tool_registry.register("list_jules_sessions", self.jules_agent.list_sessions_formatted)
@@ -1172,6 +1177,30 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send ollama notification: {e}")
 
+        return f"Agent started. ID: {session['id']}"
+
+    async def handle_lm_studio_request(self, prompt, source=None, role=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [LM_STUDIO] Task: '{prompt}'")
+        session = await self.lm_studio_agent.spawn_agent(prompt, source, role)
+        msg = f"System Notification: Local LM Studio agent started with ID '{session['id']}'. I will notify you when it completes."
+        try:
+            await self.session.send(input=msg, end_of_turn=True)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
+        return f"Agent started. ID: {session['id']}"
+
+    async def handle_openrouter_request(self, prompt, source=None, role=None):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENROUTER] Task: '{prompt}'")
+        session = await self.openrouter_agent.spawn_agent(prompt, source, role)
+        msg = f"System Notification: OpenRouter agent started with ID '{session['id']}'. I will notify you when it completes."
+        try:
+            await self.session.send(input=msg, end_of_turn=True)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
         return f"Agent started. ID: {session['id']}"
 
     async def handle_jules_request(self, prompt, source=None, role=None, on_session_created=None):

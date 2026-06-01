@@ -10,7 +10,7 @@ if sys.platform == 'win32':
 import socketio
 import uvicorn
 from backend.fleet_manager import FleetManager
-from backend.openai_agent import OpenAIAgent
+from backend.openai_agent import LMStudioAgent, OpenRouterAgent
 from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
 from backend.jules_agent import JulesAgent
 from fastapi import FastAPI
@@ -43,7 +43,8 @@ from project_manager import ProjectManager
 from slack_agent import SlackAgent
 from scraper_agent import ScraperAgent
 fleet_manager = FleetManager(data_file="projects/fleet_state.json")
-openai_agent = OpenAIAgent()
+lm_studio_agent = LMStudioAgent()
+openrouter_agent = OpenRouterAgent()
 try:
     from backend.message_deduplicator import MessageDeduplicator
 except ImportError:
@@ -2336,8 +2337,12 @@ async def check_and_start_next_task(repo_name, agent_id=None):
                     task_status = current_task.get("status")
                     
                     if task_status == "todo_planning":
-                        print("[SERVER] Routing task to OpenAIAgent for Planner role.")
-                        agent_instance = openai_agent
+                        if os.getenv("OPENROUTER_API_KEY"):
+                            print("[SERVER] Routing task to OpenRouterAgent for Planner role.")
+                            agent_instance = openrouter_agent
+                        else:
+                            print("[SERVER] Routing task to LMStudioAgent for Planner role.")
+                            agent_instance = lm_studio_agent
                     else:
                         if selected_api_key:
                             print(f"[SERVER] Spawning task using mapped Fleet Account: {account_name}")

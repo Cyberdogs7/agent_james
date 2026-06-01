@@ -8,9 +8,10 @@ from pathlib import Path
 
 class OpenAIAgent:
     """An agent that interfaces with OpenAI-compatible APIs like LM Studio and OpenRouter."""
-    def __init__(self, base_url="http://localhost:1234/v1"):
-        self.base_url = os.getenv("OPENAI_BASE_URL", base_url)
-        self.api_key = os.getenv("OPENAI_API_KEY", "lm-studio")
+    def __init__(self, base_url, api_key, default_model):
+        self.base_url = base_url
+        self.api_key = api_key
+        self.default_model = default_model
         self.client = httpx.AsyncClient(timeout=None)
 
         # State Storage
@@ -63,7 +64,8 @@ class OpenAIAgent:
         ))
         return {"status": "message sent"}
 
-    async def spawn_agent(self, prompt, source=None, role=None, model="local-model", **kwargs):
+    async def spawn_agent(self, prompt, source=None, role=None, model=None, **kwargs):
+        model = model or self.default_model
         session_id = str(uuid.uuid4())
         clean_prompt = prompt.replace("\n", " ").strip()
         title = f"[{role.upper()}] {clean_prompt[:40]}..." if role else f"Planner: {clean_prompt[:50]}..."
@@ -187,3 +189,19 @@ class OpenAIAgent:
             return "\n".join(context)
         except Exception as e:
             return f"Error building context: {e}"
+
+class LMStudioAgent(OpenAIAgent):
+    def __init__(self):
+        super().__init__(
+            base_url=os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1"),
+            api_key="lm-studio",
+            default_model=os.getenv("LM_STUDIO_MODEL", "local-model")
+        )
+
+class OpenRouterAgent(OpenAIAgent):
+    def __init__(self):
+        super().__init__(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY", ""),
+            default_model=os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+        )

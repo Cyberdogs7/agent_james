@@ -55,15 +55,22 @@ async def run_harness():
     
     await asyncio.sleep(2)
     
-    # Pull config from .env or default to LM Studio
-    base_url = os.getenv("OPENAI_BASE_URL", "http://localhost:1234/v1")
-    api_key = os.getenv("OPENAI_API_KEY", "lm-studio")
-    model = os.getenv("OPENAI_MODEL", "local-model")
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key:
+        base_url = "https://openrouter.ai/api/v1"
+        api_key = openrouter_key
+        model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+    else:
+        base_url = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+        if base_url and not base_url.endswith("/v1"):
+            base_url = base_url.rstrip("/") + "/v1"
+        api_key = "lm-studio"
+        model = os.getenv("LM_STUDIO_MODEL", "local-model")
     
     print(f"\nUsing LLM API:")
     print(f"Base URL: {base_url}")
     print(f"Model: {model}")
-    print(f"To change this, set OPENAI_BASE_URL, OPENAI_API_KEY, and OPENAI_MODEL in your .env file.")
+    print(f"To change this, set OPENROUTER_API_KEY and OPENROUTER_MODEL, or LM_STUDIO_BASE_URL and LM_STUDIO_MODEL in your .env file.")
     
     client = AsyncOpenAI(api_key=api_key, base_url=base_url)
     openai_tools = convert_gemini_to_openai(tools_list)

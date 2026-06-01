@@ -51,11 +51,18 @@ class LocalWebAgent:
         self.browser_agent = browser_agent
         self.tool_registry = tool_registry
         
-        base_url = os.getenv("OPENAI_BASE_URL", "http://localhost:1234/v1")
-        if base_url and not base_url.endswith("/v1"):
-            base_url = base_url.rstrip("/") + "/v1"
-        api_key = os.getenv("OPENAI_API_KEY", "lm-studio")
-        self.model = os.getenv("OPENAI_MODEL", "local-model")
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        if openrouter_key:
+            base_url = "https://openrouter.ai/api/v1"
+            api_key = openrouter_key
+            self.model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
+        else:
+            base_url = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
+            if base_url and not base_url.endswith("/v1"):
+                base_url = base_url.rstrip("/") + "/v1"
+            api_key = "lm-studio"
+            self.model = os.getenv("LM_STUDIO_MODEL", "local-model")
+            
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         
         raw_tools = [

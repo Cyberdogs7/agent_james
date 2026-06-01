@@ -1309,6 +1309,51 @@ apply_task_fix_tool = {
     }
 }
 
+run_lm_studio_agent_tool = {
+    "name": "run_lm_studio_agent",
+    "description": "Creates a new local LM Studio agent task. Use this when the user asks for LM Studio.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The prompt to send to the LM Studio agent."
+            },
+            "source": {
+                "type": "STRING",
+                "description": "Optional: The local file path or directory to use as context."
+            },
+            "role": {
+                "type": "STRING",
+                "description": "Optional: The role of the agent."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
+
+run_openrouter_agent_tool = {
+    "name": "run_openrouter_agent",
+    "description": "Creates a new Open Router agent task. Use this when the user asks for Open Router.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The prompt to send to the Open Router agent."
+            },
+            "source": {
+                "type": "STRING",
+                "description": "Optional: The local file path or directory to use as context."
+            },
+            "role": {
+                "type": "STRING",
+                "description": "Optional: The role of the agent."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
 run_ollama_agent_tool = {
     "name": "run_ollama_agent",
     "description": "Creates a new local Ollama agent task. Use this when the user specifically asks for a local agent, or when you need to perform a task locally without sending data to the cloud. Supports reading local files for context.",
@@ -1487,6 +1532,8 @@ all_tools_list = [
     run_jules_agent_tool,
     run_openhands_agent_tool,
     run_ollama_agent_tool,
+    run_lm_studio_agent_tool,
+    run_openrouter_agent_tool,
     spawn_swarm_agent_tool,
     create_swarm_mission_tool,
     send_jules_feedback_tool,
