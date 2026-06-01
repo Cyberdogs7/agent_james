@@ -424,6 +424,63 @@ class MusicAgent:
         # Put None to signal EOF to the playback task
         internal_queue.put(None)
 
+    def _process_chunk(self, process_data):
+        """Processes an audio chunk: applies volume, visualizer logic, and pushes to queue."""
+        if not self._audio_queue:
+            return process_data
+
+        import array
+        import audioop
+
+        # Ensure data length is even for 16-bit PCM
+        if len(process_data) % 2 != 0:
+            process_data = process_data[:-1]
+
+        # Apply volume scaling
+        if self.volume != 1.0:
+            process_data = audioop.mul(process_data, 2, self.volume)
+
+        arr = array.array('h', process_data)
+
+        # Visualization logic
+        if self.sio and self.main_loop:
+            try:
+                current_time = time.time()
+                # Rate limit visualizer emission to approx 15 fps (66ms) to avoid flooding the socket
+                if not hasattr(self, '_last_vis_emit') or (current_time - self._last_vis_emit) >= 0.066:
+                    self._last_vis_emit = current_time
+                    # Extract real amplitude chunks for the visualizer
+                    step = max(1, len(arr) // 64)
+                    vis_data = []
+                    for i in range(64):
+                        start_idx = i * step
+                        end_idx = min(len(arr), start_idx + step)
+                        if start_idx < len(arr):
+                            chunk = arr[start_idx:end_idx]
+                            max_val = max(max(chunk), abs(min(chunk))) if chunk else 0
+                            val = min(255, int((max_val / 32768.0) * 255))
+                        else:
+                            val = 0
+                        vis_data.append(val)
+
+                    # Async emit to avoid blocking audio loop
+                    async def safe_emit():
+                        try:
+                            await self.sio.emit('music_vis_data', {"data": vis_data})
+                        except Exception as emit_err:
+                            self.logger.debug(f"Emit error: {emit_err}")
+
+                    asyncio.run_coroutine_threadsafe(safe_emit(), self.main_loop)
+            except Exception as e:
+                self.logger.debug(f"Vis error: {e}")
+
+        try:
+            self._audio_queue.put_nowait(process_data)
+        except queue.Full:
+            pass
+
+        return process_data
+
     def _stream_reader_sync(self, internal_queue, stop_event):
         """Reads from internal queue and pushes to audio queue at playback speed."""
         start_time = time.time()
@@ -480,58 +537,7 @@ class MusicAgent:
                 process_data = small_chunk_buffer
                 small_chunk_buffer = b""
 
-            # Push to ADA's queue if available
-            if self._audio_queue:
-                import array
-                import sys
-                import audioop
-
-                # Ensure data length is even for 16-bit PCM
-                if len(process_data) % 2 != 0:
-                    process_data = process_data[:-1]
-
-                # Apply volume scaling
-                if self.volume != 1.0:
-                    process_data = audioop.mul(process_data, 2, self.volume)
-
-                arr = array.array('h', process_data)
-
-                # Visualization logic
-                if self.sio and self.main_loop:
-                    try:
-                        current_time = time.time()
-                        # Rate limit visualizer emission to approx 15 fps (66ms) to avoid flooding the socket
-                        if not hasattr(self, '_last_vis_emit') or (current_time - self._last_vis_emit) >= 0.066:
-                            self._last_vis_emit = current_time
-                            # Extract real amplitude chunks for the visualizer
-                            step = max(1, len(arr) // 64)
-                            vis_data = []
-                            for i in range(64):
-                                start_idx = i * step
-                                end_idx = min(len(arr), start_idx + step)
-                                if start_idx < len(arr):
-                                    chunk = arr[start_idx:end_idx]
-                                    max_val = max(max(chunk), abs(min(chunk))) if chunk else 0
-                                    val = min(255, int((max_val / 32768.0) * 255))
-                                else:
-                                    val = 0
-                                vis_data.append(val)
-
-                            # Async emit to avoid blocking audio loop
-                            async def safe_emit():
-                                try:
-                                    await self.sio.emit('music_vis_data', {"data": vis_data})
-                                except Exception as emit_err:
-                                    self.logger.debug(f"Emit error: {emit_err}")
-
-                            asyncio.run_coroutine_threadsafe(safe_emit(), self.main_loop)
-                    except Exception as e:
-                        self.logger.debug(f"Vis error: {e}")
-
-                try:
-                    self._audio_queue.put_nowait(process_data)
-                except queue.Full:
-                    pass
+            process_data = self._process_chunk(process_data)
 
             # Manual rate-limiting to simulate real-time playback and handle drift
             total_bytes_played += len(process_data)
