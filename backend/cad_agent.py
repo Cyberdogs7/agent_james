@@ -277,6 +277,7 @@ Original request: {original_prompt}
 
                 if b64_stl is not None:
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
+
                     
                     return {
                         "format": "stl",
