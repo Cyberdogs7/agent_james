@@ -1,5 +1,8 @@
 import os
 import asyncio
+import base64
+import aiofiles
+import aiofiles.ospath
 from datetime import datetime
 from google import genai
 from google.genai import types
@@ -92,11 +95,11 @@ export_stl(result_part, 'output.stl')
         
         script_path = os.path.join(work_dir, "current_design.py")
         
-        def _read_and_sanitize(path: str) -> str:
-            if not os.path.exists(path):
+        async def _read_and_sanitize(path: str) -> str:
+            if not await aiofiles.ospath.exists(path):
                 return ""
-            with open(path, "r") as f:
-                code = f.read()
+            async with aiofiles.open(path, "r") as f:
+                code = await f.read()
             # Sanitize existing code: replace any absolute paths with 'output.stl'
             import re
             code = re.sub(
@@ -111,7 +114,7 @@ export_stl(result_part, 'output.stl')
             )
             return code
 
-        existing_code = await asyncio.to_thread(_read_and_sanitize, script_path)
+        existing_code = await _read_and_sanitize(script_path)
 
         if not existing_code:
              self._log("[CadAgent DEBUG] [WARN] No existing script found. Falling back to fresh generation.")
@@ -202,12 +205,12 @@ Ensure you still export to 'output.stl'.
                 
                 safe_output_path = output_stl.replace("\\", "\\\\")
                 
-                def _write_script():
-                    with open(script_path, "w") as f:
+                async def _write_script():
+                    async with aiofiles.open(script_path, "w") as f:
                         code_with_path = code.replace("output.stl", safe_output_path)
-                        f.write(code_with_path)
+                        await f.write(code_with_path)
 
-                await asyncio.to_thread(_write_script)
+                await _write_script()
                     
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
@@ -263,23 +266,17 @@ Original request: {original_prompt}
                 
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
-                def _read_output_stl():
+                def _read_and_encode_stl():
                     if os.path.exists(output_stl):
                         with open(output_stl, "rb") as f:
-                            return f.read()
+                            stl_data = f.read()
+                        return base64.b64encode(stl_data).decode('utf-8')
                     return None
 
-                stl_data = await asyncio.to_thread(_read_output_stl)
-                if stl_data is not None:
-                    self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
-                    def _read_stl():
-                        with open(output_stl, "rb") as f:
-                            return f.read()
+                b64_stl = await asyncio.to_thread(_read_and_encode_stl)
 
-                    stl_data = await asyncio.to_thread(_read_stl)
-                        
-                    import base64
-                    b64_stl = base64.b64encode(stl_data).decode('utf-8')
+                if b64_stl is not None:
+                    self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     
                     return {
                         "format": "stl",
