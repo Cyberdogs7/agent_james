@@ -4,6 +4,7 @@ import logging
 import shutil
 import os
 import ctypes
+import shlex
 
 class OSAgent:
     def __init__(self):
@@ -22,7 +23,7 @@ class OSAgent:
                     return f"Launched {app_name}"
                 except FileNotFoundError:
                     # Fallback to shell execution if not found directly
-                    subprocess.Popen(f'start "" "{app_name}"', shell=True)
+                    subprocess.Popen(['cmd.exe', '/c', 'start', '""', app_name])
                     return f"Launched {app_name} (via shell)"
             elif self.platform == "darwin":
                 subprocess.Popen(["open", "-a", app_name])
@@ -32,7 +33,7 @@ class OSAgent:
                     subprocess.Popen([app_name], start_new_session=True)
                     return f"Launched {app_name}"
                 else:
-                    subprocess.Popen(app_name, shell=True, start_new_session=True)
+                    subprocess.Popen(shlex.split(app_name), start_new_session=True)
                     return f"Attempted to launch {app_name}"
             else:
                 return "Platform not supported"
