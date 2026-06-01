@@ -27,6 +27,8 @@ import copy
 import base64
 from datetime import datetime
 from pathlib import Path
+import aiofiles
+import aiofiles.os
 
 
 
@@ -884,7 +886,7 @@ async def save_memory(sid, data):
 
         # Ensure directory exists
         memory_dir = Path("long_term_memory")
-        memory_dir.mkdir(exist_ok=True)
+        await aiofiles.os.makedirs(memory_dir, exist_ok=True)
 
         # Generate filename
         # Use provided filename if available, else timestamp
@@ -901,7 +903,7 @@ async def save_memory(sid, data):
             filename = memory_dir / f"memory_{timestamp}.txt"
 
         # Write to file
-        with open(filename, 'w', encoding='utf-8') as f:
+        async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
             for msg in messages:
                 sender = msg.get('sender', 'Unknown')
                 text = msg.get('text', '')
