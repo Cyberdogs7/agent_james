@@ -2563,6 +2563,21 @@ If the user asks about past conversations, decisions, or if you feel you lack hi
             except Exception as e:
                 print(f"[ADA DEBUG] [ERR] Context nudging task failed: {e}")
 
+    @staticmethod
+    def _read_and_parse_chat_lines(chat_file, last_processed_line):
+        """Synchronously reads and parses chat history lines."""
+        new_lines = []
+        with open(chat_file, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if i >= last_processed_line:
+                    try:
+                        entry = json.loads(line)
+                        new_lines.append(f"{entry.get('sender', 'Unknown')}: {entry.get('text', '')}")
+                    except json.JSONDecodeError:
+                        pass
+                last_processed_line = i + 1
+        return new_lines, last_processed_line
+
     async def _implicit_learning_task(self):
         """Periodically scans chat history to update the user profile."""
         if not self.project_manager:
@@ -2589,16 +2604,9 @@ If the user asks about past conversations, decisions, or if you feel you lack hi
                     continue
 
                 # Read new lines since last check
-                new_lines = []
-                with open(chat_file, "r", encoding="utf-8") as f:
-                    for i, line in enumerate(f):
-                        if i >= last_processed_line:
-                            try:
-                                entry = json.loads(line)
-                                new_lines.append(f"{entry.get('sender', 'Unknown')}: {entry.get('text', '')}")
-                            except json.JSONDecodeError:
-                                pass
-                        last_processed_line = i + 1
+                new_lines, last_processed_line = await asyncio.to_thread(
+                    self._read_and_parse_chat_lines, chat_file, last_processed_line
+                )
 
                 if not new_lines:
                     continue
