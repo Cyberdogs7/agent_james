@@ -93,9 +93,15 @@ export_stl(result_part, 'output.stl')
         script_path = os.path.join(work_dir, "current_design.py")
         existing_code = ""
         
-        if os.path.exists(script_path):
-            with open(script_path, "r") as f:
-                existing_code = f.read()
+        def _read_existing_code():
+            if os.path.exists(script_path):
+                with open(script_path, "r") as f:
+                    return f.read()
+            return None
+
+        _existing = await asyncio.to_thread(_read_existing_code)
+        if _existing is not None:
+            existing_code = _existing
             
             # Sanitize existing code: replace any absolute paths with 'output.stl'
             import re
@@ -198,9 +204,12 @@ Ensure you still export to 'output.stl'.
                 
                 safe_output_path = output_stl.replace("\\", "\\\\")
                 
-                with open(script_path, "w") as f:
-                    code_with_path = code.replace("output.stl", safe_output_path)
-                    f.write(code_with_path)
+                def _write_script():
+                    with open(script_path, "w") as f:
+                        code_with_path = code.replace("output.stl", safe_output_path)
+                        f.write(code_with_path)
+
+                await asyncio.to_thread(_write_script)
                     
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
@@ -256,10 +265,15 @@ Original request: {original_prompt}
                 
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
-                if os.path.exists(output_stl):
+                def _read_output_stl():
+                    if os.path.exists(output_stl):
+                        with open(output_stl, "rb") as f:
+                            return f.read()
+                    return None
+
+                stl_data = await asyncio.to_thread(_read_output_stl)
+                if stl_data is not None:
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
-                    with open(output_stl, "rb") as f:
-                        stl_data = f.read()
                         
                     import base64
                     b64_stl = base64.b64encode(stl_data).decode('utf-8')
