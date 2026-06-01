@@ -94,8 +94,11 @@ export_stl(result_part, 'output.stl')
         existing_code = ""
         
         if os.path.exists(script_path):
-            with open(script_path, "r") as f:
-                existing_code = f.read()
+            def read_script(path):
+                with open(path, "r") as f:
+                    return f.read()
+
+            existing_code = await asyncio.to_thread(read_script, script_path)
             
             # Sanitize existing code: replace any absolute paths with 'output.stl'
             import re
@@ -198,9 +201,12 @@ Ensure you still export to 'output.stl'.
                 
                 safe_output_path = output_stl.replace("\\", "\\\\")
                 
-                with open(script_path, "w") as f:
-                    code_with_path = code.replace("output.stl", safe_output_path)
-                    f.write(code_with_path)
+                def write_script(path, content):
+                    with open(path, "w") as f:
+                        f.write(content)
+
+                code_with_path = code.replace("output.stl", safe_output_path)
+                await asyncio.to_thread(write_script, script_path, code_with_path)
                     
                 self._log(f"[CadAgent DEBUG] [EXEC] Running local script: {script_path}")
                 
@@ -258,11 +264,14 @@ Original request: {original_prompt}
                 
                 if os.path.exists(output_stl):
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
-                    with open(output_stl, "rb") as f:
-                        stl_data = f.read()
+
+                    def read_and_encode_stl(path):
+                        import base64
+                        with open(path, "rb") as f:
+                            stl_data = f.read()
+                        return base64.b64encode(stl_data).decode('utf-8')
                         
-                    import base64
-                    b64_stl = base64.b64encode(stl_data).decode('utf-8')
+                    b64_stl = await asyncio.to_thread(read_and_encode_stl, output_stl)
                     
                     return {
                         "format": "stl",
