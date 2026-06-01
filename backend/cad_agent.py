@@ -263,7 +263,14 @@ Original request: {original_prompt}
                 
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
-                if os.path.exists(output_stl):
+                def _read_output_stl():
+                    if os.path.exists(output_stl):
+                        with open(output_stl, "rb") as f:
+                            return f.read()
+                    return None
+
+                stl_data = await asyncio.to_thread(_read_output_stl)
+                if stl_data is not None:
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
                     def _read_stl():
                         with open(output_stl, "rb") as f:
