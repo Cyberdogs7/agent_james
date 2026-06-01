@@ -42,6 +42,37 @@ class TestOSAgent(unittest.TestCase):
             mock_os.startfile.assert_called_with("Notepad")
             self.assertIn("Launched Notepad", result)
 
+    @patch('backend.os_agent.sys.platform', 'win32')
+    @patch('subprocess.Popen')
+    def test_launch_app_windows_fallback(self, mock_popen):
+        with patch('backend.os_agent.os') as mock_os:
+            self.agent.platform = 'win32'
+            # Setup mock to raise FileNotFoundError
+            mock_os.startfile = MagicMock(side_effect=FileNotFoundError)
+
+            result = self.agent.launch_app('Notepad "evil.exe"')
+
+            mock_popen.assert_called_with(['cmd.exe', '/c', 'start', '""', 'Notepad "evil.exe"'])
+            self.assertIn("Launched Notepad \"evil.exe\" (via shell)", result)
+
+    @patch('backend.os_agent.sys.platform', 'linux')
+    @patch('subprocess.Popen')
+    def test_launch_app_linux_which(self, mock_popen):
+        with patch('backend.os_agent.shutil.which', return_value="/usr/bin/calculator"):
+            self.agent.platform = 'linux'
+            result = self.agent.launch_app("calculator")
+            mock_popen.assert_called_with(["calculator"], start_new_session=True)
+            self.assertIn("Launched calculator", result)
+
+    @patch('backend.os_agent.sys.platform', 'linux')
+    @patch('subprocess.Popen')
+    def test_launch_app_linux_fallback(self, mock_popen):
+        with patch('backend.os_agent.shutil.which', return_value=None):
+            self.agent.platform = 'linux'
+            result = self.agent.launch_app('calculator --display "abc def"')
+            mock_popen.assert_called_with(['calculator', '--display', 'abc def'], start_new_session=True)
+            self.assertIn("Attempted to launch calculator --display \"abc def\"", result)
+
     @patch('backend.os_agent.sys.platform', 'darwin')
     @patch('subprocess.run')
     def test_set_volume_mac(self, mock_run):
