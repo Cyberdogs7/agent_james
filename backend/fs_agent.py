@@ -2,6 +2,8 @@ import asyncio
 import os
 from pathlib import Path
 import aiofiles
+import aiofiles.os
+import aiofiles.ospath
 
 class FileSystemAgent:
     def __init__(self, project_manager):
@@ -34,9 +36,7 @@ class FileSystemAgent:
             # Ensure directory exists (can block slightly, but minimal impact compared to file I/O)
             dir_name = os.path.dirname(final_path)
             if dir_name:
-                def _make_dirs():
-                    os.makedirs(dir_name, exist_ok=True)
-                await asyncio.to_thread(_make_dirs)
+                await aiofiles.os.makedirs(dir_name, exist_ok=True)
 
             async with aiofiles.open(final_path, 'w', encoding='utf-8') as f:
                 await f.write(content)
@@ -50,9 +50,7 @@ class FileSystemAgent:
 
         try:
             # Check existence (minimal block)
-            def _check_exists():
-                return os.path.exists(final_path)
-            exists = await asyncio.to_thread(_check_exists)
+            exists = await aiofiles.ospath.exists(final_path)
 
             if not exists:
                 return f"File '{final_path}' does not exist."
@@ -67,15 +65,12 @@ class FileSystemAgent:
         """Lists contents of a directory asynchronously."""
         final_path = self._resolve_path(path)
 
-        def _perform_list():
-            if not os.path.exists(final_path):
-                return f"Directory '{final_path}' does not exist."
-            if not os.path.isdir(final_path):
-                return f"Path '{final_path}' is not a directory."
-            items = os.listdir(final_path)
-            return f"Contents of '{final_path}': {', '.join(items)}"
-
         try:
-            return await asyncio.to_thread(_perform_list)
+            if not await aiofiles.ospath.exists(final_path):
+                return f"Directory '{final_path}' does not exist."
+            if not await aiofiles.ospath.isdir(final_path):
+                return f"Path '{final_path}' is not a directory."
+            items = await aiofiles.os.listdir(final_path)
+            return f"Contents of '{final_path}': {', '.join(items)}"
         except Exception as e:
             return f"Failed to read directory '{path}': {str(e)}"
