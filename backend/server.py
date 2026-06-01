@@ -1,6 +1,5 @@
 import sys
 import asyncio
-from backend.jules_agent import JulesAgent
 
 # Fix for asyncio subprocess support on Windows
 # MUST BE SET BEFORE OTHER IMPORTS
