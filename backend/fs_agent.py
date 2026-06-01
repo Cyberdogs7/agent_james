@@ -1,6 +1,7 @@
 import asyncio
 import os
 from pathlib import Path
+import aiofiles
 
 class FileSystemAgent:
     def __init__(self, project_manager):
@@ -29,14 +30,11 @@ class FileSystemAgent:
         """Writes content to a file asynchronously."""
         final_path = self._resolve_path(path)
 
-        def _perform_write():
-            os.makedirs(os.path.dirname(final_path), exist_ok=True)
-            with open(final_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            return f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
-
         try:
-            return await asyncio.to_thread(_perform_write)
+            await asyncio.to_thread(os.makedirs, os.path.dirname(final_path), exist_ok=True)
+            async with aiofiles.open(final_path, 'w', encoding='utf-8') as f:
+                await f.write(content)
+            return f"File '{final_path}' written successfully to project '{self.project_manager.current_project}'."
         except Exception as e:
             return f"Failed to write file '{path}': {str(e)}"
 
@@ -44,14 +42,13 @@ class FileSystemAgent:
         """Reads content from a file asynchronously."""
         final_path = self._resolve_path(path)
 
-        def _perform_read():
-            if not os.path.exists(final_path):
-                return f"File '{final_path}' does not exist."
-            with open(final_path, 'r', encoding='utf-8') as f:
-                return f"Content of '{final_path}':\n{f.read()}"
-
         try:
-            return await asyncio.to_thread(_perform_read)
+            exists = await asyncio.to_thread(os.path.exists, final_path)
+            if not exists:
+                return f"File '{final_path}' does not exist."
+            async with aiofiles.open(final_path, 'r', encoding='utf-8') as f:
+                content = await f.read()
+            return f"Content of '{final_path}':\n{content}"
         except Exception as e:
             return f"Failed to read file '{path}': {str(e)}"
 

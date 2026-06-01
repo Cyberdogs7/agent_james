@@ -33,3 +33,4 @@ pytest-asyncio
 watchdog
 pyperclip
 google-genai
+aiofiles
