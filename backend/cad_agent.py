@@ -265,7 +265,6 @@ Original request: {original_prompt}
                 
                 if os.path.exists(output_stl):
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
-
                     def _read_stl():
                         with open(output_stl, "rb") as f:
                             return f.read()
