@@ -682,6 +682,7 @@ class AutomationEngine:
             if script_content is None:
                 return None
 
+
             prompt = f"""
 You are an expert Python debugger.
 I am running a script that failed. I need you to analyze the code and the error trace, and provide the FULL FIXED CODE.
