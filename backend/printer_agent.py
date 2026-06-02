@@ -12,6 +12,7 @@ import os
 import subprocess
 import json
 import platform
+import aiofiles
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -817,15 +818,12 @@ class PrinterAgent:
         
         try:
             async def file_sender():
-                f = await asyncio.to_thread(open, gcode_path, 'rb')
-                try:
+                async with aiofiles.open(gcode_path, 'rb') as f:
                     while True:
-                        chunk = await asyncio.to_thread(f.read, 1024 * 1024)
+                        chunk = await f.read(1024 * 1024)
                         if not chunk:
                             break
                         yield chunk
-                finally:
-                    await asyncio.to_thread(f.close)
 
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
@@ -853,15 +851,12 @@ class PrinterAgent:
         
         try:
             async def file_sender():
-                f = await asyncio.to_thread(open, gcode_path, 'rb')
-                try:
+                async with aiofiles.open(gcode_path, 'rb') as f:
                     while True:
-                        chunk = await asyncio.to_thread(f.read, 1024 * 1024)
+                        chunk = await f.read(1024 * 1024)
                         if not chunk:
                             break
                         yield chunk
-                finally:
-                    await asyncio.to_thread(f.close)
 
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
