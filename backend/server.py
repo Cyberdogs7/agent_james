@@ -1394,10 +1394,12 @@ async def update_api_keys(sid, data):
             with open(env_path, 'w') as f:
                 f.write("")
 
+
         for key, val in data.items():
             if val is not None:
                 dotenv.set_key(env_path, key, str(val))
                 os.environ[key] = str(val)
+
 
         return dotenv.dotenv_values(env_path)
 
