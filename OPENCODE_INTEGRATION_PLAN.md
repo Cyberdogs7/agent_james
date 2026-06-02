@@ -11,22 +11,27 @@ This document outlines the plan to integrate [OpenCode](https://opencode.ai/) in
 - **API Modularity**: By utilizing OpenCode's API instead of CLI calls, ADA maintains robust state tracking, cleaner error handling, and structured communication.
 
 ### Trade-offs
-- **Additional Dependency**: Requires users to have an OpenCode API server/process accessible, adding complexity to the developer setup compared to native Python agents.
+- **Additional Complexity**: ADA must now manage the lifecycle of an external binary (OpenCode), including installation, daemonization, and cleanup, which increases the complexity of `opencode_agent.py`.
 - **State Synchronization**: OpenCode has its own internal state management which must be carefully synced with ADA's `FleetManager` to ensure the Kanban UI accurately reflects agent status.
-- **Model Key Propogation**: Passing API keys and model selections to an external API securely requires careful credential management between ADA's `.env` and the OpenCode payload.
+- **Model Key Propogation**: Passing API keys and model selections securely to the OpenCode process requires careful credential management between ADA's `.env` and OpenCode's environment.
 
 ---
 
 ## Architecture Changes
 
 ### 1. `backend/opencode_agent.py`
-Create a new agent wrapper class `OpenCodeAgent` similar to `openhands_agent.py`.
-- **Initialization**: Will accept a base URL pointing to the OpenCode API.
-- **Dynamic Model Selection**: Support passing in an explicit `model` argument (e.g. `claude-3.5-sonnet`, `gemini-2.5-pro`, or open router models) to the session creation payload.
+Create a new agent wrapper class `OpenCodeAgent` that acts as an orchestrator and API wrapper.
+- **Lifecycle Management (Fully Managed)**:
+  - ADA will automatically check if the `opencode` binary exists on the system path.
+  - If missing, ADA will prompt the user (or automatically attempt) to install it using the official script (`curl -fsSL https://opencode.ai/install | bash`).
+  - ADA will spawn the OpenCode daemon as a background subprocess using Python's `asyncio.create_subprocess_exec`, capturing `stdout`/`stderr` for logging and monitoring.
+  - ADA will ensure the subprocess is gracefully killed when ADA shuts down to prevent orphaned processes.
+- **Dynamic Model Selection**: Support passing in an explicit `model` argument (e.g. `claude-3.5-sonnet`, `gemini-2.5-pro`, or open router models) to the session creation payload or CLI arguments.
 - **Methods**:
-  - `async def create_session(self, prompt, repo_path, model_selection)`
+  - `async def ensure_opencode_installed(self)`
+  - `async def start_daemon(self)`
   - `async def spawn_agent(self, prompt, repo_path, model_selection)`
-  - `async def check_status(self, session_id)` for polling and Kanban updates.
+  - `async def stop_daemon(self)`
 
 ### 2. `backend/ada.py`
 Update the central AI router to register OpenCode tools and handle user intent.
