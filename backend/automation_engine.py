@@ -4,6 +4,8 @@ import json
 import traceback
 import os
 import shutil
+import aiofiles
+import aiofiles.ospath
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -672,15 +674,10 @@ class AutomationEngine:
 
         try:
             # Read script
-            def _read_script():
-                if not os.path.exists(script_path):
-                    return None
-                with open(script_path, 'r', encoding='utf-8') as f:
-                    return f.read()
-
-            script_content = await asyncio.to_thread(_read_script)
-            if script_content is None:
+            if not await aiofiles.ospath.exists(script_path):
                 return None
+            async with aiofiles.open(script_path, 'r', encoding='utf-8') as f:
+                script_content = await f.read()
 
             prompt = f"""
 You are an expert Python debugger.
@@ -722,7 +719,7 @@ INSTRUCTIONS:
             print(f"[AutomationEngine] Healing generation failed: {e}")
             return None
 
-    def apply_fix(self, task_id):
+    async def apply_fix(self, task_id):
         """Applies the proposed fix for a failed task."""
         current_path = self.project_manager.get_current_project_path()
 
@@ -758,16 +755,16 @@ INSTRUCTIONS:
 
         try:
             # 1. Backup
-            if os.path.exists(script_path):
+            if await aiofiles.ospath.exists(script_path):
                 timestamp = int(time.time())
                 backup_path = f"{script_path}.{timestamp}.bak"
-                shutil.copy2(script_path, backup_path)
+                await asyncio.to_thread(shutil.copy2, script_path, backup_path)
             else:
                 return False, f"Original file not found at {script_path}"
 
             # 2. Overwrite
-            with open(script_path, 'w', encoding='utf-8') as f:
-                f.write(fix_code)
+            async with aiofiles.open(script_path, 'w', encoding='utf-8') as f:
+                await f.write(fix_code)
 
             # 3. Reset Task
             updates = {

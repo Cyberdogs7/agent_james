@@ -829,7 +829,14 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("set_auto_merge_threshold", lambda hours: f"Auto-merge threshold set to {hours} hours." if self.project_manager.update_project_config({"auto_merge_threshold": int(hours * 3600)})[0] else "Failed.")
         self.tool_registry.register("add_architectural_memory", lambda content, tags=None: self.project_manager.add_architectural_memory(content, tags)[1])
         self.tool_registry.register("switch_video_source", lambda source: setattr(self, "video_mode", source) or f"Switched video source to {source}." if source in ["camera", "screen"] else f"Invalid source '{source}'. Use 'camera' or 'screen'.")
-        self.tool_registry.register("apply_task_fix", lambda task_id: self.automation_engine.apply_fix(task_id)[1] if self.automation_engine else "Automation Engine not available.")
+
+        async def apply_task_fix_handler(task_id):
+            if self.automation_engine:
+                result = await self.automation_engine.apply_fix(task_id)
+                return result[1]
+            return "Automation Engine not available."
+
+        self.tool_registry.register("apply_task_fix", apply_task_fix_handler)
         self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
