@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Play, AlertCircle, FileText, CheckCircle, Clock } from 'lucide-react';
+import { X, Play, AlertCircle, FileText, CheckCircle, Clock, Layers } from 'lucide-react';
 
 const LANE_CONFIG = [
-  { id: 'backlog', title: 'Backlog', color: 'border-gray-600' },
-  { id: 'todo_planning', title: 'Todo / Planning', color: 'border-blue-500' },
-  { id: 'dev_implementation', title: 'Dev / Implementation', color: 'border-purple-500' },
-  { id: 'review_verification', title: 'Review / Verification', color: 'border-yellow-500' },
-  { id: 'completed', title: 'Done', color: 'border-green-500' }
+  { id: 'backlog', title: 'Backlog', color: 'border-gray-500/50' },
+  { id: 'todo_planning', title: 'Todo / Planning', color: 'border-blue-500/50' },
+  { id: 'dev_implementation', title: 'Dev / Implementation', color: 'border-purple-500/50' },
+  { id: 'review_verification', title: 'Review / Verification', color: 'border-yellow-500/50' },
+  { id: 'completed', title: 'Done', color: 'border-green-500/50' }
 ];
 
 const WorkspaceBoard = ({ socket, onClose }) => {
@@ -63,18 +63,22 @@ const WorkspaceBoard = ({ socket, onClose }) => {
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.3 }}
-      className="fixed inset-0 z-[100] flex flex-col bg-gray-900/95 backdrop-blur-xl text-white font-sans overflow-hidden"
+      className="fixed inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-xl text-gold9 font-mono overflow-hidden"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-gray-800/50">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gold9/20 bg-black/80" style={{ WebkitAppRegion: 'drag' }}>
         <div className="flex items-center space-x-4">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+          <div className="w-10 h-10 bg-gold9/10 border border-gold9 rounded-lg flex items-center justify-center">
+             <Layers className="w-5 h-5 text-gold9" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-[0.2em] text-gold9 drop-shadow-[0_0_10px_rgba(255,215,0,0.5)] uppercase">
             Workspace Board
           </h1>
           <select
-            className="bg-gray-800 border border-gray-600 text-white rounded px-3 py-1 text-sm outline-none focus:border-blue-500 transition-colors"
+            className="bg-black/40 border border-gold9/30 text-gold9 rounded px-3 py-1 text-xs outline-none focus:border-gold9 transition-colors uppercase font-mono tracking-widest ml-4"
             value={selectedRepo || ''}
             onChange={(e) => setSelectedRepo(e.target.value)}
+            style={{ WebkitAppRegion: 'no-drag' }}
           >
             {fleetState?.repos?.map(r => (
               <option key={r.name} value={r.name}>{r.name}</option>
@@ -83,14 +87,15 @@ const WorkspaceBoard = ({ socket, onClose }) => {
         </div>
         <button
           onClick={onClose}
-          className="p-2 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-full transition-colors"
+          className="px-4 py-2 border border-gold9/30 hover:bg-gold9/10 hover:border-gold9 rounded text-xs tracking-widest transition-all"
+          style={{ WebkitAppRegion: 'no-drag' }}
         >
-          <X className="w-6 h-6" />
+          CLOSE BOARD
         </button>
       </div>
 
       {/* Kanban Board */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 scrollbar-hide">
         <div className="flex space-x-6 h-full min-w-max">
           {LANE_CONFIG.map(lane => {
             const laneTasks = tasks.filter(t => t.status === lane.id || (lane.id === 'blocked' && t.status === 'blocked'));
@@ -101,15 +106,15 @@ const WorkspaceBoard = ({ socket, onClose }) => {
                 key={lane.id}
                 onDrop={(e) => handleDrop(e, lane.id)}
                 onDragOver={handleDragOver}
-                className={`flex flex-col w-80 bg-gray-800/40 rounded-xl border-t-4 ${lane.color} shadow-lg shadow-black/20`}
+                className={`flex flex-col w-80 bg-black/80 rounded-xl border border-gold9/20 border-t-4 ${lane.color} shadow-[0_0_15px_rgba(255,215,0,0.05)]`}
               >
-                <div className="p-4 border-b border-gray-700/50 flex justify-between items-center">
-                  <h3 className="font-semibold text-gray-200">{lane.title}</h3>
-                  <span className="text-xs font-mono bg-gray-700 text-gray-300 px-2 py-1 rounded-full">
+                <div className="p-4 border-b border-gold9/10 flex justify-between items-center bg-gold9/5">
+                  <h3 className="font-bold text-gold9 tracking-widest text-sm uppercase">{lane.title}</h3>
+                  <span className="text-xs font-mono bg-gold9/20 text-gold9 px-2 py-1 rounded">
                     {laneTasks.length}
                   </span>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">
                   <AnimatePresence>
                     {laneTasks.map(task => (
                       <TaskCard
@@ -153,31 +158,31 @@ const TaskCard = ({ task, lane, onClick, onDragStart }) => {
       draggable
       onDragStart={onDragStart}
       onClick={onClick}
-      className={`p-4 rounded-lg cursor-pointer border backdrop-blur-md transition-all hover:shadow-md ${
+      className={`p-3 rounded cursor-pointer border transition-all hover:-translate-y-0.5 group ${
         isBlocked 
-          ? 'bg-red-900/30 border-red-500/50 hover:bg-red-900/40 hover:border-red-400' 
-          : 'bg-gray-700/40 border-gray-600/50 hover:bg-gray-700/60 hover:border-gray-500'
+          ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50 hover:shadow-[0_4px_15px_rgba(239,68,68,0.1)]' 
+          : 'bg-gold9/5 border-gold9/10 hover:bg-gold9/20 hover:border-gold9/30 hover:shadow-[0_4px_15px_rgba(255,215,0,0.1)]'
       }`}
     >
       <div className="flex items-start justify-between mb-2">
-        <span className="text-xs font-mono text-gray-400 truncate w-2/3">{task.id}</span>
-        {isBlocked && <AlertCircle className="w-4 h-4 text-red-400" />}
+        <span className="text-[10px] font-mono text-gold9/40 truncate w-2/3">ID: {task.id.substring(0, 8)}</span>
+        {isBlocked && <AlertCircle className="w-3 h-3 text-red-400" />}
       </div>
-      <p className="text-sm text-gray-200 line-clamp-3 leading-relaxed mb-3">
+      <p className="text-xs text-gold9 line-clamp-3 leading-relaxed mb-3">
         {task.prompt}
       </p>
       
-      <div className="flex items-center justify-between text-xs text-gray-400">
+      <div className="flex items-center justify-between text-[10px] text-gold9/40">
         <div className="flex items-center space-x-2">
           {task.agent_id ? (
-            <span className="flex items-center space-x-1 bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded">
-              <Play className="w-3 h-3" />
+            <span className="flex items-center space-x-1 bg-gold9/20 text-gold9 px-1.5 py-0.5 rounded border border-gold9/30">
+              <Play className="w-2.5 h-2.5" />
               <span>{task.agent_id}</span>
             </span>
           ) : (
-            <span className="flex items-center space-x-1">
-              <Clock className="w-3 h-3" />
-              <span>Unassigned</span>
+            <span className="flex items-center space-x-1 opacity-50">
+              <Clock className="w-2.5 h-2.5" />
+              <span>UNASSIGNED</span>
             </span>
           )}
         </div>
@@ -199,41 +204,44 @@ const TaskDetailPanel = ({ task, onClose }) => {
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: '100%', opacity: 0 }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="absolute top-0 right-0 bottom-0 w-[500px] bg-gray-900/95 backdrop-blur-2xl border-l border-gray-700 shadow-2xl flex flex-col z-50"
+      className="absolute top-0 right-0 bottom-0 w-[500px] bg-[#111] border-l border-gold9/30 shadow-[-20px_0_50px_rgba(0,0,0,0.5)] flex flex-col z-50 font-mono text-gold9"
     >
-      <div className="p-6 border-b border-gray-700 flex justify-between items-center">
+      <div className="p-4 border-b border-gold9/20 flex justify-between items-center bg-gold9/5">
         <div>
-          <h2 className="text-xl font-bold text-white mb-1">Task Details</h2>
-          <p className="text-xs font-mono text-gray-400">{task.id}</p>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+             <AlertCircle size={18} />
+             TASK DETAILS
+          </h2>
+          <p className="text-[10px] text-gold9/40 mt-1">ID: {task.id}</p>
         </div>
-        <button onClick={onClose} className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-full transition-colors">
+        <button onClick={onClose} className="p-2 text-gold9/40 hover:text-gold9 transition-colors">
           <X className="w-5 h-5" />
         </button>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
         <div>
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Status</h3>
-          <div className="inline-flex items-center space-x-2 bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700">
+          <h3 className="text-[10px] font-bold text-gold9/40 uppercase tracking-widest mb-2">STATUS</h3>
+          <div className="inline-flex items-center space-x-2 bg-black/80 px-3 py-1.5 rounded border border-white/5">
             <div className={`w-2 h-2 rounded-full ${task.status === 'completed' ? 'bg-green-500' : task.status === 'failed' ? 'bg-red-500' : 'bg-blue-500'}`} />
-            <span className="text-sm text-gray-200 capitalize">{task.status.replace('_', ' ')}</span>
+            <span className="text-xs text-gray-200 uppercase tracking-wider">{task.status.replace('_', ' ')}</span>
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Prompt / Description</h3>
-          <div className="bg-gray-800/50 rounded-lg p-4 text-sm text-gray-300 whitespace-pre-wrap border border-gray-700/50">
+          <h3 className="text-[10px] font-bold text-gold9/40 uppercase tracking-widest mb-2">PROMPT / DESCRIPTION</h3>
+          <div className="bg-black/80 rounded p-4 text-xs text-gray-200 whitespace-pre-wrap border border-white/5 select-text">
             {task.prompt}
           </div>
         </div>
 
         {task.error_message && (
           <div>
-            <h3 className="text-sm font-semibold text-red-400 uppercase tracking-wider mb-2 flex items-center space-x-2">
-              <AlertCircle className="w-4 h-4" />
-              <span>Blocker / Error Analysis</span>
+            <h3 className="text-[10px] font-bold text-red-500/80 uppercase tracking-widest mb-2 flex items-center space-x-2">
+              <AlertCircle className="w-3 h-3" />
+              <span>FAILURE REASON</span>
             </h3>
-            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-sm text-red-200 whitespace-pre-wrap">
+            <div className="bg-red-500/20 border border-red-500/30 rounded p-4 text-xs text-red-400 whitespace-pre-wrap font-mono select-text">
               {task.error_message}
             </div>
           </div>
@@ -241,12 +249,12 @@ const TaskDetailPanel = ({ task, onClose }) => {
 
         {task.attachments?.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Attachments ({task.attachments.length})</h3>
+            <h3 className="text-[10px] font-bold text-gold9/40 uppercase tracking-widest mb-2">ATTACHMENTS ({task.attachments.length})</h3>
             <div className="space-y-2">
               {task.attachments.map((att, i) => (
-                <div key={i} className="flex items-center space-x-3 bg-gray-800 p-3 rounded-lg border border-gray-700">
-                  <FileText className="w-5 h-5 text-gray-400" />
-                  <span className="text-sm text-gray-300">{att.name || `Attachment ${i + 1}`}</span>
+                <div key={i} className="flex items-center space-x-3 bg-black/80 p-3 rounded border border-white/5">
+                  <FileText className="w-4 h-4 text-gold9/60" />
+                  <span className="text-xs text-gray-300">{att.name || `Attachment ${i + 1}`}</span>
                 </div>
               ))}
             </div>
@@ -255,8 +263,8 @@ const TaskDetailPanel = ({ task, onClose }) => {
 
         {task.session_id && (
           <div>
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">Agent Session</h3>
-            <div className="bg-gray-800/50 rounded-lg p-3 text-sm text-gray-300 font-mono border border-gray-700/50">
+            <h3 className="text-[10px] font-bold text-gold9/40 uppercase tracking-widest mb-2">AGENT SESSION</h3>
+            <div className="bg-black/80 rounded p-3 text-xs text-gray-300 border border-white/5 select-text">
               {task.session_id}
             </div>
           </div>
