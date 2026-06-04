@@ -35,6 +35,7 @@ import KasaWindow from "./components/KasaWindow";
 import PrinterWindow from "./components/PrinterWindow";
 import SettingsWindow from "./components/SettingsWindow";
 import FleetSettingsWindow from "./components/FleetSettingsWindow";
+import FpsCounter from "./components/FpsCounter";
 import Suggestion from "./components/Suggestion";
 import WarRoomDashboard from "./components/WarRoomDashboard";
 import ProjectWindow from "./components/ProjectWindow";
@@ -75,7 +76,6 @@ function App() {
   const [isMuted, setIsMuted] = useState(true); // Mic state DEFAULT MUTED
   const [isVideoOn, setIsVideoOn] = useState(false); // Video state
   const [messages, setMessages] = useState([]);
-  const [inputValue, setInputValue] = useState("");
   const [cadData, setCadData] = useState(null);
   const [cadThoughts, setCadThoughts] = useState(""); // Streaming AI thoughts
   const [cadRetryInfo, setCadRetryInfo] = useState({
@@ -111,8 +111,8 @@ function App() {
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
 
   // RESTORED STATE
-  const [aiAudioData, setAiAudioData] = useState(new Array(64).fill(0));
-  const [fps, setFps] = useState(0);
+  const fpsRef = useRef(0);
+  const audioHistoryRef = useRef([]);
 
   // Device states - microphones, speakers, webcams
   const [micDevices, setMicDevices] = useState([]);
@@ -184,7 +184,6 @@ function App() {
   ]);
 
   // Hand Control State
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
   const [isPinching, setIsPinching] = useState(false);
   const [isHandTrackingEnabled, setIsHandTrackingEnabled] = useState(false); // DEFAULT OFF
   const [cursorSensitivity, setCursorSensitivity] = useState(2.0);
@@ -205,7 +204,6 @@ function App() {
   const analyserRef = useRef(null);
   const sourceRef = useRef(null);
   const animationFrameRef = useRef(null);
-  const audioHistoryRef = useRef([]); // For smoothing AI audio
 
   // Video Refs
   const videoRef = useRef(null);
@@ -237,7 +235,10 @@ function App() {
 
   // Mouse Drag Refs
   const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const dragPosRef = useRef(null);
   const isDraggingRef = useRef(false);
+  const cursorPosRef = useRef({ x: 0, y: 0 });
+  const lastIsPinchingRef = useRef(false);
 
   // Update refs when state changes
   useEffect(() => {
@@ -514,12 +515,12 @@ function App() {
                 const silenceThreshold = 5;
                 const isSilent = smoothedData.every(val => val < silenceThreshold);
                 if (isSilent) {
-                    setAiAudioData(new Array(rawData.length).fill(0));
+                    // setAiAudioData(new Array(rawData.length).fill(0));
                 } else {
-                    setAiAudioData(smoothedData);
+                    // setAiAudioData(smoothedData);
                 }
             } else {
-                setAiAudioData(rawData);
+                // setAiAudioData(rawData);
             }
         });
         socket.on('auth_status', (data) => {
@@ -1126,7 +1127,7 @@ function App() {
         const landmarks = results.landmarks[0];
 
         // Log on first detection
-        if (cursorPos.x === 0 && cursorPos.y === 0) {
+        if (cursorPosRef.current.x === 0 && cursorPosRef.current.y === 0) {
           console.log("First hand detection!", landmarks);
         }
 
@@ -1248,7 +1249,12 @@ function App() {
         }
 
         // Update Cursor Loop
-        setCursorPos({ x: finalX, y: finalY });
+        cursorPosRef.current = { x: finalX, y: finalY };
+        const cursorEl = document.getElementById('hand-cursor');
+        if (cursorEl) {
+            cursorEl.style.left = `${finalX}px`;
+            cursorEl.style.top = `${finalY}px`;
+        }
 
         // Trail Logic: Removed per user request
 
@@ -1276,7 +1282,10 @@ function App() {
             }
           }
         }
-        setIsPinching(isPinchNow);
+        if (isPinchNow !== lastIsPinchingRef.current) {
+            setIsPinching(isPinchNow);
+            lastIsPinchingRef.current = isPinchNow;
+        }
 
         // Fist Detection for Gesture-Based Dragging (Popup Windows Only)
         // Detects if all fingers are folded (tips closer to wrist than MCPs)
@@ -1385,7 +1394,7 @@ function App() {
     const now = performance.now();
     frameCountRef.current++;
     if (now - lastFrameTimeRef.current >= 1000) {
-      setFps(frameCountRef.current);
+      fpsRef.current = frameCountRef.current;
       frameCountRef.current = 0;
       lastFrameTimeRef.current = now;
     }
@@ -1424,7 +1433,6 @@ function App() {
     }
     setIsVideoOn(false);
     isVideoOnRef.current = false; // Update ref
-    setFps(0);
   };
 
   const toggleVideo = () => {
@@ -1467,11 +1475,10 @@ function App() {
     }
   };
 
-  const handleSend = (e) => {
-    if (e.key === "Enter" && inputValue.trim()) {
-      socket.emit("user_input", { text: inputValue });
-      addMessage("You", inputValue);
-      setInputValue("");
+  const handleSend = (text) => {
+    if (text.trim()) {
+      socket.emit("user_input", { text });
+      addMessage("You", text);
     }
   };
 
@@ -1663,20 +1670,44 @@ function App() {
     const rawNewX = e.clientX - dragOffsetRef.current.x;
     const rawNewY = e.clientY - dragOffsetRef.current.y;
 
-    updateElementPosition(id, rawNewX, rawNewY);
+    // Direct DOM manipulation to bypass React state re-render lag
+    const el = document.getElementById(id);
+    if (el) {
+        let newX = rawNewX;
+        let newY = rawNewY;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const margin = 0;
+        const size = elementSizes[id] || { w: 100, h: 100 };
+
+        if (id === "chat") {
+            newX = Math.max(size.w / 2 + margin, Math.min(width - size.w / 2 - margin, newX));
+            newY = Math.max(margin, Math.min(height - size.h - margin, newY));
+        } else if (id === "video") {
+            newX = Math.max(margin, Math.min(width - size.w - margin, newX));
+            newY = Math.max(margin, Math.min(height - size.h - margin, newY));
+        } else {
+            newX = Math.max(size.w / 2 + margin, Math.min(width - size.w / 2 - margin, newX));
+            newY = Math.max(size.h / 2 + margin, Math.min(height - size.h / 2 - margin, newY));
+        }
+        
+        el.style.left = `${newX}px`;
+        el.style.top = `${newY}px`;
+        dragPosRef.current = { x: newX, y: newY };
+    }
   };
 
   const handleMouseUp = () => {
+    if (isDraggingRef.current && activeDragElementRef.current && dragPosRef.current) {
+        updateElementPosition(activeDragElementRef.current, dragPosRef.current.x, dragPosRef.current.y);
+    }
+    dragPosRef.current = null;
     isDraggingRef.current = false;
     setActiveDragElement(null);
     activeDragElementRef.current = null;
     window.removeEventListener("mousemove", handleMouseDrag);
     window.removeEventListener("mouseup", handleMouseUp);
   };
-
-  // Calculate Average Audio Amplitude for Background Pulse
-  const audioAmp =
-    aiAudioData.reduce((a, b) => a + b, 0) / aiAudioData.length / 255;
 
   const toggleKasaWindow = () => {
     if (!showKasaWindow) {
@@ -1731,10 +1762,11 @@ function App() {
       {/* Hand Cursor - Only show if tracking is enabled */}
       {isVideoOn && isHandTrackingEnabled && (
         <div
+          id="hand-cursor"
           className={`fixed w-6 h-6 border-2 rounded-full pointer-events-none z-[100] transition-transform duration-75 ${isPinching ? "bg-gold9 border-gold9 scale-75 shadow-[0_0_15px_rgba(255,215,0,0.8)]" : "border-gold9 shadow-[0_0_10px_rgba(255,215,0,0.3)]"}`}
           style={{
-            left: cursorPos.x,
-            top: cursorPos.y,
+            left: cursorPosRef.current.x,
+            top: cursorPosRef.current.y,
             transform: "translate(-50%, -50%)",
           }}
         >
@@ -1765,11 +1797,7 @@ function App() {
             V2.0.0
           </div>
           {/* FPS Counter */}
-          {isVideoOn && (
-            <div className="text-[10px] text-green-500 border border-green-900 px-1 rounded ml-2">
-              FPS: {fps}
-            </div>
-          )}
+          <FpsCounter fpsRef={fpsRef} />
           {/* Connected Printers Count */}
           {printerCount > 0 && (
             <div className="flex items-center gap-1.5 text-[10px] text-green-400 border border-green-500/30 bg-green-500/10 px-2 py-0.5 rounded ml-2">
@@ -1892,9 +1920,7 @@ function App() {
           <div className="relative z-20 w-full h-full">
             <DisplayArea
               socket={socket}
-              audioData={aiAudioData}
               isListening={isConnected && !isMuted}
-              intensity={audioAmp}
               timers={timers}
               currentProject={currentProject}
               facePosition={facePosition}
@@ -2055,9 +2081,7 @@ function App() {
         {/* Chat Module */}
         <ChatModule
           messages={messages}
-          inputValue={inputValue}
-          setInputValue={setInputValue}
-          handleSend={handleSend}
+          onSend={handleSend}
           isModularMode={isModularMode}
           activeDragElement={activeDragElement}
           position={elementPositions.chat}

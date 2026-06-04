@@ -62,8 +62,7 @@ const WorkspaceBoard = ({ socket, onClose }) => {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
-      className="fixed inset-0 z-[100] flex flex-col bg-black/90 backdrop-blur-xl text-gold9 font-mono overflow-hidden"
+      className="fixed inset-0 z-[100] flex flex-col bg-black/95 text-gold9 font-mono overflow-hidden"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gold9/20 bg-black/80" style={{ WebkitAppRegion: 'drag' }}>

@@ -304,4 +304,4 @@ const PrinterWindow = ({
     );
 };
 
-export default PrinterWindow;
+export default React.memo(PrinterWindow);

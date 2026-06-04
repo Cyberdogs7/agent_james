@@ -259,4 +259,4 @@ const FleetSettingsWindow = ({ socket, onClose }) => {
     );
 };
 
-export default FleetSettingsWindow;
+export default React.memo(FleetSettingsWindow);

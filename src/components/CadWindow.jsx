@@ -229,4 +229,4 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
     );
 };
 
-export default CadWindow;
+export default React.memo(CadWindow);

@@ -273,4 +273,4 @@ const SettingsWindow = ({
     );
 };
 
-export default SettingsWindow;
+export default React.memo(SettingsWindow);

@@ -3,9 +3,7 @@ import { Copy, Check } from 'lucide-react';
 
 const ChatModule = ({
     messages,
-    inputValue,
-    setInputValue,
-    handleSend,
+    onSend,
     isModularMode,
     activeDragElement,
     position,
@@ -15,6 +13,7 @@ const ChatModule = ({
 }) => {
     const messagesEndRef = useRef(null);
     const [copiedKey, setCopiedKey] = useState(null);
+    const [localInputValue, setLocalInputValue] = useState("");
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -77,9 +76,14 @@ const ChatModule = ({
             <div className="flex gap-2 relative z-10 absolute bottom-4 left-6 right-6">
                 <input
                     type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={handleSend}
+                    value={localInputValue}
+                    onChange={(e) => setLocalInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            onSend(localInputValue);
+                            setLocalInputValue("");
+                        }
+                    }}
                     placeholder="INITIALIZE COMMAND..."
                     className="flex-1 bg-black/80 border border-gold9/30 rounded-lg p-3 text-gold9 focus:outline-none focus:border-gold9 focus:ring-1 focus:ring-gold9/50 transition-all placeholder-gold9/50 "
                 />
@@ -89,4 +93,4 @@ const ChatModule = ({
     );
 };
 
-export default ChatModule;
+export default React.memo(ChatModule);

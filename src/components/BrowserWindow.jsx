@@ -81,4 +81,4 @@ const BrowserWindow = ({ imageSrc, logs, onClose, socket }) => {
     );
 };
 
-export default BrowserWindow;
+export default React.memo(BrowserWindow);

@@ -6,11 +6,51 @@ import AvatarCanvas from './AvatarCanvas';
 import SelectWindow from './SelectWindow';
 import { X } from 'lucide-react';
 
-const DisplayArea = ({ socket, isListening, audioData, intensity, timers, currentProject, facePosition }) => {
+const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition }) => {
   const [displayContent, setDisplayContent] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const timerRef = useRef(null);
+
+  const [aiAudioData, setAiAudioData] = useState(new Array(64).fill(0));
+  const audioHistoryRef = useRef([]);
+
+  useEffect(() => {
+        if (!socket) return;
+        const handleAudio = (rawData) => {
+            const history = audioHistoryRef.current;
+            history.push(rawData);
+            if (history.length > 5) {
+                history.shift();
+            }
+
+            if (history.length > 0) {
+                const smoothedData = new Array(rawData.length).fill(0);
+                for (let i = 0; i < rawData.length; i++) {
+                    let sum = 0;
+                    for (let j = 0; j < history.length; j++) {
+                        sum += history[j][i] || 0;
+                    }
+                    smoothedData[i] = sum / history.length;
+                }
+
+                const silenceThreshold = 5;
+                const isSilent = smoothedData.every(val => val < silenceThreshold);
+                if (isSilent) {
+                    setAiAudioData(new Array(rawData.length).fill(0));
+                } else {
+                    setAiAudioData(smoothedData);
+                }
+            } else {
+                setAiAudioData(rawData);
+            }
+        };
+
+        socket.on('audio_data', handleAudio);
+        return () => socket.off('audio_data', handleAudio);
+  }, [socket]);
+
+  const intensity = aiAudioData.length > 0 ? aiAudioData.reduce((a, b) => a + b, 0) / aiAudioData.length / 255 : 0;
 
   // Check for project-specific avatar
   useEffect(() => {
@@ -90,9 +130,9 @@ const DisplayArea = ({ socket, isListening, audioData, intensity, timers, curren
       }
       // Render Avatar if available
       if (avatarUrl) {
-          return <AvatarCanvas audioData={audioData} vrmUrl={avatarUrl} facePosition={facePosition} />;
+          return <AvatarCanvas audioData={aiAudioData} vrmUrl={avatarUrl} facePosition={facePosition} />;
       }
-      return <Visualizer isListening={isListening} audioData={audioData} intensity={intensity} />;
+      return <Visualizer isListening={isListening} audioData={aiAudioData} intensity={intensity} />;
     }
 
     switch (displayContent.content_type) {
@@ -107,7 +147,7 @@ const DisplayArea = ({ socket, isListening, audioData, intensity, timers, curren
         }
         return null;
       default:
-        return <Visualizer isListening={isListening} audioData={audioData} intensity={intensity} />;
+        return <Visualizer isListening={isListening} audioData={aiAudioData} intensity={intensity} />;
     }
   };
 

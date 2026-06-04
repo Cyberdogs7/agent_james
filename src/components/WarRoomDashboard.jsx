@@ -1512,4 +1512,4 @@ const BranchReviewView = ({ repo, branch, socket, onBack, onClose }) => {
     );
 };
 
-export default WarRoomDashboard;
+export default React.memo(WarRoomDashboard);
