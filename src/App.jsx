@@ -96,6 +96,7 @@ function App() {
   const [showMusicPlayer, setShowMusicPlayer] = useState(false);
   const [isWritingMode, setIsWritingMode] = useState(false);
   const [warRoomData, setWarRoomData] = useState(null);
+  const [inputValue, setInputValue] = useState("");
   const [suggestion, setSuggestion] = useState(null);
 
   // Printing workflow status (for top toolbar display)
