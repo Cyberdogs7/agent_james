@@ -49,7 +49,7 @@ class FileSystemAgent:
         final_path = self._resolve_path(path)
 
         try:
-            # Check existence (minimal block)
+            # Check existence (non-blocking)
             exists = await aiofiles.ospath.exists(final_path)
 
             if not exists:
