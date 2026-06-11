@@ -42,6 +42,8 @@ class AutomationEngine:
         self.NAG_COOLDOWN = 86400    # 24 hours
         self.CHECK_INTERVAL = 300    # 5 minutes
         self._last_merge_check = 0
+        self._last_ci_check = 0
+        self.last_ci_status = {}     # {repo_name_pr_num: status}
 
         # Gemini Client for Healing
         self.api_key = os.getenv("GEMINI_API_KEY")
@@ -90,6 +92,21 @@ class AutomationEngine:
                     self._last_merge_check = now
                 except Exception as e:
                     print(f"[AutomationEngine] Error checking merge candidates: {e}")
+                    traceback.print_exc()
+
+            # Check CI pipelines based on configured interval (default 5 mins)
+            try:
+                from backend.server import SETTINGS
+                ci_check_interval = SETTINGS.get("ci_check_interval", 300)
+            except Exception:
+                ci_check_interval = 300
+                
+            if now - self._last_ci_check > ci_check_interval:
+                try:
+                    await self._monitor_ci_pipelines()
+                    self._last_ci_check = now
+                except Exception as e:
+                    print(f"[AutomationEngine] Error checking CI pipelines: {e}")
                     traceback.print_exc()
 
             # Run every minute
@@ -421,6 +438,117 @@ class AutomationEngine:
 
             except Exception as e:
                 print(f"[AutomationEngine] Error checking merge candidates for {repo.get('name')}: {e}")
+
+    async def _monitor_ci_pipelines(self):
+        """
+        Polls CI/CD pipeline status for active repos that have 'monitor_ci_pipelines' set to true in fleet.json.
+        Notifies the user when a PR's CI pipeline finishes.
+        """
+        now = time.time()
+        token = self.project_manager.get_github_token()
+        if not token: return
+
+        client = GitHubClient(token)
+        fleet = self.project_manager.load_fleet()
+
+        for repo in fleet:
+            try:
+                # Check if this repo has CI monitoring enabled
+                if not repo.get('monitor_ci_pipelines', False):
+                    continue
+
+                owner = repo.get('owner')
+                name = repo.get('name')
+                if not owner or not name: continue
+
+                repo_name = f"{owner}/{name}"
+                try:
+                    from backend.server import fleet_manager
+                except ImportError:
+                    fleet_manager = None
+
+                is_active = False
+                if fleet_manager and repo_name in fleet_manager.repos:
+                    is_active = fleet_manager.repos[repo_name].get('is_active', False)
+                if not is_active: continue
+
+                prs = await client.list_pull_requests(owner, name)
+                if not prs: continue
+
+                for pr in prs:
+                    pr_url = pr.get('html_url')
+                    title = pr.get('title')
+                    number = pr.get('number')
+                    head_sha = pr.get('head', {}).get('sha')
+                    
+                    if not head_sha: continue
+
+                    # Generate a unique key for this PR's commit
+                    pr_key = f"{repo_name}_pr_{number}_{head_sha}"
+
+                    status = await client.get_commit_status(owner, name, head_sha)
+                    state = status.get('state', 'pending') # pending, success, failure, error
+                    
+                    is_pending = False
+                    is_success = False
+                    is_failure = False
+
+                    if state == 'failure' or state == 'error':
+                        is_failure = True
+                    else:
+                        # Check actions explicitly
+                        check_runs = await client.get_check_runs(owner, name, head_sha)
+                        if check_runs:
+                            runs = check_runs.get('check_runs', [])
+                            if not runs:
+                                if state == 'success':
+                                    is_success = True
+                                else:
+                                    is_pending = True
+                            else:
+                                any_pending = False
+                                any_failure = False
+                                for run in runs:
+                                    if run.get('status') != 'completed':
+                                        any_pending = True
+                                        break
+                                    if run.get('conclusion') in ['failure', 'timed_out', 'cancelled']:
+                                        any_failure = True
+                                        
+                                if any_pending:
+                                    is_pending = True
+                                elif any_failure:
+                                    is_failure = True
+                                else:
+                                    is_success = True
+                        else:
+                            if state == 'success':
+                                is_success = True
+                            elif state == 'pending':
+                                is_pending = True
+
+                    current_status = 'pending'
+                    if is_success: current_status = 'success'
+                    if is_failure: current_status = 'failure'
+
+                    last_status = self.last_ci_status.get(pr_key, 'unknown')
+                    
+                    # Store current status
+                    self.last_ci_status[pr_key] = current_status
+
+                    # Notify if it transitioned from pending/unknown to success/failure
+                    if last_status in ['pending', 'unknown'] and current_status in ['success', 'failure']:
+                        msg = f"CI/CD Pipeline for PR #{number} ('{title}') in {owner}/{name} completed with status: {current_status.upper()}."
+                        print(f"[AutomationEngine] CI NOTIFICATION: {msg}")
+                        
+                        if self.ada:
+                            await self.ada.handle_external_event({
+                                "type": "notification",
+                                "message": msg
+                            })
+
+            except Exception as e:
+                print(f"[AutomationEngine] Error checking CI pipelines for {repo.get('name')}: {e}")
 
     async def _monitor_stalled_items(self):
         """Checks for stalled Jules sessions and PRs and notifies (nags) the user."""
