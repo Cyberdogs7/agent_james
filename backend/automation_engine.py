@@ -676,12 +676,9 @@ class AutomationEngine:
             # Read script
             if not await aiofiles.ospath.exists(script_path):
                 return None
+
             async with aiofiles.open(script_path, 'r', encoding='utf-8') as f:
                 script_content = await f.read()
-
-            if script_content is None:
-                return None
-
 
             prompt = f"""
 You are an expert Python debugger.
