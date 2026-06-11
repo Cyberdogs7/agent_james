@@ -461,24 +461,12 @@ class MusicAgent:
                     )
                 last_emit_time = current_time
 
-            if len(small_chunk_buffer) < SMALL_CHUNK_SIZE:
-                # Read chunk directly from internal cache queue
-                data = internal_queue.get()
+            process_data, small_chunk_buffer, is_finished = self._get_next_chunk(
+                internal_queue, small_chunk_buffer, SMALL_CHUNK_SIZE
+            )
 
-                if not data:
-                    self.logger.info("Internal audio queue finished.")
-                    if internal_queue is self.internal_queue:
-                        self.is_playing = False
-                    break
-
-                small_chunk_buffer += data
-
-            if len(small_chunk_buffer) >= SMALL_CHUNK_SIZE:
-                process_data = small_chunk_buffer[:SMALL_CHUNK_SIZE]
-                small_chunk_buffer = small_chunk_buffer[SMALL_CHUNK_SIZE:]
-            else:
-                process_data = small_chunk_buffer
-                small_chunk_buffer = b""
+            if is_finished:
+                break
 
             # Push to ADA's queue if available
             if self._audio_queue:
@@ -507,6 +495,32 @@ class MusicAgent:
                     "status": "stopped",
                     "track": None
                 }), self.main_loop)
+
+    def _get_next_chunk(self, internal_queue, small_chunk_buffer, chunk_size):
+        """Extracts the next chunk of audio data from the internal queue and buffer."""
+        is_finished = False
+
+        if len(small_chunk_buffer) < chunk_size:
+            # Read chunk directly from internal cache queue
+            data = internal_queue.get()
+
+            if not data:
+                self.logger.info("Internal audio queue finished.")
+                if internal_queue is self.internal_queue:
+                    self.is_playing = False
+                is_finished = True
+                return b"", small_chunk_buffer, is_finished
+
+            small_chunk_buffer += data
+
+        if len(small_chunk_buffer) >= chunk_size:
+            process_data = small_chunk_buffer[:chunk_size]
+            small_chunk_buffer = small_chunk_buffer[chunk_size:]
+        else:
+            process_data = small_chunk_buffer
+            small_chunk_buffer = b""
+
+        return process_data, small_chunk_buffer, is_finished
 
     def _process_and_push_chunk(self, process_data):
         """Processes audio chunk for volume, visualization, and pushes to ADA queue."""
