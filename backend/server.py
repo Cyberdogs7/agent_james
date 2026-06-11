@@ -873,11 +873,15 @@ async def video_frame(sid, data):
         # But send_frame is async, so we create a task
         asyncio.create_task(audio_loop.send_frame(image_data))
 
-def _write_memory_file_sync(filename, messages):
+def _write_memory_file_sync(filename, memory_dir, messages):
+    # Ensure directory exists
+    memory_dir.mkdir(exist_ok=True)
     with open(filename, 'w', encoding='utf-8') as f:
+        # Actually format the strings to write to file
         for msg in messages:
             sender = msg.get('sender', 'Unknown')
             text = msg.get('text', '')
+            f.write(f"[{sender}] {text}\n")
 
 @sio.event
 async def save_memory(sid, data):
@@ -887,9 +891,7 @@ async def save_memory(sid, data):
             print("No messages to save.")
             return
 
-        # Ensure directory exists
         memory_dir = Path("long_term_memory")
-        memory_dir.mkdir(exist_ok=True)
 
         # Generate filename
         # Use provided filename if available, else timestamp
@@ -906,7 +908,7 @@ async def save_memory(sid, data):
             filename = memory_dir / f"memory_{timestamp}.txt"
 
         # Write to file using a thread to prevent blocking the event loop
-        await asyncio.to_thread(_write_memory_file_sync, filename, messages)
+        await asyncio.to_thread(_write_memory_file_sync, filename, memory_dir, messages)
         print(f"Conversation saved to {filename}")
         await sio.emit('status', {'msg': 'Memory Saved Successfully'})
 
