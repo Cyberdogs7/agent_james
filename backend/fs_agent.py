@@ -33,7 +33,6 @@ class FileSystemAgent:
         final_path = self._resolve_path(path)
 
         try:
-            # Ensure directory exists (can block slightly, but minimal impact compared to file I/O)
             dir_name = os.path.dirname(final_path)
             if dir_name:
                 await aiofiles.os.makedirs(dir_name, exist_ok=True)
@@ -49,10 +48,7 @@ class FileSystemAgent:
         final_path = self._resolve_path(path)
 
         try:
-            # Check existence (minimal block)
-            exists = await aiofiles.ospath.exists(final_path)
-
-            if not exists:
+            if not await aiofiles.ospath.exists(final_path):
                 return f"File '{final_path}' does not exist."
 
             async with aiofiles.open(final_path, 'r', encoding='utf-8') as f:
