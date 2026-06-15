@@ -1436,8 +1436,27 @@ browser_wait_tool = {
     }
 }
 
+forget_memory_tool = {
+    "name": "forget_memory",
+    "description": "Deletes specific keys from the user's implicit learning profile (user_profile.json). Use this when the user asks you to 'forget' a specific constraint or when they say 'try again' and ask you to clear old assumptions.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "keys": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "STRING"
+                },
+                "description": "A list of keys to delete from the profile."
+            }
+        },
+        "required": ["keys"]
+    }
+}
+
 all_tools_list = [
     update_user_preferences_tool,
+    forget_memory_tool,
     browser_navigate_tool,
     browser_execute_javascript_tool,
     browser_get_dom_tool,

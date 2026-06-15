@@ -228,6 +228,25 @@ class ProjectManager:
         except Exception as e:
             return False, f"Failed to update user profile: {e}"
 
+    def forget_memory(self, keys: list) -> tuple[bool, str]:
+        """Deletes specific keys from the user profile."""
+        profile = self.get_user_profile()
+        deleted = []
+        for k in keys:
+            if k in profile:
+                del profile[k]
+                deleted.append(k)
+        
+        if not deleted:
+            return True, "No matching keys found to delete."
+            
+        try:
+            with open(self.user_profile_file, "w", encoding="utf-8") as f:
+                json.dump(profile, f, indent=4)
+            return True, f"Successfully deleted keys: {', '.join(deleted)}"
+        except Exception as e:
+            return False, f"Failed to update user profile: {e}"
+
     def update_project_config(self, new_config: dict):
         """Updates and saves the config for the current project."""
         config_path = self.get_current_project_path() / "config.json"

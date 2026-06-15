@@ -844,6 +844,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
         self.tool_registry.register("update_user_preferences", self.update_user_preferences)
+        self.tool_registry.register("forget_memory", lambda keys: self.project_manager.forget_memory(keys)[1])
         self.tool_registry.register("schedule_routine", self.handle_schedule_routine)
         self.tool_registry.register("create_new_skill", self.handle_create_new_skill)
 
@@ -1760,6 +1761,9 @@ Important: After creating a new skill, you must inform the user that the session
         memory_prompt = """
 **Historical Context & Memory Recall:**
 If the user asks about past conversations, decisions, or if you feel you lack historical context to properly answer a question, you MUST use the `search_memory` tool to recall it.
+
+**Forgetting Memories & Implicit Profile:**
+If the user explicitly asks you to forget a specific memory, limitation, constraint, or asks you to "try again and ignore what you learned about X", you MUST use the `forget_memory` tool. The keys available to delete are listed below in your 'Known User Preferences and Constraints'. Find the matching key from that list and use the tool to delete it.
 """
         # MCP Integration Prompt
         mcp_prompt = """

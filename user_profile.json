@@ -53,11 +53,8 @@
     "desired_capability": "image generation",
     "image_generation_type": "normal image generations",
     "current_goal": "test image generation pipeline",
-    "specific_image_request": "M.A.V. inspired mech image",
-    "system_limitation": "image generation currently blocked due to missing FAL_KEY configuration",
     "image_generation_preference": "normal image generations",
     "tool_context": "higgsfield",
     "preferred_pipeline_context": "higgsfield",
-    "image_prompt": "M.A.V. inspired mech image",
-    "current_system_limitation": "missing configuration key (FAL_KEY) preventing image generation"
+    "image_prompt": "M.A.V. inspired mech image"
 }
