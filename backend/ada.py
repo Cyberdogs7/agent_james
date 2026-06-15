@@ -33,6 +33,7 @@ if sys.version_info < (3, 11, 0):
 
 from backend.tools import tools_list, trello_tools
 from backend.tool_registry import ToolRegistry
+from backend.mcp_client import MCPClientManager
 
 if pyaudio:
     FORMAT = pyaudio.paInt16
@@ -222,6 +223,7 @@ class AudioLoop:
         # Initialize Tool Registry
         self.tool_registry = ToolRegistry()
         self._register_tools()
+        self.mcp_manager = MCPClientManager(self.tool_registry, reconnect_callback=self.reconnect)
         self.web_agent = LocalWebAgent(self.browser_agent, self.tool_registry)
 
         # Sync Initial Project State
@@ -271,6 +273,11 @@ class AudioLoop:
 
     def stop(self):
         self.stop_event.set()
+        if hasattr(self, 'mcp_manager') and self.mcp_manager:
+            try:
+                asyncio.create_task(self.mcp_manager.stop())
+            except RuntimeError:
+                pass
         if self.music_agent:
             try:
                 # If we are in the main thread (shutdown), we shouldn't create a task in the main loop for a sub-loop
@@ -2663,6 +2670,10 @@ If the user asks about past conversations, decisions, or if you feel you lack hi
         self.giphy_agent.start_precaching_task()
         if self.music_agent:
             await self.music_agent.start()
+
+        # Start dynamic MCP connections
+        if hasattr(self, 'mcp_manager') and self.mcp_manager:
+            await self.mcp_manager.start()
 
         while not self.stop_event.is_set():
             if INCLUDE_RAW_LOGS:

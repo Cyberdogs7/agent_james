@@ -215,10 +215,10 @@ class TestAgentImports:
         print("CadAgent imported")
     
     def test_web_agent_import(self):
-        """Test WebAgent is imported."""
-        from ada import WebAgent
-        assert WebAgent is not None
-        print("WebAgent imported")
+        """Test LocalWebAgent is imported."""
+        from ada import LocalWebAgent
+        assert LocalWebAgent is not None
+        print("LocalWebAgent imported")
     
     def test_kasa_agent_import(self):
         """Test KasaAgent is imported."""
