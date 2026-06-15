@@ -255,62 +255,6 @@ apply_cuts_tool = {
     }
 }
 
-gen_art_tool = {
-    "name": "gen_art",
-    "description": "Art pipeline: style, curate, ornaments, vectorize. This tool returns an instruction prompt directing you to perform this task.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "args": {
-                "type": "STRING",
-                "description": "Optional arguments for the tool."
-            }
-        }
-    }
-}
-
-gen_art_directions_tool = {
-    "name": "gen_art_directions",
-    "description": "Generate diverse art directions for curation. This tool returns an instruction prompt directing you to perform this task.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "args": {
-                "type": "STRING",
-                "description": "Optional arguments for the tool."
-            }
-        }
-    }
-}
-
-gen_cover_composite_tool = {
-    "name": "gen_cover_composite",
-    "description": "Text overlay on cover art. This tool returns an instruction prompt directing you to perform this task.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "args": {
-                "type": "STRING",
-                "description": "Optional arguments for the tool."
-            }
-        }
-    }
-}
-
-gen_cover_print_tool = {
-    "name": "gen_cover_print",
-    "description": "Print-ready full-wrap cover (Lulu/KDP specs). This tool returns an instruction prompt directing you to perform this task.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "args": {
-                "type": "STRING",
-                "description": "Optional arguments for the tool."
-            }
-        }
-    }
-}
-
 gen_audiobook_script_tool = {
     "name": "gen_audiobook_script",
     "description": "Parse chapters into speaker-attributed scripts. This tool returns an instruction prompt directing you to perform this task.",
@@ -1569,10 +1513,6 @@ all_tools_list = [
     gen_brief_tool,
     gen_revision_tool,
     apply_cuts_tool,
-    gen_art_tool,
-    gen_art_directions_tool,
-    gen_cover_composite_tool,
-    gen_cover_print_tool,
     gen_audiobook_script_tool,
     gen_audiobook_tool,
     run_pipeline_tool,

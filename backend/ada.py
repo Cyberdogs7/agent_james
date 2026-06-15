@@ -822,10 +822,6 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("gen_brief", self.writing_agent.gen_brief)
         self.tool_registry.register("gen_revision", self.writing_agent.gen_revision)
         self.tool_registry.register("apply_cuts", self.writing_agent.apply_cuts)
-        self.tool_registry.register("gen_art", self.writing_agent.gen_art)
-        self.tool_registry.register("gen_art_directions", self.writing_agent.gen_art_directions)
-        self.tool_registry.register("gen_cover_composite", self.writing_agent.gen_cover_composite)
-        self.tool_registry.register("gen_cover_print", self.writing_agent.gen_cover_print)
         self.tool_registry.register("gen_audiobook_script", self.writing_agent.gen_audiobook_script)
         self.tool_registry.register("gen_audiobook", self.writing_agent.gen_audiobook)
         self.tool_registry.register("run_pipeline", self.writing_agent.run_pipeline)
@@ -1765,9 +1761,14 @@ Important: After creating a new skill, you must inform the user that the session
 **Historical Context & Memory Recall:**
 If the user asks about past conversations, decisions, or if you feel you lack historical context to properly answer a question, you MUST use the `search_memory` tool to recall it.
 """
+        # MCP Integration Prompt
+        mcp_prompt = """
+**Image and Video Generation:**
+When the user asks you to generate an image, art, or a video, you MUST use the dynamically provided `higgsfield` tools (e.g., `higgsfield_generate_image` or `higgsfield_generate_video`). DO NOT use the legacy `gen_art` tool unless explicitly instructed to run the autonovel art pipeline.
+"""
 
         # Combine prompts
-        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{skill_prompt}\n{memory_prompt}"
+        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{skill_prompt}\n{memory_prompt}\n{mcp_prompt}"
 
         # Inject User Profile
         user_profile = self.project_manager.get_user_profile()

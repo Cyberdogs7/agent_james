@@ -147,18 +147,6 @@ class WritingAgent:
     def apply_cuts(self, args=None):
         return self._run_script("apply_cuts.py", args)
 
-    def gen_art(self, args=None):
-        return self._run_script("gen_art.py", args)
-
-    def gen_art_directions(self, args=None):
-        return self._run_script("gen_art_directions.py", args)
-
-    def gen_cover_composite(self, args=None):
-        return self._run_script("gen_cover_composite.py", args)
-
-    def gen_cover_print(self, args=None):
-        return self._run_script("gen_cover_print.py", args)
-
     def gen_audiobook_script(self, args=None):
         return self._run_script("gen_audiobook_script.py", args)
 
