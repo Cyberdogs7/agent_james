@@ -3,6 +3,11 @@ import logging
 import webbrowser
 import re
 from websockets.exceptions import ConnectionClosedError
+
+# Custom exception to signal that authentication via browser is required
+class AuthRequiredError(Exception):
+    """Raised when the MCP server indicates authentication is needed (e.g., 401)."""
+    pass
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 
@@ -13,6 +18,8 @@ class MCPClientManager:
         self.tool_registry = tool_registry
         self.reconnect_callback = reconnect_callback
         self.sessions = {}
+        # Tracks whether we have already opened the auth browser for this session
+        self.auth_pending = False
         self.active_tasks = []
 
     async def start(self):
@@ -57,9 +64,29 @@ class MCPClientManager:
             while True:
                 try:
                     await self.connect_sse(name, url)
+                except asyncio.CancelledError:
+                    break
                 except (ConnectionClosedError, asyncio.TimeoutError, Exception) as e:
-                    if isinstance(e, asyncio.CancelledError):
-                        break
+                    # If the server responded with a 401 or we explicitly raised AuthRequiredError,
+                    # pause the retry loop until the user completes the login flow.
+                    if isinstance(e, AuthRequiredError) or ('401' in str(e)):
+                        if not self.auth_pending:
+                            self.auth_pending = True
+                            # Prompt the user to complete authentication in the opened browser.
+                            loop = asyncio.get_event_loop()
+                            await loop.run_in_executor(
+                                None,
+                                lambda: input("\n[AUTH] Please complete the Higgsfield login in your browser, then press Enter to continue...\n")
+                            )
+                            self.auth_pending = False
+                            # Reset backoff after successful login
+                            backoff = 1
+                        else:
+                            # Already waiting for user – just wait a bit before retry
+                            await asyncio.sleep(backoff)
+                        # Continue to next retry iteration
+                        continue
+                    
                     logger.warning(f"Connection to '{name}' failed: {e}. Retrying in {backoff}s...")
                     await asyncio.sleep(backoff)
                     backoff = min(backoff * 2, 60)
@@ -110,7 +137,8 @@ class MCPClientManager:
                                     login_url = login_url_match.group(0)
                                     print(f"\n[MCP AUTH] Connection requires authentication. Opening browser to:\n{login_url}\n", flush=True)
                                     webbrowser.open(login_url)
-                                    return f"Authentication required. I have opened the login page in your browser. Please log in to your Higgsfield account and try the request again."
+                                    # Signal to outer loop that auth is required
+                                    raise AuthRequiredError("Authentication required – browser opened.")
                                 raise err
                         return handler
 
