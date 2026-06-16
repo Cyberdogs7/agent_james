@@ -1225,25 +1225,27 @@ async def print_stl(sid, data):
         # Resolve STL path before slicing so we can preview it
         resolved_stl = audio_loop.printer_agent._resolve_file_path(stl_path, current_project_path)
         
-        if resolved_stl and os.path.exists(resolved_stl):
-            # Open the STL in the CAD module for preview
+        # Offload file existence check and base64 encoding to a thread
+        def _read_and_encode_stl(filepath):
+            import os
+            import base64
+            if os.path.exists(filepath):
+                with open(filepath, 'rb') as f:
+                    stl_data = f.read()
+                return base64.b64encode(stl_data).decode('utf-8')
+            return None
+
+        if resolved_stl:
             try:
-                import base64
-
-                def _read_and_encode_stl(filepath):
-                    with open(filepath, 'rb') as f:
-                        data = f.read()
-                    return base64.b64encode(data).decode('utf-8')
-
                 stl_b64 = await asyncio.to_thread(_read_and_encode_stl, resolved_stl)
-                stl_filename = os.path.basename(resolved_stl)
-                
-                print(f"[SERVER] Opening STL in CAD module: {stl_filename}")
-                await sio.emit('cad_data', {
-                    'format': 'stl',
-                    'data': stl_b64,
-                    'filename': stl_filename
-                })
+                if stl_b64:
+                    stl_filename = os.path.basename(resolved_stl)
+                    print(f"[SERVER] Opening STL in CAD module: {stl_filename}")
+                    await sio.emit('cad_data', {
+                        'format': 'stl',
+                        'data': stl_b64,
+                        'filename': stl_filename
+                    })
             except Exception as e:
                 print(f"[SERVER] Warning: Could not preview STL: {e}")
         
@@ -1390,22 +1392,22 @@ async def get_api_keys(sid):
 async def update_api_keys(sid, data):
     print(f"Updating API keys...")
     env_path = os.path.join(project_root, ".env")
-    def _sync_update_api_keys():
+
+    def _sync_update_api_keys_io():
         # Ensure .env exists
         if not os.path.exists(env_path):
             with open(env_path, 'w') as f:
                 f.write("")
-
 
         for key, val in data.items():
             if val is not None:
                 dotenv.set_key(env_path, key, str(val))
                 os.environ[key] = str(val)
 
-
         return dotenv.dotenv_values(env_path)
 
-    keys = await asyncio.to_thread(_sync_update_api_keys)
+    # Offload the blocking file operations and dotenv parsing to a background thread
+    keys = await asyncio.to_thread(_sync_update_api_keys_io)
     await sio.emit('api_keys', keys)
     await sio.emit('status', {'msg': 'API Keys saved successfully'})
 
