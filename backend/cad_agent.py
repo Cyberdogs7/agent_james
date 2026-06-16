@@ -266,14 +266,15 @@ Original request: {original_prompt}
                 
                 self._log(f"[CadAgent DEBUG] [OK] Script executed successfully.")
                 
-                def _read_and_encode_stl():
-                    if os.path.exists(output_stl):
-                        with open(output_stl, "rb") as f:
-                            stl_data = f.read()
-                        return base64.b64encode(stl_data).decode('utf-8')
+                async def _read_and_encode_stl():
+                    if await aiofiles.ospath.exists(output_stl):
+                        async with aiofiles.open(output_stl, "rb") as f:
+                            stl_data = await f.read()
+                        return await asyncio.to_thread(base64.b64encode, stl_data)
                     return None
 
-                b64_stl = await asyncio.to_thread(_read_and_encode_stl)
+                b64_stl_bytes = await _read_and_encode_stl()
+                b64_stl = b64_stl_bytes.decode('utf-8') if b64_stl_bytes else None
 
                 if b64_stl is not None:
                     self._log(f"[CadAgent DEBUG] [file] '{output_stl}' found.")
