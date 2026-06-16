@@ -2,6 +2,7 @@ import asyncio
 import logging
 import webbrowser
 import re
+from websockets.exceptions import ConnectionClosedError
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 
@@ -51,90 +52,83 @@ class MCPClientManager:
             if not url:
                 logger.error(f"No URL specified for SSE server {name}")
                 return
-            await self.connect_sse(name, url)
+            
+            backoff = 1
+            while True:
+                try:
+                    await self.connect_sse(name, url)
+                except (ConnectionClosedError, asyncio.TimeoutError, Exception) as e:
+                    if isinstance(e, asyncio.CancelledError):
+                        break
+                    logger.warning(f"Connection to '{name}' failed: {e}. Retrying in {backoff}s...")
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 60)
         else:
             logger.warning(f"Unsupported transport type {transport_type} for {name}")
 
     async def connect_sse(self, name, url):
         """Establishes an SSE connection, retrieves tools, and maps them to the registry."""
         print(f"[MCP] Connecting to SSE server '{name}' at {url}...", flush=True)
-        try:
-            async with sse_client(url) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    self.sessions[name] = session
-                    print(f"[MCP] Initialized session with '{name}'.", flush=True)
+        async with sse_client(url) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                self.sessions[name] = session
+                print(f"[MCP] Initialized session with '{name}'.", flush=True)
+                
+                # Fetch tools from the server
+                tools = await session.list_tools()
+                print(f"[MCP] Discovered {len(tools.tools)} tools from '{name}'.", flush=True)
+                
+                has_new_tool = False
+                for tool in tools.tools:
+                    # Normalize tool names to fit Gemini's requirements
+                    tool_name = f"{name}_{tool.name.replace('-', '_').replace(':', '_')}"
+                    gemini_schema = self.convert_to_gemini_schema(tool_name, tool)
                     
-                    # Fetch tools from the server
-                    tools = await session.list_tools()
-                    print(f"[MCP] Discovered {len(tools.tools)} tools from '{name}'.", flush=True)
-                    
-                    has_new_tool = False
-                    for tool in tools.tools:
-                        # Normalize tool names to fit Gemini's requirements
-                        tool_name = f"{name}_{tool.name.replace('-', '_').replace(':', '_')}"
-                        gemini_schema = self.convert_to_gemini_schema(tool_name, tool)
-                        
-                        # Closure to bind tool execution parameters
-                        async def make_handler(t_name, orig_name, sess):
-                            async def handler(**kwargs):
-                                print(f"[MCP] Calling tool '{orig_name}' on '{name}' with args: {kwargs}", flush=True)
-                                try:
-                                    res = await sess.call_tool(orig_name, arguments=kwargs)
-                                    text_content = []
-                                    for content in res.content:
-                                        if hasattr(content, "text"):
-                                            text_content.append(content.text)
-                                        elif isinstance(content, dict) and "text" in content:
-                                            text_content.append(content["text"])
-                                    return "\n".join(text_content) if text_content else str(res)
-                                except Exception as err:
-                                    err_str = str(err)
-                                    # Match OAuth login links in error messages (like those from hosted Higgsfield SSE)
-                                    login_url_match = re.search(
-                                        r'(https?://[^\s]+(?:login|oauth|authorize|authenticate)[^\s]*)', 
-                                        err_str, 
-                                        re.IGNORECASE
-                                    )
-                                    if login_url_match:
-                                        login_url = login_url_match.group(0)
-                                        print(f"\n[MCP AUTH] Connection requires authentication. Opening browser to:\n{login_url}\n", flush=True)
-                                        webbrowser.open(login_url)
-                                        return f"Authentication required. I have opened the login page in your browser. Please log in to your Higgsfield account and try the request again."
-                                    raise err
-                            return handler
+                    # Closure to bind tool execution parameters
+                    async def make_handler(t_name, orig_name, sess):
+                        async def handler(**kwargs):
+                            print(f"[MCP] Calling tool '{orig_name}' on '{name}' with args: {kwargs}", flush=True)
+                            try:
+                                res = await sess.call_tool(orig_name, arguments=kwargs)
+                                text_content = []
+                                for content in res.content:
+                                    if hasattr(content, "text"):
+                                        text_content.append(content.text)
+                                    elif isinstance(content, dict) and "text" in content:
+                                        text_content.append(content["text"])
+                                return "\n".join(text_content) if text_content else str(res)
+                            except Exception as err:
+                                err_str = str(err)
+                                # Match OAuth login links in error messages (like those from hosted Higgsfield SSE)
+                                login_url_match = re.search(
+                                    r'(https?://[^\s]+(?:login|oauth|authorize|authenticate)[^\s]*)', 
+                                    err_str, 
+                                    re.IGNORECASE
+                                )
+                                if login_url_match:
+                                    login_url = login_url_match.group(0)
+                                    print(f"\n[MCP AUTH] Connection requires authentication. Opening browser to:\n{login_url}\n", flush=True)
+                                    webbrowser.open(login_url)
+                                    return f"Authentication required. I have opened the login page in your browser. Please log in to your Higgsfield account and try the request again."
+                                raise err
+                        return handler
 
-                        handler_fn = await make_handler(tool_name, tool.name, session)
-                        self.tool_registry.register(tool_name, handler_fn)
-                        
-                        # Add to dynamic declarations so it gets registered in Gemini's LiveConnectConfig
-                        self.tool_registry._dynamic_declarations.append(gemini_schema)
-                        has_new_tool = True
-                        print(f"[MCP] Registered tool '{tool_name}'", flush=True)
-                        
-                    if has_new_tool and self.reconnect_callback:
-                        print(f"[MCP] New tools registered. Reconnecting voice session to sync...", flush=True)
-                        self.reconnect_callback()
-                        
-                    # Keep the session running
-                    while True:
-                        await asyncio.sleep(3600)
-        except asyncio.CancelledError:
-            print(f"[MCP] Session for '{name}' cancelled.", flush=True)
-        except Exception as e:
-            err_str = str(e)
-            login_url_match = re.search(
-                r'(https?://[^\s]+(?:login|oauth|authorize|authenticate)[^\s]*)', 
-                err_str, 
-                re.IGNORECASE
-            )
-            if login_url_match:
-                login_url = login_url_match.group(0)
-                print(f"\n[MCP AUTH] Server requires authentication. Opening browser to:\n{login_url}\n", flush=True)
-                webbrowser.open(login_url)
-            else:
-                logger.exception(f"Error in SSE session '{name}'")
-                print(f"[MCP ERR] Connection to '{name}' failed: {e}", flush=True)
+                    handler_fn = await make_handler(tool_name, tool.name, session)
+                    self.tool_registry.register(tool_name, handler_fn)
+                    
+                    # Add to dynamic declarations so it gets registered in Gemini's LiveConnectConfig
+                    self.tool_registry._dynamic_declarations.append(gemini_schema)
+                    has_new_tool = True
+                    print(f"[MCP] Registered tool '{tool_name}'", flush=True)
+                    
+                if has_new_tool and self.reconnect_callback:
+                    print(f"[MCP] New tools registered. Reconnecting voice session to sync...", flush=True)
+                    self.reconnect_callback()
+                    
+                # Keep the session running
+                while True:
+                    await asyncio.sleep(3600)
 
     def convert_to_gemini_schema(self, name, tool):
         """Converts inputSchema into GenAI JSON schema structure."""
