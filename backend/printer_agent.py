@@ -818,12 +818,15 @@ class PrinterAgent:
         
         try:
             async def file_sender():
-                async with aiofiles.open(gcode_path, 'rb') as f:
+                f = await asyncio.to_thread(open, gcode_path, 'rb')
+                try:
                     while True:
-                        chunk = await f.read(1024 * 1024)
+                        chunk = await asyncio.to_thread(f.read, 1024 * 1024)
                         if not chunk:
                             break
                         yield chunk
+                finally:
+                    await asyncio.to_thread(f.close)
 
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
@@ -851,12 +854,15 @@ class PrinterAgent:
         
         try:
             async def file_sender():
-                async with aiofiles.open(gcode_path, 'rb') as f:
+                f = await asyncio.to_thread(open, gcode_path, 'rb')
+                try:
                     while True:
-                        chunk = await f.read(1024 * 1024)
+                        chunk = await asyncio.to_thread(f.read, 1024 * 1024)
                         if not chunk:
                             break
                         yield chunk
+                finally:
+                    await asyncio.to_thread(f.close)
 
             async with aiohttp.ClientSession() as session:
                 data = aiohttp.FormData()
