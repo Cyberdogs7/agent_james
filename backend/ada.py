@@ -83,6 +83,7 @@ from backend.ollama_agent import OllamaAgent
 from backend.openai_agent import LMStudioAgent, OpenRouterAgent
 from backend.fs_agent import FileSystemAgent
 from backend.git_agent import GitAgent
+from backend.github_agent import GitHubAgent
 try:
     from backend.task_manager import TaskManager
     from backend.message_deduplicator import MessageDeduplicator
@@ -203,6 +204,7 @@ class AudioLoop:
         self.openrouter_agent = OpenRouterAgent()
         self.fs_agent = FileSystemAgent(self.project_manager)
         self.git_agent = GitAgent(self.project_manager)
+        self.github_agent = GitHubAgent(self.project_manager)
         self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
 
         self.sct = None
@@ -876,6 +878,24 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("git_fleet_status", self.git_agent.fleet_status)
         self.tool_registry.register("sync_git_repos", self.git_agent.sync_fleet)
         self.tool_registry.register("merge_pull_request", self.git_agent.merge_pull_request)
+
+        # GitHub Agent Tools
+        self.tool_registry.register("github_get_repo_details", self.github_agent.get_repo_details)
+        self.tool_registry.register("github_list_branches", self.github_agent.list_branches)
+        self.tool_registry.register("github_compare_commits", self.github_agent.compare_commits)
+        self.tool_registry.register("github_merge_branch", self.github_agent.merge_branch)
+        self.tool_registry.register("github_get_commit", self.github_agent.get_commit)
+        self.tool_registry.register("github_delete_branch", self.github_agent.delete_branch)
+        self.tool_registry.register("github_list_pull_requests", self.github_agent.list_pull_requests)
+        self.tool_registry.register("github_get_pull_request", self.github_agent.get_pull_request)
+        self.tool_registry.register("github_create_pull_request", self.github_agent.create_pull_request)
+        self.tool_registry.register("github_merge_pull_request", self.github_agent.merge_pull_request)
+        self.tool_registry.register("github_get_check_runs", self.github_agent.get_check_runs)
+        self.tool_registry.register("github_get_commit_status", self.github_agent.get_commit_status)
+        self.tool_registry.register("github_list_issues", self.github_agent.list_issues)
+        self.tool_registry.register("github_get_issue", self.github_agent.get_issue)
+        self.tool_registry.register("github_create_issue", self.github_agent.create_issue)
+        self.tool_registry.register("github_create_issue_comment", self.github_agent.create_issue_comment)
 
         # Music Agent Tools
         self.tool_registry.register("play_music", self.music_agent.play)

@@ -397,6 +397,229 @@ merge_pull_request_tool = {
     }
 }
 
+github_get_repo_details_tool = {
+    "name": "github_get_repo_details",
+    "description": "Gets details of a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner/organization of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."}
+        },
+        "required": ["owner", "repo"]
+    }
+}
+
+github_list_branches_tool = {
+    "name": "github_list_branches",
+    "description": "Lists all branches in a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."}
+        },
+        "required": ["owner", "repo"]
+    }
+}
+
+github_compare_commits_tool = {
+    "name": "github_compare_commits",
+    "description": "Compares two commits/branches in a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "base": {"type": "STRING", "description": "The base branch/commit to compare from."},
+            "head": {"type": "STRING", "description": "The head branch/commit to compare to."}
+        },
+        "required": ["owner", "repo", "base", "head"]
+    }
+}
+
+github_get_commit_tool = {
+    "name": "github_get_commit",
+    "description": "Gets details of a specific commit on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "sha": {"type": "STRING", "description": "The SHA of the commit."}
+        },
+        "required": ["owner", "repo", "sha"]
+    }
+}
+
+github_delete_branch_tool = {
+    "name": "github_delete_branch",
+    "description": "Deletes a branch on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "branch_name": {"type": "STRING", "description": "The name of the branch to delete."}
+        },
+        "required": ["owner", "repo", "branch_name"]
+    }
+}
+
+github_list_pull_requests_tool = {
+    "name": "github_list_pull_requests",
+    "description": "Lists pull requests on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "state": {"type": "STRING", "description": "Optional PR state: 'open', 'closed', or 'all'. Defaults to 'open'."}
+        },
+        "required": ["owner", "repo"]
+    }
+}
+
+github_get_pull_request_tool = {
+    "name": "github_get_pull_request",
+    "description": "Gets details of a specific Pull Request on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "pull_number": {"type": "INTEGER", "description": "The PR number."}
+        },
+        "required": ["owner", "repo", "pull_number"]
+    }
+}
+
+github_create_pull_request_tool = {
+    "name": "github_create_pull_request",
+    "description": "Creates a Pull Request on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "title": {"type": "STRING", "description": "The title of the PR."},
+            "head": {"type": "STRING", "description": "The branch where changes are implemented."},
+            "base": {"type": "STRING", "description": "The branch into which changes should be merged (e.g. 'main')."},
+            "body": {"type": "STRING", "description": "Optional body/description of the PR."},
+            "draft": {"type": "BOOLEAN", "description": "Optional flag indicating whether this is a draft PR."}
+        },
+        "required": ["owner", "repo", "title", "head", "base"]
+    }
+}
+
+github_merge_pull_request_tool = {
+    "name": "github_merge_pull_request",
+    "description": "Merges a specific Pull Request on a GitHub repository (alias of merge_pull_request).",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "pull_number": {"type": "INTEGER", "description": "The number of the Pull Request to merge."},
+            "merge_method": {"type": "STRING", "description": "Optional merge method: 'merge', 'squash', or 'rebase'. Defaults to 'merge'."}
+        },
+        "required": ["owner", "repo", "pull_number"]
+    }
+}
+
+github_get_check_runs_tool = {
+    "name": "github_get_check_runs",
+    "description": "Gets status of check runs for a commit/ref on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "ref": {"type": "STRING", "description": "Commit SHA, branch name, or tag."}
+        },
+        "required": ["owner", "repo", "ref"]
+    }
+}
+
+github_get_commit_status_tool = {
+    "name": "github_get_commit_status",
+    "description": "Gets the combined status for a specific commit/ref on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "ref": {"type": "STRING", "description": "Commit SHA, branch name, or tag."}
+        },
+        "required": ["owner", "repo", "ref"]
+    }
+}
+
+github_list_issues_tool = {
+    "name": "github_list_issues",
+    "description": "Lists issues (and PRs) on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "state": {"type": "STRING", "description": "Optional issue state: 'open', 'closed', or 'all'. Defaults to 'open'."},
+            "assignee": {"type": "STRING", "description": "Optional assignee filter. 'none' for unassigned, '*' for any assignee, or a user login."},
+            "creator": {"type": "STRING", "description": "Optional creator username filter."},
+            "mentioned": {"type": "STRING", "description": "Optional mentioned username filter."},
+            "labels": {"type": "STRING", "description": "Optional comma-separated list of labels."}
+        },
+        "required": ["owner", "repo"]
+    }
+}
+
+github_get_issue_tool = {
+    "name": "github_get_issue",
+    "description": "Gets details of a specific issue on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "issue_number": {"type": "INTEGER", "description": "The issue number."}
+        },
+        "required": ["owner", "repo", "issue_number"]
+    }
+}
+
+github_create_issue_tool = {
+    "name": "github_create_issue",
+    "description": "Creates an issue on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "title": {"type": "STRING", "description": "The title of the issue."},
+            "body": {"type": "STRING", "description": "Optional body/description of the issue."},
+            "assignees": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Optional list of usernames to assign."},
+            "labels": {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Optional list of label names to associate."}
+        },
+        "required": ["owner", "repo", "title"]
+    }
+}
+
+github_create_issue_comment_tool = {
+    "name": "github_create_issue_comment",
+    "description": "Posts a comment on an issue or Pull Request on a GitHub repository.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "owner": {"type": "STRING", "description": "The owner of the repository."},
+            "repo": {"type": "STRING", "description": "The name of the repository."},
+            "issue_number": {"type": "INTEGER", "description": "The issue/PR number."},
+            "body": {"type": "STRING", "description": "The comment text body."}
+        },
+        "required": ["owner", "repo", "issue_number", "body"]
+    }
+}
+
+
 list_projects_tool = {
     "name": "list_projects",
     "description": "Lists all available projects.",
@@ -1514,6 +1737,21 @@ all_tools_list = [
     apply_task_fix_tool,
     dismiss_jules_session_tool,
     merge_pull_request_tool,
+    github_get_repo_details_tool,
+    github_list_branches_tool,
+    github_compare_commits_tool,
+    github_get_commit_tool,
+    github_delete_branch_tool,
+    github_list_pull_requests_tool,
+    github_get_pull_request_tool,
+    github_create_pull_request_tool,
+    github_merge_pull_request_tool,
+    github_get_check_runs_tool,
+    github_get_commit_status_tool,
+    github_list_issues_tool,
+    github_get_issue_tool,
+    github_create_issue_tool,
+    github_create_issue_comment_tool,
     commit_novel_changes_tool,
     seed_tool,
     gen_world_tool,

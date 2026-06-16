@@ -89,3 +89,47 @@ class GitHubClient:
     async def get_commit_status(self, owner, repo, ref):
         # Returns the combined status for a specific ref
         return await self._request("GET", f"/repos/{owner}/{repo}/commits/{ref}/status")
+
+    async def create_pull_request(self, owner, repo, title, head, base, body=None, draft=False):
+        data = {
+            "title": title,
+            "head": head,
+            "base": base,
+            "draft": draft
+        }
+        if body is not None:
+            data["body"] = body
+        return await self._request("POST", f"/repos/{owner}/{repo}/pulls", json=data)
+
+    async def list_issues(self, owner, repo, state="open", assignee=None, creator=None, mentioned=None, labels=None):
+        params = {"state": state}
+        if assignee:
+            params["assignee"] = assignee
+        if creator:
+            params["creator"] = creator
+        if mentioned:
+            params["mentioned"] = mentioned
+        if labels:
+            if isinstance(labels, list):
+                params["labels"] = ",".join(labels)
+            else:
+                params["labels"] = labels
+        return await self._request("GET", f"/repos/{owner}/{repo}/issues", params=params)
+
+    async def get_issue(self, owner, repo, issue_number):
+        return await self._request("GET", f"/repos/{owner}/{repo}/issues/{issue_number}")
+
+    async def create_issue(self, owner, repo, title, body=None, assignees=None, labels=None):
+        data = {"title": title}
+        if body is not None:
+            data["body"] = body
+        if assignees is not None:
+            data["assignees"] = assignees
+        if labels is not None:
+            data["labels"] = labels
+        return await self._request("POST", f"/repos/{owner}/{repo}/issues", json=data)
+
+    async def create_issue_comment(self, owner, repo, issue_number, body):
+        data = {"body": body}
+        return await self._request("POST", f"/repos/{owner}/{repo}/issues/{issue_number}/comments", json=data)
+

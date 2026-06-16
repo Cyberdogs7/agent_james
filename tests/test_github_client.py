@@ -234,3 +234,72 @@ async def test_merge_pull_request_exception(github_client):
 
         result = await github_client.merge_pull_request("owner", "repo", 1)
         assert result == {"message": "Generic error"}
+
+@pytest.mark.asyncio
+async def test_create_pull_request(github_client):
+    with patch.object(github_client, "_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"number": 1, "title": "New PR"}
+        result = await github_client.create_pull_request(
+            "owner", "repo", "New PR", "dev", "main", body="PR Description", draft=True
+        )
+        assert result == {"number": 1, "title": "New PR"}
+        mock_request.assert_called_once_with(
+            "POST",
+            "/repos/owner/repo/pulls",
+            json={"title": "New PR", "head": "dev", "base": "main", "draft": True, "body": "PR Description"}
+        )
+
+@pytest.mark.asyncio
+async def test_list_issues(github_client):
+    with patch.object(github_client, "_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = [{"number": 1, "title": "Issue 1"}]
+        result = await github_client.list_issues(
+            "owner", "repo", state="closed", assignee="user1", creator="user2", mentioned="user3", labels=["bug", "ui"]
+        )
+        assert result == [{"number": 1, "title": "Issue 1"}]
+        mock_request.assert_called_once_with(
+            "GET",
+            "/repos/owner/repo/issues",
+            params={
+                "state": "closed",
+                "assignee": "user1",
+                "creator": "user2",
+                "mentioned": "user3",
+                "labels": "bug,ui"
+            }
+        )
+
+@pytest.mark.asyncio
+async def test_get_issue(github_client):
+    with patch.object(github_client, "_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"number": 1, "title": "Issue 1"}
+        result = await github_client.get_issue("owner", "repo", 1)
+        assert result == {"number": 1, "title": "Issue 1"}
+        mock_request.assert_called_once_with("GET", "/repos/owner/repo/issues/1")
+
+@pytest.mark.asyncio
+async def test_create_issue(github_client):
+    with patch.object(github_client, "_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"number": 1, "title": "New Issue"}
+        result = await github_client.create_issue(
+            "owner", "repo", "New Issue", body="Description", assignees=["user1"], labels=["bug"]
+        )
+        assert result == {"number": 1, "title": "New Issue"}
+        mock_request.assert_called_once_with(
+            "POST",
+            "/repos/owner/repo/issues",
+            json={"title": "New Issue", "body": "Description", "assignees": ["user1"], "labels": ["bug"]}
+        )
+
+@pytest.mark.asyncio
+async def test_create_issue_comment(github_client):
+    with patch.object(github_client, "_request", new_callable=AsyncMock) as mock_request:
+        mock_request.return_value = {"id": 123, "body": "Comment body"}
+        result = await github_client.create_issue_comment("owner", "repo", 1, "Comment body")
+        assert result == {"id": 123, "body": "Comment body"}
+        mock_request.assert_called_once_with(
+            "POST",
+            "/repos/owner/repo/issues/1/comments",
+            json={"body": "Comment body"}
+        )
+
