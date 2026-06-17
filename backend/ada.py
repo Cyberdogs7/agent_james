@@ -1782,8 +1782,15 @@ If the user explicitly asks you to forget a specific memory, limitation, constra
 """
         # MCP Integration Prompt
         mcp_prompt = """
-**Image and Video Generation:**
-When the user asks you to generate an image, art, or a video, you MUST use the dynamically provided `higgsfield` tools (e.g., `higgsfield_generate_image` or `higgsfield_generate_video`). DO NOT use the legacy `gen_art` tool unless explicitly instructed to run the autonovel art pipeline.
+**Image and Video Generation (Higgsfield):**
+When the user asks you to generate an image, art, or a video, use the `higgsfield_generate_image` or `higgsfield_generate_video` tools. These are always available via the local Higgsfield CLI even when the MCP server is offline.
+
+Key model recommendations:
+- **Images**: `nano_banana_2` (Nano Banana Pro, default), `flux_2` (FLUX.2), `gpt_image_2`, `seedream_v4_5`, `cinematic_studio_image`, `recraft_v4_1`
+- **Videos**: `kling3_0` (Kling v3.0, default), `veo3_1` (Google Veo 3.1), `seedance_2_0`, `wan2_7`, `cinematic_studio_video_3_5`
+- **3D**: `sam_3_3d`, `image_to_3d`
+
+Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1`; for videos default is `16:9` with `duration=5`. DO NOT use the legacy `gen_art` tool unless explicitly instructed to run the autonovel art pipeline.
 """
 
         # Combine prompts
