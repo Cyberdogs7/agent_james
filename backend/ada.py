@@ -63,7 +63,7 @@ if pyaudio:
 else:
     pya = None
 
-from backend.cad_agent import CadAgent
+# from backend.cad_agent import CadAgent  # Disabled in favor of Higgsfield tools
 from backend.local_web_agent import LocalWebAgent
 from backend.browser_agent import ProgrammaticBrowserAgent
 from backend.kasa_agent import KasaAgent
@@ -144,15 +144,8 @@ class AudioLoop:
         self.session = None
         
         # Create CadAgent with thought callback
-        def handle_cad_thought(thought_text):
-            if self.on_cad_thought:
-                self.on_cad_thought(thought_text)
-        
-        def handle_cad_status(status_info):
-            if self.on_cad_status:
-                self.on_cad_status(status_info)
-        
-        self.cad_agent = CadAgent(on_thought=handle_cad_thought, on_status=handle_cad_status)
+        # CAD agent disabled. No callbacks needed.
+        self.cad_agent = None
         self.browser_agent = ProgrammaticBrowserAgent()
         self.kasa_agent = kasa_agent if kasa_agent else KasaAgent()
         self.kasa_agent.set_on_update(self.on_device_update)
@@ -743,7 +736,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             self.tool_registry.register(tool_name, getattr(self.trello_agent, method_name))
 
         # Explicit Registrations
-        self.tool_registry.register("generate_cad", self.handle_cad_request)
+        # self.tool_registry.register("generate_cad", self.handle_cad_request)  # Disabled
         self.tool_registry.register("run_web_agent", self.handle_web_agent_request)
         self.tool_registry.register("stop_web_agent", self.handle_stop_web_agent_request)
         self.tool_registry.register("browser_navigate", self.browser_agent.browser_navigate)
@@ -772,7 +765,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("discover_printers", self.printer_agent.get_formatted_discovery)
         self.tool_registry.register("print_stl", self.printer_agent.print_stl)
         self.tool_registry.register("get_print_status", self.printer_agent.get_formatted_status)
-        self.tool_registry.register("iterate_cad", self.handle_iterate_cad)
+        # self.tool_registry.register("iterate_cad", self.handle_iterate_cad)  # Disabled
         self.tool_registry.register("set_timer", self.timer_agent.set_timer)
         self.tool_registry.register("set_reminder", self.timer_agent.set_reminder)
         self.tool_registry.register("list_timers", self.timer_agent.list_timers)
@@ -904,10 +897,10 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
     async def handle_cad_request(self, prompt):
+        # CAD functionality is disabled. Inform the user.
         if INCLUDE_RAW_LOGS:
-             print(f"[ADA DEBUG] [TOOL] Tool Call Detected: 'generate_cad', prompt='{prompt}'")
-        asyncio.create_task(self._run_cad_generation_task(prompt))
-        return "CAD Generation started."
+            print(f"[ADA DEBUG] [TOOL] CAD request received but disabled: '{prompt}'")
+        return "CAD generation is currently disabled."
 
     async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
@@ -1022,7 +1015,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
 
         # Call CadAgent to iterate on the design
-        cad_data = await self.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
+        # CAD disabled; skip iteration
+        cad_data = None
 
         if cad_data:
             if INCLUDE_RAW_LOGS:
@@ -1076,7 +1070,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
         
         # Call the secondary agent with project path
-        cad_data = await self.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
+        # CAD disabled; skip generation
+        cad_data = None
         
         if cad_data:
             if INCLUDE_RAW_LOGS:

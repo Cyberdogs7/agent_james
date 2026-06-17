@@ -982,75 +982,18 @@ async def iterate_cad(sid, data):
     # data: { prompt: "make it bigger" }
     prompt = data.get('prompt')
     print(f"Received iterate_cad request: '{prompt}'")
-    
-    if not audio_loop or not audio_loop.cad_agent:
-        await sio.emit('error', {'msg': "CAD Agent not available"})
-        return
-
-    try:
-        # Notify user work has started
-        await sio.emit('status', {'msg': 'Iterating design...'})
-        await sio.emit('cad_status', {'status': 'generating'})
-        
-        # Call the agent with project path
-        cad_output_dir = str(audio_loop.project_manager.get_current_project_path() / "cad")
-        result = await audio_loop.cad_agent.iterate_prototype(prompt, output_dir=cad_output_dir)
-        
-        if result:
-            info = f"{len(result.get('data', ''))} bytes (STL)"
-            print(f"Sending updated CAD data: {info}")
-            await sio.emit('cad_data', result)
-            # Save to Project
-            if 'file_path' in result:
-                saved_path = audio_loop.project_manager.save_cad_artifact(result['file_path'], prompt)
-                if saved_path:
-                    print(f"[SERVER] Saved iterated CAD to {saved_path}")
-
-            await sio.emit('status', {'msg': 'Design updated'})
-        else:
-            await sio.emit('error', {'msg': 'Failed to update design'})
-            
-    except Exception as e:
-        print(f"Error iterating CAD: {e}")
-        await sio.emit('error', {'msg': f"Iteration Error: {str(e)}"})
+    # CAD functionality is disabled; inform the client.
+    await sio.emit('error', {'msg': "CAD functionality is disabled."})
+    return
 
 @sio.event
 async def generate_cad(sid, data):
     # data: { prompt: "make a cube" }
     prompt = data.get('prompt')
     print(f"Received generate_cad request: '{prompt}'")
-    
-    if not audio_loop or not audio_loop.cad_agent:
-        await sio.emit('error', {'msg': "CAD Agent not available"})
-        return
-
-    try:
-        await sio.emit('status', {'msg': 'Generating new design...'})
-        await sio.emit('cad_status', {'status': 'generating'})
-        
-        # Use generate_prototype based on prompt with project path
-        cad_output_dir = str(audio_loop.project_manager.get_current_project_path() / "cad")
-        result = await audio_loop.cad_agent.generate_prototype(prompt, output_dir=cad_output_dir)
-        
-        if result:
-            info = f"{len(result.get('data', ''))} bytes (STL)"
-            print(f"Sending newly generated CAD data: {info}")
-            await sio.emit('cad_data', result)
-
-
-            # Save to Project
-            if 'file_path' in result:
-                saved_path = audio_loop.project_manager.save_cad_artifact(result['file_path'], prompt)
-                if saved_path:
-                    print(f"[SERVER] Saved generated CAD to {saved_path}")
-
-            await sio.emit('status', {'msg': 'Design generated'})
-        else:
-            await sio.emit('error', {'msg': 'Failed to generate design'})
-            
-    except Exception as e:
-        print(f"Error generating CAD: {e}")
-        await sio.emit('error', {'msg': f"Generation Error: {str(e)}"})
+    # CAD functionality is disabled; inform the client.
+    await sio.emit('error', {'msg': "CAD functionality is disabled."})
+    return
 
 @sio.event
 async def prompt_web_agent(sid, data):
