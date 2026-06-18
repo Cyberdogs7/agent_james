@@ -1,5 +1,4 @@
 import httpx
-import json
 
 class GitHubClient:
     def __init__(self, token):
