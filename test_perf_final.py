@@ -53,8 +53,8 @@ async def test_performance():
     script_path = os.path.join(temp_dir, "current_design.py")
 
     dummy_code = "import build123d\n" + "x = 1\n" * 1000 + "export_stl(result_part, 'C:\\\\Users\\\\Bob\\\\output.stl')\n"
-    with open(script_path, "w") as f:
-        f.write(dummy_code)
+    async with aiofiles.open(script_path, "w") as f:
+        await f.write(dummy_code)
 
     # We test concurrency of 100 tasks, run 10 times
     async def run_aio():
