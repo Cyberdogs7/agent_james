@@ -7,7 +7,7 @@ from datetime import datetime
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
-from typing import List, Optional
+from typing import Optional
 
 load_dotenv()
 
