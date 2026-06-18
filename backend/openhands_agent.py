@@ -1,7 +1,6 @@
 import asyncio
 import os
 import httpx
-import time
 from dotenv import load_dotenv
 
 load_dotenv()
