@@ -9,7 +9,6 @@ import re
 import asyncio
 import httpx
 from pathlib import Path
-from dotenv import load_dotenv
 
 BASE_DIR = Path.cwd()
 pass
