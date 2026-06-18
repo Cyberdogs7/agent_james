@@ -14,7 +14,6 @@ import re
 import random
 from pathlib import Path
 from datetime import datetime
-from dotenv import load_dotenv
 
 BASE_DIR = Path.cwd()
 pass
