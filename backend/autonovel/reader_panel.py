@@ -7,7 +7,6 @@ The disagreements between readers are where editorial decisions live.
 Usage: python reader_panel.py
 """
 import os
-import sys
 import json
 import re
 from pathlib import Path
