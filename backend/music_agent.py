@@ -525,7 +525,6 @@ class MusicAgent:
     def _process_and_push_chunk(self, process_data):
         """Processes audio chunk for volume, visualization, and pushes to ADA queue."""
         import array
-        import sys
         import audioop
 
         # Ensure data length is even for 16-bit PCM
