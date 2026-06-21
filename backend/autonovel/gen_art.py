@@ -472,17 +472,19 @@ async def cmd_vectorize(args, client=None):
 
     print(f"Vectorizing {len(files)} images...")
 
-    for png_path in files:
-        svg_path = SVG_DIR / f"{png_path.stem}.svg"
+    def _process_image_sync(png_path, pbm_path):
+        from PIL import Image
+        img = Image.open(png_path).convert("L")
+        # Threshold to black and white
+        bw = img.point(lambda x: 0 if x < 180 else 255, "1")
+        bw.save(pbm_path)
 
+    async def _process_single_file(png_path):
+        svg_path = SVG_DIR / f"{png_path.stem}.svg"
+        pbm_path = png_path.with_suffix(".pbm")
         try:
-            # Step 1: Convert to grayscale PBM using Pillow
-            from PIL import Image
-            img = Image.open(png_path).convert("L")
-            # Threshold to black and white
-            bw = img.point(lambda x: 0 if x < 180 else 255, "1")
-            pbm_path = png_path.with_suffix(".pbm")
-            bw.save(pbm_path)
+            # Step 1: Convert to grayscale PBM using Pillow in thread pool
+            await asyncio.to_thread(_process_image_sync, png_path, pbm_path)
 
             # Step 2: Run potrace
             process = await asyncio.create_subprocess_exec(
@@ -504,6 +506,10 @@ async def cmd_vectorize(args, client=None):
 
         except Exception as e:
             print(f"  {png_path.name} → ERROR: {e}")
+
+    tasks = [_process_single_file(png_path) for png_path in files]
+    if tasks:
+        await asyncio.gather(*tasks)
 
     print(f"\nSVGs saved to {SVG_DIR}/")
 
