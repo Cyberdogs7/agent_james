@@ -6,7 +6,6 @@ Reads seed.txt + voice.md + world.md + CRAFT.md, calls writer model.
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 BASE_DIR = Path.cwd()
 pass
