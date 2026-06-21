@@ -17,7 +17,6 @@ import argparse
 import math
 import struct
 import time
-import random
 from datetime import datetime
 
 from backend.time_utils import format_datetime, get_local_time
