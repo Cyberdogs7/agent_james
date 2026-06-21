@@ -1232,8 +1232,33 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
     async def handle_sync_jules_sessions(self):
         """Syncs external Jules sessions into the War Room (Fleet Manager)."""
         try:
-            from backend.server import fleet_manager, sio
-            sessions = await self.jules_agent.list_sessions()
+            from backend.server import fleet_manager, sio, get_all_accounts
+            
+            accounts = get_all_accounts()
+            all_sessions = []
+            
+            # Fetch from default agent
+            default_sessions = await self.jules_agent.list_sessions()
+            if default_sessions:
+                all_sessions.extend(default_sessions)
+                
+            # Fetch from all configured accounts
+            for account in accounts:
+                api_key = account.get("api_key")
+                if api_key and api_key != self.jules_agent.api_key:
+                    temp_agent = JulesAgent(api_key=api_key, project_manager=self.project_manager)
+                    account_sessions = await temp_agent.list_sessions()
+                    if account_sessions:
+                        all_sessions.extend(account_sessions)
+            
+            # Deduplicate by session ID
+            unique_sessions = {}
+            for s in all_sessions:
+                if s.get("name"):
+                    unique_sessions[s.get("name")] = s
+                    
+            sessions = list(unique_sessions.values())
+            
             if not sessions:
                 return "No sessions found to sync."
 

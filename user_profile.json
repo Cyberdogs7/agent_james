@@ -273,5 +273,8 @@
     "user_preference_critical_stalls_intervention": "direct intervention preferred over full automation",
     "user_goals": {
         "generate_diverse_reaction_images": true
-    }
+    },
+    "sync_scope": "all_jules_api_keys_and_sessions",
+    "desired_session_status": "active",
+    "relevant_repository": "world_gen_repo"
 }
