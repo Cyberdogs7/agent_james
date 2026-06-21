@@ -5,7 +5,6 @@ Generate canon.md by extracting all hard facts from world.md + characters.md.
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 BASE_DIR = Path.cwd()
 pass
