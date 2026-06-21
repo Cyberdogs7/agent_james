@@ -454,6 +454,46 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                 print(f"[ADA DEBUG] [ERR] Triage failed for {session_id}: {e}")
             self.notify_user(f"Jules task {session_id} sent a message: {message_content[:50]}...", duration=20000)
 
+    async def _monitor_all_jules_accounts(self):
+        """Monitors Jules sessions across all configured accounts."""
+        from backend.server import get_all_accounts
+        
+        # Track monitored agents and their tasks
+        monitoring_tasks = {} # api_key -> task
+        
+        # We start the default agent first
+        monitoring_tasks[self.jules_agent.api_key] = asyncio.create_task(
+            self.jules_agent.start_monitoring(self._handle_jules_status_change)
+        )
+        
+        while True:
+            try:
+                accounts = get_all_accounts()
+                current_keys = {self.jules_agent.api_key}
+                
+                for account in accounts:
+                    api_key = account.get("api_key")
+                    if api_key:
+                        current_keys.add(api_key)
+                        if api_key not in monitoring_tasks:
+                            temp_agent = JulesAgent(api_key=api_key, project_manager=self.project_manager)
+                            monitoring_tasks[api_key] = asyncio.create_task(
+                                temp_agent.start_monitoring(self._handle_jules_status_change)
+                            )
+                
+                # Clean up deleted accounts
+                for key in list(monitoring_tasks.keys()):
+                    if key not in current_keys:
+                        monitoring_tasks[key].cancel()
+                        del monitoring_tasks[key]
+                        
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Error in account monitor loop: {e}")
+                    
+            await asyncio.sleep(60) # Check for new/deleted accounts every 60s
+
+
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
@@ -1238,7 +1278,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             all_sessions = []
             
             # Fetch from default agent
-            default_sessions = await self.jules_agent.list_sessions()
+            default_sessions = await self.jules_agent.list_sessions(max_pages=50)
             if default_sessions:
                 all_sessions.extend(default_sessions)
                 
@@ -1247,7 +1287,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                 api_key = account.get("api_key")
                 if api_key and api_key != self.jules_agent.api_key:
                     temp_agent = JulesAgent(api_key=api_key, project_manager=self.project_manager)
-                    account_sessions = await temp_agent.list_sessions()
+                    account_sessions = await temp_agent.list_sessions(max_pages=50)
                     if account_sessions:
                         all_sessions.extend(account_sessions)
             
@@ -2538,7 +2578,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     tasks.append(asyncio.create_task(self._context_nudging_task()))
 
                     # Start the Jules session monitoring task
-                    tasks.append(asyncio.create_task(self.jules_agent.start_monitoring(self._handle_jules_status_change)))
+                    tasks.append(asyncio.create_task(self._monitor_all_jules_accounts()))
 
                     # Git Fleet monitoring is now handled by AutomationEngine in server.py
                     # tasks.append(asyncio.create_task(self._monitor_git_fleet()))

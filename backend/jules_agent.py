@@ -381,23 +381,42 @@ class JulesAgent:
         """Sends a message to a session."""
         return await self._request("POST", f"{self.base_url}/{session_id}:sendMessage", tool_name="send_message", json={"prompt": message})
 
-    async def list_sessions(self, limit=100):
+    async def list_sessions(self, limit=100, max_pages=10):
         """Lists all sessions, returning full session objects."""
         # Check Cache
-        cache_key = "list_sessions"
+        cache_key = f"list_sessions_{limit}_{max_pages}"
         now = time.time()
         if cache_key in self._cache and cache_key in self._cache_expiry:
             if now < self._cache_expiry[cache_key]:
                 return self._cache[cache_key]
 
-        params = {"pageSize": limit}
-        response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions", params=params)
-        if response is not None:
-            sessions = response.get("sessions", [])
-            self._cache[cache_key] = sessions
-            self._cache_expiry[cache_key] = now + self._cache_ttl
-            return sessions
-        return None
+        all_sessions = []
+        page_token = None
+        pages_fetched = 0
+
+        while pages_fetched < max_pages:
+            params = {"pageSize": limit}
+            if page_token:
+                params["pageToken"] = page_token
+                
+            response = await self._request("GET", f"{self.base_url}/sessions", tool_name="list_sessions", params=params)
+            if response is not None:
+                sessions = response.get("sessions", [])
+                all_sessions.extend(sessions)
+                
+                page_token = response.get("nextPageToken")
+                pages_fetched += 1
+                
+                if not page_token:
+                    break
+            else:
+                if not all_sessions:
+                    return None
+                break
+
+        self._cache[cache_key] = all_sessions
+        self._cache_expiry[cache_key] = now + self._cache_ttl
+        return all_sessions
 
     async def get_session(self, session_id):
         """Fetches a single session by ID."""

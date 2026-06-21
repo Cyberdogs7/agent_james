@@ -1,5 +1,5 @@
 {
-    "user_goal": "generate images",
+    "user_goal": "sync jules tasks",
     "mini_game_name": "butterfly_botanist",
     "mini_game_url": "https://nlevelsoftware.github.io/minigames/butterfly_botanist.html",
     "playtest_comprehensiveness": "comprehensive",
@@ -43,7 +43,7 @@
     "repository_branch_constraint": "When performing operations in the 'NLevelSoftware/minigames' repository, ADA must use the 'main' branch, not 'master'.",
     "context_retention_preference": "ADA should maintain context and remember previous interactions, goals, and task details to avoid 'forgetting it all'.",
     "issue_resolution_expectation": "Issues must be genuinely fixed and resolved, not just attempted or reported as 'in progress' without visible results.",
-    "preferred_coding_agent": "For coding and debugging tasks, the 'Jules' agent is the preferred or explicitly chosen agent.",
+    "preferred_coding_agent": "Jules",
     "playtest_goal": "Conduct a comprehensive playtest for 'butterfly_botanist'.",
     "bug_resolution_goal": "Address bugs identified during the 'butterfly_botanist' playtest, specifically the 'watering mechanic unresponsive' issue.",
     "primary_interest": "higgsfield tools",
@@ -86,7 +86,7 @@
     "merged_prs_count": 2,
     "execution_method_preference": "Perform tasks directly rather than delegating to 'swarm agents' or 'Jules sessions'. Automated agent-based approaches have failed and are explicitly rejected.",
     "task_scope_update": "Two pull requests have already been merged in the 'NLevelSoftware/minigames' repository. The current task is to identify and merge only the remaining unmerged pull requests.",
-    "pr_merge_method_preference": "ADA should directly merge PRs; do not use Jules/swarm agents for this task due to perceived failures.",
+    "pr_merge_method_preference": "direct_merge_no_automation",
     "NLevelSoftware/minigames_merged_pr_count": 2,
     "interaction_style": "do not contradict or dismiss the user when they provide corrections or factual information; acknowledge user input gracefully and apologize for missteps",
     "automation_preference": "for pull request merging tasks, execute directly rather than relying on automated agents (Jules/swarm), as they are perceived to have failed",
@@ -172,7 +172,7 @@
     "do_not_merge_conflicted_prs": true,
     "expected_feedback_mechanism": "verbal_acknowledgement_preferred",
     "ada_tool_access_agentCoder": false,
-    "merge_stalled_pull_requests": "do_not_merge_currently",
+    "merge_stalled_pull_requests": true,
     "prefer_verbal_acknowledgement": true,
     "ada_has_agent_coder_access": false,
     "user_communication_preference": "voice_feedback",
@@ -272,9 +272,81 @@
     "specific_pull_request_directive": "merge marketing agent PRs in Cyberdogs7/marketing_agent repository",
     "user_preference_critical_stalls_intervention": "direct intervention preferred over full automation",
     "user_goals": {
-        "generate_diverse_reaction_images": true
+        "sync_jules_tasks": true,
+        "fix_broken_jules_test": "test_create_session_success",
+        "merge_stalled_marketing_agent_pull_requests": [
+            "#861",
+            "#860",
+            "#859",
+            "#858",
+            "#857"
+        ],
+        "merge_stalled_minigames_pull_request": "#291",
+        "prioritize_jules_feedback_notification": true
     },
     "sync_scope": "all_jules_api_keys_and_sessions",
     "desired_session_status": "active",
-    "relevant_repository": "world_gen_repo"
+    "relevant_repository": "world_gen_repo",
+    "sync_jules_tasks_requested": true,
+    "jules_feedback_priority": "top",
+    "direct_jules_agent_prompting_for_coding_tasks": true,
+    "merge_stalled_pull_requests_goal": true,
+    "pr_merge_order_priority": [
+        "Cyberdogs7/marketing_agent",
+        "NLevelSoftware/minigames"
+    ],
+    "pr_merge_conflict_handling_marketing_agent": "halt_on_conflict_and_proceed_to_next_pr",
+    "nlevelsoftware_minigames_pr_target_branch": "main",
+    "adhere_to_prevent_merge_on_conflict_policy": true,
+    "user_preferences": {
+        "jules_agent_preference": "strong",
+        "prioritize_stalled_pr_merges": true
+    },
+    "user_constraints": {
+        "avoid_automation_for_merges": true,
+        "target_main_branch_for_minigames_merges": true,
+        "prevent_merge_on_conflict": true
+    },
+    "important_context": {
+        "stalled_marketing_agent_prs": [
+            "#861",
+            "#860",
+            "#859",
+            "#858",
+            "#857"
+        ],
+        "stalled_minigames_pr": "#291",
+        "all_stalled_prs_have_merge_conflicts": true
+    },
+    "important_contextual_details_about_user": {
+        "jules_session_awaiting_user_feedback": true,
+        "broken_test_involving_jules_agent_files": [
+            "jules_agent.py",
+            "test_jules_agent.py"
+        ],
+        "current_status_stalled_marketing_agent_prs": "all have merge conflicts",
+        "current_status_stalled_minigames_pr": "has merge conflicts",
+        "nlevelsoftware_minigames_repo_merge_count": 2
+    },
+    "sync_jules_sessions": true,
+    "prioritize_notifications_for_jules_feedback": true,
+    "strong_jules_preference": true,
+    "fix_test_create_session_success_using_jules": true,
+    "stalled_pr_list": {
+        "Cyberdogs7/marketing_agent": [
+            "#861",
+            "#860",
+            "#859",
+            "#858",
+            "#857"
+        ],
+        "NLevelSoftware/minigames": [
+            "#291"
+        ]
+    },
+    "prioritize_marketing_agent_pr_merges": true,
+    "avoid_automation_for_pr_merges": true,
+    "perform_direct_merges_for_prs": true,
+    "prevent_merge_on_conflict_for_prs": true,
+    "target_main_branch_for_minigames_repo_prs": true
 }
