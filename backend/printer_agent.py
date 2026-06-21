@@ -10,7 +10,6 @@ Supported Printer Types:
 import asyncio
 import os
 import subprocess
-import json
 import platform
 import aiofiles
 from typing import Dict, List, Optional, Any
