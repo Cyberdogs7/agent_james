@@ -755,6 +755,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
         self.tool_registry.register("list_jules_sources", self.jules_agent.list_sources_formatted)
         self.tool_registry.register("list_jules_sessions", self.jules_agent.list_sessions_formatted)
+        self.tool_registry.register("sync_jules_sessions", self.handle_sync_jules_sessions)
         self.tool_registry.register("list_jules_activities", self.jules_agent.list_activities_formatted)
         self.tool_registry.register("create_project", lambda name: self._execute_project_switch(self.project_manager.create_project, name))
         self.tool_registry.register("switch_project", lambda name: self._execute_project_switch(self.project_manager.switch_project, name))
@@ -1227,6 +1228,74 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
         return f"Agent started. ID: {session['id']}"
+
+    async def handle_sync_jules_sessions(self):
+        """Syncs external Jules sessions into the War Room (Fleet Manager)."""
+        try:
+            from backend.server import fleet_manager, sio
+            sessions = await self.jules_agent.list_sessions()
+            if not sessions:
+                return "No sessions found to sync."
+
+            synced_count = 0
+            for session in sessions:
+                session_id = session.get("name")
+                state = session.get("state")
+                title = session.get("title", "Imported Jules Task")
+
+                agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+                if repo_name and task_id:
+                    continue  # Already tracked
+
+                # Try to extract repo name from source context
+                repo_name = "Imported"
+                source_context = session.get("sourceContext", {})
+                source = source_context.get("source", "")
+                if "github" in source:
+                    # e.g. sources/github/owner/repo
+                    parts = source.split("/")
+                    if len(parts) >= 4:
+                        repo_name = f"{parts[2]}/{parts[3]}"
+                
+                # Add to fleet manager
+                fleet_manager.ensure_repo(repo_name)
+                # Create a task
+                task_id = fleet_manager.add_task_to_queue(repo_name, title)
+                fleet_manager.update_task_session(repo_name, task_id, session_id)
+                
+                # Assign to an idle agent if not completed/failed
+                local_status = "in_progress" if state not in ["COMPLETED", "FAILED"] else state.lower()
+                fleet_manager.update_task_status(repo_name, task_id, local_status)
+
+                if local_status not in ["completed", "failed"]:
+                    # Find an idle agent
+                    idle_agent = None
+                    for a_id, a_data in fleet_manager.agents.items():
+                        if a_data.get("status") == "idle":
+                            idle_agent = a_id
+                            break
+                    
+                    if idle_agent:
+                        fleet_manager.assign_agent(idle_agent, repo_name)
+                        agent_status = "working"
+                        if state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
+                            agent_status = "needing_feedback"
+                        elif state == "PAUSED":
+                            agent_status = "stuck"
+                        fleet_manager.update_agent_session(idle_agent, session_id, agent_status)
+                        fleet_manager.update_task_status(repo_name, task_id, local_status, agent_id=idle_agent)
+                
+                synced_count += 1
+            
+            if synced_count > 0:
+                await sio.emit('fleet_state_update', fleet_manager.get_state())
+                return f"Successfully synced {synced_count} Jules sessions into the War Room."
+            else:
+                return "All Jules sessions are already tracked in the War Room."
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to sync Jules sessions: {e}")
+            return f"Error syncing Jules sessions: {str(e)}"
 
     async def handle_jules_request(self, prompt, source=None, role=None, on_session_created=None):
         if INCLUDE_RAW_LOGS:

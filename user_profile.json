@@ -11,9 +11,7 @@
     "agent_goal": "navigate to the correct URL and commence gameplay",
     "goal_context": "as a prelude to a comprehensive playtest",
     "goals": {
-        "initiate_gameplay_via_agent": "agent to navigate to the correct URL and commence gameplay",
-        "overall_playtest_objective": "conduct a comprehensive playtest",
-        "commitment_to_provide_update": true
+        "merge_marketing_agent_prs": true
     },
     "preferences": {
         "preferred_web_agent_tool": "run_web_agent"
@@ -147,7 +145,9 @@
         "agentCoder_access": false
     },
     "pull_request_management": {
-        "stalled_and_conflicting_prs_action": "leave_unmerged_for_now"
+        "merge_marketing_agent_prs": true,
+        "do_not_merge_stalled_prs": false,
+        "do_not_merge_if_merge_conflicts_exist": true
     },
     "pull_requests_with_conflicts_action": "leave them for now",
     "preferred_acknowledgment_style": "verbal",
@@ -203,5 +203,75 @@
         "details": "User inquired about ADA's access to 'agentCoder', indicating interest in ADA's capabilities and available tools."
     },
     "stalled_pull_requests_action": "leave_for_now",
-    "emphatic_instruction_handling": "interpret_strong_language_as_critical_directives"
+    "emphatic_instruction_handling": "interpret_strong_language_as_critical_directives",
+    "model_access_constraint": "unlimited_no_charge_models_only",
+    "image_generation_model_access": "only_unlimited_models",
+    "image_generation_model_constraint": "no_charge_models_only",
+    "image_generation_tool": "higgsfied",
+    "image_subject": "ADA's witty butler persona (James)",
+    "image_purpose": "reaction images",
+    "image_format_constraint": "single image per emotion/reaction",
+    "image_content_constraint": "no speech bubbles",
+    "image_generation_preferences": {
+        "single_emotion_per_image": true,
+        "no_speech_bubbles": true,
+        "single_portrait_per_image": true
+    },
+    "pull_request_merging_policy": {
+        "allow_merging_stalled_prs_if_no_conflicts": true,
+        "block_merging_prs_with_actual_merge_conflicts": true
+    },
+    "task_priority": {
+        "pr_merging": "prioritize merging marketing agent PRs as requested"
+    },
+    "pr_merging_policy_updates": {
+        "remove_constraint": "do_not_merge_stalled_or_conflicting_prs",
+        "new_constraint_clarification": "a 'do not merge' constraint should only apply to PRs with actual merge conflicts, not just stalled status",
+        "implication": "stalled PRs without merge conflicts should be merged when requested"
+    },
+    "explicit_memory_forget_keys": [
+        "stalled_conflicting_prs_policy",
+        "action_on_conflicting_pull_requests",
+        "merge_conflicting_prs",
+        "unmergeable_prs_directive",
+        "do_not_merge_stalled_or_conflicting_prs",
+        "pr_conflict_handling",
+        "pr_merging_scope_update"
+    ],
+    "pull_request_merging_preferences": {
+        "allow_merging_stalled_prs": true,
+        "prevent_merge_on_conflict": true
+    },
+    "image_generation_output_format": "single portrait per image",
+    "image_generation_exclude_speech_bubbles": true,
+    "image_generation_single_portrait_per_image": true,
+    "pr_merging_stalled_policy": "merge_if_no_merge_conflicts",
+    "pr_merging_constraint_scope_for_not_merging": "only_for_merge_conflicts",
+    "remove_constraint": "do_not_merge_stalled_or_conflicting_prs",
+    "pr_merging_policy_update": {
+        "removed_constraint": "do_not_merge_stalled_or_conflicting_prs",
+        "new_merge_prevention_criteria": "only for merge conflicts"
+    },
+    "pull_request_merging_policy_updates": {
+        "stalled_prs_without_merge_conflicts": "can be merged",
+        "prs_with_merge_conflicts": "should not be merged",
+        "override_previous_policy": true
+    },
+    "image_generation_single_emotion_per_image": true,
+    "image_generation_no_speech_bubbles": true,
+    "pr_merging_stalled_prs_allowed": true,
+    "image_generation_constraints": {
+        "output_format": "single_image_per_emotion_or_reaction",
+        "exclude_speech_bubbles": true,
+        "portraits_per_image": 1
+    },
+    "image_generation_target_persona": "James, witty butler",
+    "image_generation_content_exclusion": "speech bubbles",
+    "pull_request_merge_policy_stalled": "stalled PRs should be merged if no merge conflicts",
+    "pull_request_merge_policy_conflicts": "do not merge PRs with merge conflicts",
+    "specific_pull_request_directive": "merge marketing agent PRs in Cyberdogs7/marketing_agent repository",
+    "user_preference_critical_stalls_intervention": "direct intervention preferred over full automation",
+    "user_goals": {
+        "generate_diverse_reaction_images": true
+    }
 }

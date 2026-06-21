@@ -1014,6 +1014,15 @@ list_jules_sessions_tool = {
     }
 }
 
+sync_jules_sessions_tool = {
+    "name": "sync_jules_sessions",
+    "description": "Synchronizes any Jules sessions created outside of A.D.A. back into the War Room (Fleet Manager) so they can be tracked.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
 list_jules_activities_tool = {
     "name": "list_jules_activities",
     "description": "Lists all activities for a specific Jules session.",
@@ -1725,6 +1734,7 @@ all_tools_list = [
     send_jules_feedback_tool,
     list_jules_sources_tool,
     list_jules_sessions_tool,
+    sync_jules_sessions_tool,
     list_jules_activities_tool,
     jules_get_diff_tool,
     append_system_prompt_tool,
