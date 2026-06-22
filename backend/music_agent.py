@@ -165,25 +165,33 @@ class MusicAgent:
                     self.logger.info(f"Extracting playlist/album with browseId: {browse_id}")
 
                     def get_playlist_tracks(bid):
+                        if bid.startswith('RD'):
+                            try:
+                                wp = self.yt.get_watch_playlist(playlistId=bid)
+                                return wp.get("tracks", [])
+                            except Exception as e:
+                                self.logger.error(f"Error getting watch playlist for mix {bid}: {e}")
+                                return []
+
                         ydl_opts = {
                             'extract_flat': True,
                             'quiet': True,
                             'ignoreerrors': True,
                         }
-                        tracks = []
+                        p_tracks = []
                         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                             url = f"https://www.youtube.com/playlist?list={bid}"
                             info = ydl.extract_info(url, download=False)
                             if info and 'entries' in info:
                                 for entry in info['entries']:
                                     if entry and entry.get('id'):
-                                        tracks.append({
+                                        p_tracks.append({
                                             'videoId': entry.get('id'),
                                             'title': entry.get('title', 'Unknown Title'),
                                             'artists': [{'name': entry.get('channel', 'Unknown Artist')}],
                                             'duration_seconds': entry.get('duration', 0)
                                         })
-                        return tracks
+                        return p_tracks
 
                     tracks = await asyncio.to_thread(get_playlist_tracks, browse_id)
                     if not tracks:
@@ -261,6 +269,14 @@ class MusicAgent:
                                 browse_id = browse_id[2:]
                             
                             def get_playlist_tracks(bid):
+                                if bid.startswith('RD'):
+                                    try:
+                                        wp = self.yt.get_watch_playlist(playlistId=bid)
+                                        return wp.get("tracks", [])
+                                    except Exception as e:
+                                        self.logger.error(f"Error getting watch playlist for mix {bid}: {e}")
+                                        return []
+
                                 ydl_opts = {
                                     'extract_flat': True,
                                     'quiet': True,
