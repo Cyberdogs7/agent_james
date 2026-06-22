@@ -252,8 +252,42 @@ class MusicAgent:
                 if results:
                     top_result = results[0]
 
-                    # Handle if the top result is an artist - fallback to a playable track
-                    if top_result.get('resultType') == 'artist':
+                    # Check if it's a playlist or album
+                    result_type = top_result.get('resultType')
+                    if result_type in ['playlist', 'album']:
+                        browse_id = top_result.get('browseId')
+                        if browse_id:
+                            if browse_id.startswith('VL'):
+                                browse_id = browse_id[2:]
+                            
+                            def get_playlist_tracks(bid):
+                                ydl_opts = {
+                                    'extract_flat': True,
+                                    'quiet': True,
+                                    'ignoreerrors': True,
+                                }
+                                p_tracks = []
+                                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                                    url = f"https://www.youtube.com/playlist?list={bid}"
+                                    info = ydl.extract_info(url, download=False)
+                                    if info and 'entries' in info:
+                                        for entry in info['entries']:
+                                            if entry and entry.get('id'):
+                                                p_tracks.append({
+                                                    'videoId': entry.get('id'),
+                                                    'title': entry.get('title', 'Unknown Title'),
+                                                    'artists': [{'name': entry.get('channel', 'Unknown Artist')}],
+                                                    'duration_seconds': entry.get('duration', 0)
+                                                })
+                                return p_tracks
+
+                            p_tracks = await asyncio.to_thread(get_playlist_tracks, browse_id)
+                            if p_tracks:
+                                tracks.extend(p_tracks)
+                                continue
+
+                    # Handle if the top result doesn't have a playable videoId
+                    if not top_result.get('videoId'):
                         for r in results:
                             if r.get('videoId'):
                                 top_result = r
