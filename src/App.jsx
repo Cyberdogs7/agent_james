@@ -113,7 +113,6 @@ function App() {
 
   // RESTORED STATE
   const fpsRef = useRef(0);
-  const audioHistoryRef = useRef([]);
 
   // Device states - microphones, speakers, webcams
   const [micDevices, setMicDevices] = useState([]);
@@ -467,61 +466,6 @@ function App() {
                 setStatus('Model Connected');
             } else if (data.msg === 'A.D.A Stopped') {
                 setStatus('Connected');
-            }
-        });
-        socket.on('audio_data', (data) => {
-            // data.data will be an ArrayBuffer from socket.io since we sent raw bytes
-            // The audio data is 16-bit PCM (Int16), but the visualizer expects unsigned or normalized values.
-            // Let's use Int16Array and take absolute values, scaled down to 0-255 range for the visualizer.
-            let rawData;
-            if (data.data instanceof ArrayBuffer) {
-                const int16View = new Int16Array(data.data);
-                rawData = new Array(Math.min(int16View.length, 64)); // The visualizer uses a 64-element array typically
-                const step = Math.max(1, Math.floor(int16View.length / rawData.length));
-                for (let i = 0; i < rawData.length; i++) {
-                    // Take max absolute value in the window
-                    let maxVal = 0;
-                    for (let j = 0; j < step && (i * step + j) < int16View.length; j++) {
-                        maxVal = Math.max(maxVal, Math.abs(int16View[i * step + j]));
-                    }
-                    // Scale 0-32768 to 0-255
-                    rawData[i] = Math.min(255, Math.floor((maxVal / 32768) * 255));
-                }
-            } else if (Array.isArray(data.data)) {
-                // Fallback if it's still an array for some reason
-                rawData = data.data.slice(0, 64);
-            } else {
-                return;
-            }
-
-            const history = audioHistoryRef.current;
-            const smoothingWindow = 3; // Averaging window
-
-            history.push(rawData);
-            if (history.length > smoothingWindow) {
-                history.shift();
-            }
-
-            if (history.length > 0) {
-                const smoothedData = new Array(rawData.length).fill(0);
-                for (let i = 0; i < rawData.length; i++) {
-                    let sum = 0;
-                    for (let j = 0; j < history.length; j++) {
-                        sum += history[j][i] || 0;
-                    }
-                    smoothedData[i] = sum / history.length;
-                }
-
-                // Threshold to force silence
-                const silenceThreshold = 5;
-                const isSilent = smoothedData.every(val => val < silenceThreshold);
-                if (isSilent) {
-                    // setAiAudioData(new Array(rawData.length).fill(0));
-                } else {
-                    // setAiAudioData(smoothedData);
-                }
-            } else {
-                // setAiAudioData(rawData);
             }
         });
         socket.on('auth_status', (data) => {
@@ -884,7 +828,6 @@ function App() {
       socket.off("connect");
       socket.off("disconnect");
       socket.off("status");
-      socket.off("audio_data");
       socket.off("cad_data");
       socket.off("cad_thought");
       socket.off("cad_status");

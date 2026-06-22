@@ -17,7 +17,28 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
 
   useEffect(() => {
         if (!socket) return;
-        const handleAudio = (rawData) => {
+        const handleAudio = (data) => {
+            let rawData;
+            if (data.data instanceof ArrayBuffer) {
+                const int16View = new Int16Array(data.data);
+                rawData = new Array(Math.min(int16View.length, 64)); // The visualizer uses a 64-element array typically
+                const step = Math.max(1, Math.floor(int16View.length / rawData.length));
+                for (let i = 0; i < rawData.length; i++) {
+                    // Take max absolute value in the window
+                    let maxVal = 0;
+                    for (let j = 0; j < step && (i * step + j) < int16View.length; j++) {
+                        maxVal = Math.max(maxVal, Math.abs(int16View[i * step + j]));
+                    }
+                    // Scale 0-32768 to 0-255
+                    rawData[i] = Math.min(255, Math.floor((maxVal / 32768) * 255));
+                }
+            } else if (Array.isArray(data.data)) {
+                // Fallback if it's still an array for some reason
+                rawData = data.data.slice(0, 64);
+            } else {
+                return;
+            }
+
             const history = audioHistoryRef.current;
             history.push(rawData);
             if (history.length > 5) {
