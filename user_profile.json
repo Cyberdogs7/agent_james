@@ -11,13 +11,16 @@
     "agent_goal": "navigate to the correct URL and commence gameplay",
     "goal_context": "as a prelude to a comprehensive playtest",
     "goals": {
-        "merge_marketing_agent_prs": true
+        "fix_test_create_session_success": "Resolve the `test_create_session_success` failure in `jules_agent.py`.",
+        "manage_marketing_agent_pull_requests": "Prioritize and manage stalled pull requests in `Cyberdogs7/marketing_agent` according to the specified merge policy."
     },
     "preferences": {
-        "preferred_web_agent_tool": "run_web_agent"
+        "agent_failure_strategy": "User prefers to bypass automated agents (Jules, OpenHands) after repeated failures, opting for direct execution instead of delegation to swarm agents.",
+        "pr_merging_method": "User prefers ADA to execute marketing agent PR merges directly, bypassing other agents."
     },
     "constraints": {
-        "web_agent_instruction_quality": "useful and detailed"
+        "jules_agent_branch_context": "When initiating a Jules task, the correct branch (the one Jules is actually set up with, not `agent_james`) must be used to avoid failures.",
+        "marketing_agent_pr_merge_policy": "For stalled pull requests in `Cyberdogs7/marketing_agent`, merging is permissible only if no conflicts exist; merging must be prevented if conflicts are present."
     },
     "contextual_details": {
         "active_playtest_id": "butterfly_botanist",
@@ -348,5 +351,63 @@
     "avoid_automation_for_pr_merges": true,
     "perform_direct_merges_for_prs": true,
     "prevent_merge_on_conflict_for_prs": true,
-    "target_main_branch_for_minigames_repo_prs": true
+    "target_main_branch_for_minigames_repo_prs": true,
+    "merge_policy_on_conflicts": "prohibit_merge",
+    "priority_on_broken_tests": "immediate_attention",
+    "agent_delegation_after_failure": {
+        "preference": "direct_execution_by_ada",
+        "agents_to_bypass": [
+            "Jules"
+        ]
+    },
+    "require_error_details_for_failures": true,
+    "rejected_agent_recommendations": [
+        "OpenHands"
+    ],
+    "direct_execution_after_agent_failure": true,
+    "bypass_jules_after_failures": true,
+    "avoid_swarm_agent_delegation": true,
+    "verbal_confirmation_of_important_shifts": true,
+    "fix_test_create_session_success_goal": true,
+    "allow_openhands_agent_trial": true,
+    "marketing_agent_pr_merging_policy": "merge if no conflicts, prevent if conflicts",
+    "marketing_agent_pr_merge_method_direct_execution_with_ada": true,
+    "avoid_automation_for_merges": true,
+    "automation_aversion": true,
+    "jules_agent_branch_requirement": "Jules agent requires using its specific setup branch, not `agent_james`.",
+    "war_room_task_stalled_with_dependencies_cleared_context": true,
+    "user_wants_jules_to_work_if_fixable": true,
+    "jules_agent_must_use_correct_branch": "Jules",
+    "merge_prs_policy_for_cyberdogs7_marketing_agent": {
+        "if_no_conflicts": "merge_directly_with_ada",
+        "if_conflicts": "prevent_merge"
+    },
+    "prefer_ada_for_pr_merges_over_agents": true,
+    "prefer_detailed_error_inquiry": true,
+    "prefer_repo_context_verification": true,
+    "try_openhands_agent": true,
+    "jules_failure_reason_identified": "incorrect_branch_used (agent_james instead of Jules)",
+    "agent_selection_is_mandatory_for_coding_tasks_via_tools": true,
+    "ada_lacks_direct_agent_coder_access": true,
+    "system_enforces_sequential_actions_for_selection_window": true,
+    "prefer_jules_bypass_after_failures": true,
+    "prefer_direct_execution_over_agent_delegation": true,
+    "requires_specific_error_details": true,
+    "requires_correct_repository_context_for_agent_tasks": true,
+    "allow_use_of_openhands_agent": true,
+    "prioritize_cyberdogs7_marketing_agent_prs": true,
+    "cyberdogs7_marketing_agent_pr_merge_policy": "merge_if_no_conflicts_prevent_if_conflicts_exist",
+    "prefer_direct_ada_execution_for_marketing_agent_pr_merges": true,
+    "prefer_verbal_confirmation_for_important_system_shifts": true,
+    "goal_resolve_stalled_task_with_cleared_dependencies": true,
+    "requires_correct_branch_for_jules_tasks": true,
+    "primary_task_goal": "fix_test_create_session_success",
+    "execution_strategy_after_agent_failure": "direct_execution",
+    "allowed_alternative_agent": "OpenHands",
+    "marketing_agent_pr_prioritization": true,
+    "marketing_agent_pr_merge_policy": "merge_if_no_conflicts_prevent_if_conflicts",
+    "marketing_agent_pr_execution_method": "direct_ada_execution",
+    "system_shift_notification_method": "verbal_confirmation",
+    "jules_agent_correct_branch": "Jules",
+    "specific_test_fix_agent_preference": "Jules"
 }

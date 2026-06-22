@@ -190,7 +190,7 @@ class JulesAgent:
         if session:
             self.session_id = session["name"]
             # Invalidate session list cache so the new session appears immediately
-            self.invalidate_cache("list_sessions")
+            self.invalidate_cache(f"list_sessions_{self.api_key}_100_10")
 
         return session
 
@@ -384,7 +384,7 @@ class JulesAgent:
     async def list_sessions(self, limit=100, max_pages=10):
         """Lists all sessions, returning full session objects."""
         # Check Cache
-        cache_key = f"list_sessions_{limit}_{max_pages}"
+        cache_key = f"list_sessions_{self.api_key}_{limit}_{max_pages}"
         now = time.time()
         if cache_key in self._cache and cache_key in self._cache_expiry:
             if now < self._cache_expiry[cache_key]:
