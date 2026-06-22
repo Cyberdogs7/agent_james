@@ -2138,82 +2138,82 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                             # print("The tool was called")
                             function_responses = []
                             for fc in response.tool_call.function_calls:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
-                            else:
-                                # Basic log as requested: tool, endpoint, status
-                                print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
-
-                            # --- Tool Registry Dispatch ---
-
-                            # Confirmation Logic
-                            confirmed = True
-                            requires_confirmation = self.tool_registry.is_confirmation_required(fc.name)
-                            if hasattr(self, 'tool_permissions') and fc.name in self.tool_permissions:
-                                requires_confirmation = self.tool_permissions[fc.name]
-
-                            if fc.name == "merge_pull_request":
-                                from backend.server import SETTINGS
-                                if SETTINGS.get("auto_merge_master", False):
-                                    requires_confirmation = False
-
-                            if requires_confirmation:
-                                if self.on_tool_confirmation:
-                                    import uuid
-                                    request_id = str(uuid.uuid4())
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
-
-                                    future = asyncio.Future()
-                                    self._pending_confirmations[request_id] = future
-
-                                    self.on_tool_confirmation({
-                                        "id": request_id,
-                                        "tool": fc.name,
-                                        "args": fc.args
-                                    })
-
-                                    try:
-                                        confirmed = await future
-                                    finally:
-                                        self._pending_confirmations.pop(request_id, None)
-
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
-                                else:
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
-                                    confirmed = False
-
-                            if confirmed is not True:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user. Reason: {confirmed}")
-                                result_str = confirmed if isinstance(confirmed, str) else "User denied the request to use this tool."
+                                    print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
+                                else:
+                                    # Basic log as requested: tool, endpoint, status
+                                    print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
+
+                                # --- Tool Registry Dispatch ---
+
+                                # Confirmation Logic
+                                confirmed = True
+                                requires_confirmation = self.tool_registry.is_confirmation_required(fc.name)
+                                if hasattr(self, 'tool_permissions') and fc.name in self.tool_permissions:
+                                    requires_confirmation = self.tool_permissions[fc.name]
+
+                                if fc.name == "merge_pull_request":
+                                    from backend.server import SETTINGS
+                                    if SETTINGS.get("auto_merge_master", False):
+                                        requires_confirmation = False
+
+                                if requires_confirmation:
+                                    if self.on_tool_confirmation:
+                                        import uuid
+                                        request_id = str(uuid.uuid4())
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
+
+                                        future = asyncio.Future()
+                                        self._pending_confirmations[request_id] = future
+
+                                        self.on_tool_confirmation({
+                                            "id": request_id,
+                                            "tool": fc.name,
+                                            "args": fc.args
+                                        })
+
+                                        try:
+                                            confirmed = await future
+                                        finally:
+                                            self._pending_confirmations.pop(request_id, None)
+
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
+                                    else:
+                                        if INCLUDE_RAW_LOGS:
+                                            print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
+                                        confirmed = False
+
+                                if confirmed is not True:
+                                    if INCLUDE_RAW_LOGS:
+                                        print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user. Reason: {confirmed}")
+                                    result_str = confirmed if isinstance(confirmed, str) else "User denied the request to use this tool."
+                                    function_response = types.FunctionResponse(
+                                        id=fc.id,
+                                        name=fc.name,
+                                        response={
+                                            "result": result_str,
+                                        }
+                                    )
+                                    function_responses.append(function_response)
+                                    continue
+
+                                # Execute Tool via Registry
+                                result = await self.tool_registry.dispatch(fc.name, fc.args)
+
+                                # Construct Response
                                 function_response = types.FunctionResponse(
                                     id=fc.id,
                                     name=fc.name,
-                                    response={
-                                        "result": result_str,
-                                    }
+                                    response={"result": result}
                                 )
                                 function_responses.append(function_response)
-                                continue
 
-                            # Execute Tool via Registry
-                            result = await self.tool_registry.dispatch(fc.name, fc.args)
-
-                            # Construct Response
-                            function_response = types.FunctionResponse(
-                                id=fc.id,
-                                name=fc.name,
-                                response={"result": result}
-                            )
-                            function_responses.append(function_response)
-
-                        if function_responses:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
-                            await self.session.send_tool_response(function_responses=function_responses)
+                            if function_responses:
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
+                                await self.session.send_tool_response(function_responses=function_responses)
                         
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
