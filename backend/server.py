@@ -1917,6 +1917,16 @@ async def dismiss_jules_session(sid, data):
     print(f"[SERVER] Dismiss Jules Session: {session_id}")
     if audio_loop and audio_loop.project_manager:
         success, msg = audio_loop.project_manager.dismiss_jules_session(session_id)
+        
+        # Also archive/delete the session in Jules API and stop polling
+        if getattr(audio_loop, 'jules_agent', None):
+            try:
+                audio_loop.jules_agent.stop_polling(session_id)
+                await audio_loop.jules_agent.delete_session(session_id)
+                msg += " Archived remote task."
+            except Exception as e:
+                print(f"[SERVER] Error deleting session in Jules API: {e}")
+                
         await sio.emit('status', {'msg': msg})
         # Force dashboard update
         if dashboard_task:

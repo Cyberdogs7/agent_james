@@ -430,6 +430,12 @@ class JulesAgent:
         """Fetches a single session by ID."""
         return await self._request("GET", f"{self.base_url}/{session_id}", tool_name="get_session")
 
+    async def delete_session(self, session_id):
+        """Deletes/Archives a single session by ID."""
+        result = await self._request("DELETE", f"{self.base_url}/{session_id}", tool_name="delete_session")
+        self.invalidate_cache(f"list_sessions_{self.api_key}_100_10")
+        return result
+
     async def get_diff(self, session_id, activity_id=None):
         """
         Retrieves the code diff (unified patch) for a session or a specific activity.
