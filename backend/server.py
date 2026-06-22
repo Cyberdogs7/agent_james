@@ -836,6 +836,23 @@ async def user_input(sid, data):
         if audio_loop and audio_loop.project_manager:
             audio_loop.project_manager.log_chat("User", text)
             
+        if audio_loop and getattr(audio_loop, '_is_tool_call_pending', False):
+            print("[SERVER DEBUG] Tool call is currently pending.")
+            # Resolve any pending confirmations with the text
+            if audio_loop._pending_confirmations:
+                print(f"[SERVER DEBUG] Resolving {len(audio_loop._pending_confirmations)} pending confirmations with text input.")
+                for req_id, future in audio_loop._pending_confirmations.items():
+                    if not future.done():
+                        future.set_result(f"User interrupted with message: '{text}'")
+                await sio.emit('status', {'msg': 'Tool cancelled by user input'})
+                return
+            else:
+                # If there are no pending confirmations but tool is still executing
+                # We can't send text right now!
+                print("[SERVER DEBUG] Tool call is currently executing, cannot send text.")
+                await sio.emit('error', {'msg': 'Please wait for the current action to finish.'})
+                return
+
         # Use the same 'send' method that worked for audio, as 'send_realtime_input' and 'send_client_content' seem unstable in this env
         # INJECT VIDEO FRAME IF AVAILABLE (VAD-style logic for Text Input)
         if audio_loop and audio_loop._latest_image_payload:

@@ -139,6 +139,7 @@ class AudioLoop:
         self.audio_in_queue = None
         self.out_queue = None
         self.paused = False
+        self._is_tool_call_pending = False
 
         self.session = None
         
@@ -538,6 +539,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
     async def send_realtime(self):
         while True:
             msg = await self.out_queue.get()
+            if getattr(self, '_is_tool_call_pending', False):
+                continue
             await self.session.send(input=msg, end_of_turn=False)
 
     async def listen_audio(self):
@@ -2117,9 +2120,11 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                     # 3. Handle Tool Calls
                     if response.tool_call:
-                        # print("The tool was called")
-                        function_responses = []
-                        for fc in response.tool_call.function_calls:
+                        self._is_tool_call_pending = True
+                        try:
+                            # print("The tool was called")
+                            function_responses = []
+                            for fc in response.tool_call.function_calls:
                             if INCLUDE_RAW_LOGS:
                                 print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
                             else:
@@ -2167,14 +2172,15 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                         print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
                                     confirmed = False
 
-                            if not confirmed:
+                            if confirmed is not True:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user.")
+                                    print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user. Reason: {confirmed}")
+                                result_str = confirmed if isinstance(confirmed, str) else "User denied the request to use this tool."
                                 function_response = types.FunctionResponse(
                                     id=fc.id,
                                     name=fc.name,
                                     response={
-                                        "result": "User denied the request to use this tool.",
+                                        "result": result_str,
                                     }
                                 )
                                 function_responses.append(function_response)
@@ -2195,6 +2201,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                             if INCLUDE_RAW_LOGS:
                                 print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
                             await self.session.send_tool_response(function_responses=function_responses)
+                        
+                        except Exception as e:
+                            if INCLUDE_RAW_LOGS:
+                                print(f"[ADA DEBUG] [ERR] Error processing tool call: {e}")
+                            raise e
+                        finally:
+                            self._is_tool_call_pending = False
                 
                 # Turn/Response Loop Finished
                 # Check if we have a Slack message to send
