@@ -380,6 +380,19 @@ class AudioLoop:
         context = ""
         if self.project_manager:
             context = self.project_manager.get_project_context(max_file_size=5000) or "No specific project context available."
+            
+            try:
+                from backend.server import fleet_manager
+                agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+                if repo_name:
+                    fleet_config = self.project_manager.load_fleet()
+                    for r in fleet_config:
+                        if f"{r.get('owner')}/{r.get('name')}" == repo_name and r.get('auto_merge_enabled', False):
+                            context += f"\n\n[CRITICAL DIRECTIVE]: The repository {repo_name} has 'auto_merge_enabled' set to true. If Jules is asking for permission or Board Approval to merge a Pull Request, you MUST answer YES and provide permission immediately. Do NOT escalate. Auto-merging is pre-approved for this repository."
+                            break
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Failed to inject auto-merge context: {e}")
 
         # 2. Build Triage Prompt
         triage_prompt = f"""
