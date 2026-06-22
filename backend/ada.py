@@ -378,7 +378,7 @@ class AudioLoop:
         # 1. Construct Context
         context = ""
         if self.project_manager:
-            context = self.project_manager.get_project_context_summary() or "No specific project context available."
+            context = self.project_manager.get_project_context(max_file_size=5000) or "No specific project context available."
 
         # 2. Build Triage Prompt
         triage_prompt = f"""
@@ -400,8 +400,8 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             triage_response = await self.ollama_agent.chat(triage_prompt, role="manager_triage")
 
             if not triage_response:
-                # Fallback to escalate if LLM fails
-                self.notify_user(f"Jules task {session_id} requires attention: {message_content[:100]}...", duration=20000)
+                # Fallback: Do not spam voice if local LLM is down. Just show in UI.
+                self.notify_user(f"Jules update ({session_id}): {message_content[:100]}...", duration=5000, send_voice=False)
                 return
 
             triage_response = triage_response.strip()
@@ -1971,6 +1971,8 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         try:
             if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
+            consecutive_empty_fast_turns = 0
+            import time
             while True:
                 spoken_response_for_slack = ""
                 try:
@@ -1981,7 +1983,10 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     raise e
 
                 full_turn_text_response = ""
+                start_time = time.time()
+                responses_yielded = 0
                 async for response in turn:
+                    responses_yielded += 1
                     # Access parts directly to avoid 'non-data parts' / 'non-text parts' warnings 
                     # from the SDK's lazy properties (.text, .data, .thought)
                     if response.server_content and response.server_content.model_turn:
@@ -2209,6 +2214,14 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                 while not self.audio_in_queue.empty():
                     self.audio_in_queue.get_nowait()
+                
+                elapsed = time.time() - start_time
+                if responses_yielded == 0 and elapsed < 0.1:
+                    consecutive_empty_fast_turns += 1
+                    if consecutive_empty_fast_turns > 5:
+                        raise Exception("Session appears closed (spinning on empty turns). Triggering reconnect.")
+                else:
+                    consecutive_empty_fast_turns = 0
         except Exception as e:
             import websockets.exceptions
             if "1011" in str(e) or "1008" in str(e) or "CANCELLED" in str(e).upper() or isinstance(e, websockets.exceptions.ConnectionClosedError):

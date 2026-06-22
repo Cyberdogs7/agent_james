@@ -68,15 +68,15 @@ class JulesAgent:
         for attempt in range(max_retries):
             try:
                 response = await client.request(method, url, **kwargs)
-                response_text = response.text
                 self._log(f"[JULES_AGENT] Response for {tool_name}:")
                 self._log(f"  - Status Code: {response.status_code}")
 
                 # Log simplified data for list_sessions to avoid "artifacts"
                 if self.include_raw:
+                    response_text = await asyncio.to_thread(lambda: response.text)
                     if tool_name == "list_sessions" and response.status_code == 200:
                         try:
-                            data = response.json()
+                            data = await asyncio.to_thread(response.json)
                             if "sessions" in data:
                                 simplified = [{"name": s.get("name"), "state": s.get("state")} for s in data["sessions"][:10]]
                                 print(f"  - Simplified Data (First 10): {simplified}")
@@ -88,7 +88,7 @@ class JulesAgent:
                         print(f"  - Raw Data: {response_text}")
 
                 response.raise_for_status()
-                return response.json()
+                return await asyncio.to_thread(response.json)
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
                     delay = base_delay * (2 ** attempt)
@@ -253,6 +253,14 @@ class JulesAgent:
         """Internal loop to poll for updates on a session."""
         last_activity_count = 0
         last_activity_time = datetime.now()
+
+        # Initialize last_activity_count to avoid replaying history on restart
+        try:
+            initial_activities_response = await self.list_activities(session_id)
+            if initial_activities_response and "activities" in initial_activities_response:
+                last_activity_count = len(initial_activities_response["activities"])
+        except Exception:
+            pass
 
         while not stop_event.is_set():
             try:

@@ -23,6 +23,24 @@ class OllamaAgent:
         """Returns the latest generated thought/content for the session."""
         return self.insights.get(session_id, "")
 
+    async def chat(self, prompt, role=None, model="llama3"):
+        """Simple stateless chat method for quick one-off prompts."""
+        url = f"{self.base_url}/api/generate"
+        payload = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False
+        }
+        try:
+            response = await self.client.post(url, json=payload, timeout=60.0)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("response", "")
+            return None
+        except Exception as e:
+            print(f"[OllamaAgent] Chat error: {e}")
+            return None
+
     async def list_activities(self, session_id):
         """Returns the activity log for the session in Jules API format."""
         session = self.sessions.get(session_id)
