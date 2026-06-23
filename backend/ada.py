@@ -1949,7 +1949,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         user_profile = self.project_manager.get_user_profile()
         if user_profile:
             profile_str = "\n".join([f"- {k}: {v}" for k, v in user_profile.items()])
-            system_prompt += f"\n\nHere are known User Preferences and Constraints:\n{profile_str}"
+            system_prompt += f"\n\nHere are known User Preferences and Constraints:\n{profile_str}\n\nIMPORTANT: The above are passive, long-term preferences. DO NOT treat them as immediate commands or pending tasks. Wait for the user to explicitly ask you to do something before taking action."
 
         voice_name = project_config.get("voice_name", "Sadaltager")
 
@@ -2827,10 +2827,10 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 # Summarize and extract preferences
                 transcript = "\n".join(new_lines)
                 prompt = (
-                    "Analyze the following conversation transcript and extract any new or updated user preferences, "
-                    "constraints, goals, or important contextual details about the user.\n"
-                    "Return ONLY a valid JSON object representing key-value pairs of these preferences. "
-                    "If no new preferences are found, return an empty JSON object {}.\n\n"
+                    "Analyze the following conversation transcript and extract ONLY long-term, persistent user preferences or constraints.\n"
+                    "Do NOT extract specific one-off tasks, immediate goals, PR numbers, or transient commands (like 'play music', 'stop', 'merge PR 123').\n"
+                    "Return ONLY a valid JSON object representing key-value pairs of these long-term preferences. "
+                    "If no new persistent preferences are found, return an empty JSON object {}.\n\n"
                     f"Transcript:\n{transcript}"
                 )
 
