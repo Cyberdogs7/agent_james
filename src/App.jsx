@@ -111,6 +111,17 @@ function App() {
   const [notificationHistory, setNotificationHistory] = useState([]);
   const [showNotificationHistory, setShowNotificationHistory] = useState(false);
 
+  const [reaction, setReaction] = useState('idle');
+  const reactionTimerRef = useRef(null);
+
+  const triggerReaction = (newReaction, duration = 0) => {
+      setReaction(newReaction);
+      if (reactionTimerRef.current) clearTimeout(reactionTimerRef.current);
+      if (duration > 0) {
+          reactionTimerRef.current = setTimeout(() => setReaction('idle'), duration);
+      }
+  };
+
   // RESTORED STATE
   const fpsRef = useRef(0);
 
@@ -467,6 +478,20 @@ function App() {
             } else if (data.msg === 'A.D.A Stopped') {
                 setStatus('Connected');
             }
+
+            // Update Reaction State
+            const lower = data.msg.toLowerCase();
+            if (lower.includes('delegate') || lower.includes('spawning') || lower.includes('jules') || lower.includes('agent')) {
+                triggerReaction('delegate_task', 5000);
+            } else if (lower.includes('task prompt') || lower.includes('generating') || lower.includes('planning')) {
+                triggerReaction('intense_thinking', 10000);
+            } else if (lower.includes('success') || lower.includes('complete') || lower.includes('done')) {
+                triggerReaction('success', 5000);
+            } else if (lower.includes('error') || lower.includes('fail')) {
+                triggerReaction('alert', 5000);
+            } else if (lower.includes('thinking') || lower.includes('processing')) {
+                triggerReaction('thinking', 5000);
+            }
         });
         socket.on('auth_status', (data) => {
             console.log("Auth Status:", data);
@@ -501,6 +526,7 @@ function App() {
         socket.on('error', (data) => {
             console.error("Socket Error:", data);
             addMessage('System', `Error: ${data.msg}`);
+            triggerReaction('alert', 5000);
         });
         socket.on('cad_data', (data) => {
             console.log("Received CAD Data:", data);
@@ -1868,6 +1894,7 @@ function App() {
               timers={timers}
               currentProject={currentProject}
               facePosition={facePosition}
+              reaction={reaction}
             />
           </div>
           {isModularMode && (

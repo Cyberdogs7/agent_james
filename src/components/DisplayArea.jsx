@@ -4,9 +4,10 @@ import WeatherWidget from './WeatherWidget';
 import TimerCarousel from './TimerCarousel';
 import AvatarCanvas from './AvatarCanvas';
 import SelectWindow from './SelectWindow';
+import VideoAvatar from './VideoAvatar';
 import { X } from 'lucide-react';
 
-const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition }) => {
+const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition, reaction }) => {
   const [displayContent, setDisplayContent] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
@@ -153,7 +154,7 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
       if (avatarUrl) {
           return <AvatarCanvas audioData={aiAudioData} vrmUrl={avatarUrl} facePosition={facePosition} />;
       }
-      return <Visualizer isListening={isListening} audioData={aiAudioData} intensity={intensity} />;
+      return <VideoAvatar reaction={reaction} />;
     }
 
     switch (displayContent.content_type) {
@@ -168,7 +169,7 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
         }
         return null;
       default:
-        return <Visualizer isListening={isListening} audioData={aiAudioData} intensity={intensity} />;
+        return <VideoAvatar reaction={reaction} />;
     }
   };
 
