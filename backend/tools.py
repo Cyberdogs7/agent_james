@@ -2328,6 +2328,125 @@ all_tools_list = [
             },
             "required": ["name", "description", "code"]
         }
+    },
+    {
+        "name": "google_login",
+        "description": "Initiates browser-based login for a Google service (e.g., YouTube Music). Opens a browser window for the user to log in. Use this when the user asks to sign in to YouTube, YouTube Music, or Google services.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "service": {
+                    "type": "STRING",
+                    "description": "The Google service to authenticate with. Currently supports 'youtube_music'."
+                }
+            },
+            "required": ["service"]
+        }
+    },
+    {
+        "name": "google_logout",
+        "description": "Logs out of a Google service and clears stored credentials. Use this when the user asks to sign out.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "service": {
+                    "type": "STRING",
+                    "description": "The service to log out from (e.g., 'youtube_music')."
+                }
+            },
+            "required": ["service"]
+        }
+    },
+    {
+        "name": "google_auth_status",
+        "description": "Checks which Google services the user is currently signed into.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "youtube_library_playlists",
+        "description": "Gets the user's saved YouTube Music playlists. Requires Google login.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "youtube_library_songs",
+        "description": "Gets the user's liked/saved YouTube Music songs. Requires Google login.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "youtube_history",
+        "description": "Gets the user's YouTube Music play history. Requires Google login.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
+        "name": "youtube_rate_song",
+        "description": "Rates a YouTube video/song (like, dislike, or remove rating). Requires Google login.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "video_id": {
+                    "type": "STRING",
+                    "description": "The YouTube video ID to rate."
+                },
+                "rating": {
+                    "type": "STRING",
+                    "description": "The rating: 'like', 'dislike', or 'remove' to clear rating."
+                }
+            },
+            "required": ["video_id", "rating"]
+        }
+    },
+    {
+        "name": "youtube_create_playlist",
+        "description": "Creates a new YouTube Music playlist. Requires Google login.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "name": {
+                    "type": "STRING",
+                    "description": "The name for the new playlist."
+                },
+                "description": {
+                    "type": "STRING",
+                    "description": "Optional description for the playlist."
+                },
+                "privacy": {
+                    "type": "STRING",
+                    "description": "Privacy setting: 'PUBLIC', 'UNLISTED', or 'PRIVATE'. Defaults to PRIVATE."
+                }
+            },
+            "required": ["name"]
+        }
+    },
+    {
+        "name": "youtube_add_to_playlist",
+        "description": "Adds videos/songs to an existing YouTube Music playlist. Requires Google login.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "playlist_id": {
+                    "type": "STRING",
+                    "description": "The ID of the playlist to add to."
+                },
+                "video_ids": {
+                    "type": "ARRAY",
+                    "items": {"type": "STRING"},
+                    "description": "List of YouTube video IDs to add."
+                }
+            },
+            "required": ["playlist_id", "video_ids"]
+        }
     }
 ]
 

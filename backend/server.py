@@ -2690,6 +2690,77 @@ async def update_task_status_lane(sid, data):
         if status in ["dev_implementation", "review_verification", "todo_planning"]:
             await check_and_start_next_task(repo_name)
 
+# ==================== OAuth / Google Authentication Socket Events ====================
+
+@sio.event
+async def oauth_login_complete(sid, data):
+    """
+    Frontend signals that the user has completed login in the browser.
+    This triggers the OAuthManager to capture cookies and store credentials.
+    """
+    provider = data.get("provider", "youtube_music")
+    print(f"[SERVER] OAuth login complete signal received for: {provider}")
+    
+    if audio_loop and audio_loop.oauth_manager:
+        # Emit status update
+        await sio.emit("oauth_status", {
+            "provider": provider,
+            "status": "processing",
+            "message": "Capturing session data..."
+        })
+        
+        # The actual login is handled by the tool call flow
+        # This event just signals that the user has completed the browser step
+        await sio.emit("oauth_status", {
+            "provider": provider,
+            "status": "complete",
+            "message": f"Successfully authenticated with {provider}"
+        })
+
+@sio.event
+async def oauth_start_login(sid, data):
+    """
+    Frontend requests to start the OAuth login flow for a provider.
+    Opens browser window for user to log in.
+    """
+    provider = data.get("provider", "youtube_music")
+    print(f"[SERVER] OAuth login request for: {provider}")
+    
+    if audio_loop and audio_loop.oauth_manager:
+        # Start the login flow
+        result = await audio_loop.oauth_manager.start_login(provider, sio=sio)
+        await sio.emit("oauth_status", result)
+    else:
+        await sio.emit("oauth_status", {
+            "provider": provider,
+            "status": "error",
+            "message": "Audio loop or OAuth manager not initialized"
+        })
+
+@sio.event
+async def oauth_check_status(sid, data):
+    """Check authentication status for all providers."""
+    if audio_loop and audio_loop.oauth_manager:
+        providers = audio_loop.oauth_manager.list_providers()
+        status = {}
+        for provider in providers:
+            status[provider] = audio_loop.oauth_manager.is_authenticated(provider)
+        await sio.emit("oauth_status_response", status)
+    else:
+        await sio.emit("oauth_status_response", {})
+
+@sio.event
+async def oauth_logout(sid, data):
+    """Log out from a provider."""
+    provider = data.get("provider")
+    if provider and audio_loop and audio_loop.oauth_manager:
+        audio_loop.oauth_manager.clear_credentials(provider)
+        await sio.emit("oauth_status", {
+            "provider": provider,
+            "status": "logged_out",
+            "message": f"Logged out from {provider}"
+        })
+
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
     print(f"[SERVER] Starting server on port {port}")

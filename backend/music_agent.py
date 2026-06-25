@@ -10,13 +10,14 @@ from ytmusicapi import YTMusic
 import yt_dlp
 
 class MusicAgent:
-    def __init__(self, sio=None):
+    def __init__(self, sio=None, yt=None):
         self.sio = sio
-        self.yt = YTMusic()
+        self.yt = yt if yt else YTMusic()
         self.current_track = {"title": "Unknown", "artist": "Unknown", "time": "0:00"}
         self.is_playing = False
         self.logger = logging.getLogger("MusicAgent")
         self.logger.setLevel(logging.INFO)
+        self._authenticated = yt is not None
 
         self.ffmpeg_process = None
         self._stop_event = threading.Event()
@@ -706,3 +707,125 @@ class MusicAgent:
             return f"Volume down to {int(self.volume * 100)}%."
 
         return "Action not supported."
+
+    def set_authenticated_client(self, yt):
+        """Set an authenticated YTMusic client."""
+        self.yt = yt
+        self._authenticated = True
+        self.logger.info("MusicAgent: Switched to authenticated client")
+
+    def is_authenticated(self):
+        """Check if the agent has an authenticated client."""
+        return self._authenticated
+
+    # ==================== Authenticated Methods ====================
+    # These methods require browser-based auth via OAuthManager
+
+    def get_library_playlists(self):
+        """Get user's saved playlists. Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            playlists = self.yt.get_library_playlists(limit=25)
+            if not playlists:
+                return "No playlists in your library."
+            result = "Your Playlists:\n"
+            for i, pl in enumerate(playlists, 1):
+                title = pl.get("title", "Unknown")
+                count = pl.get("count", "?")
+                result += f"{i}. {title} ({count} tracks)\n"
+            return result
+        except Exception as e:
+            self.logger.error(f"Failed to get library playlists: {e}")
+            return f"Failed to get playlists: {e}"
+
+    def get_library_songs(self):
+        """Get user's liked songs. Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            songs = self.yt.get_library_songs(limit=25)
+            if not songs:
+                return "No liked songs in your library."
+            result = "Your Liked Songs:\n"
+            for i, song in enumerate(songs, 1):
+                title = song.get("title", "Unknown")
+                artists = ", ".join([a["name"] for a in song.get("artists", [])])
+                result += f"{i}. {title} by {artists}\n"
+            return result
+        except Exception as e:
+            self.logger.error(f"Failed to get library songs: {e}")
+            return f"Failed to get liked songs: {e}"
+
+    def get_history(self):
+        """Get play history. Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            history = self.yt.get_history(limit=25)
+            if not history:
+                return "No play history found."
+            result = "Your Play History:\n"
+            for i, item in enumerate(history, 1):
+                title = item.get("title", "Unknown")
+                artists = ", ".join([a["name"] for a in item.get("artists", [])])
+                result += f"{i}. {title} by {artists}\n"
+            return result
+        except Exception as e:
+            self.logger.error(f"Failed to get history: {e}")
+            return f"Failed to get history: {e}"
+
+    def rate_song(self, video_id, rating="LIKE"):
+        """Rate a song (LIKE, INDIFFERENT, DISLIKE). Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            rating_map = {
+                "like": "LIKE",
+                "dislike": "DISLIKE",
+                "indifferent": "INDIFFERENT",
+                "remove": "INDIFFERENT"
+            }
+            yt_rating = rating_map.get(rating.lower(), rating.upper())
+            self.yt.rate_song(video_id, yt_rating)
+            return f"Rated video {video_id} as {yt_rating}"
+        except Exception as e:
+            self.logger.error(f"Failed to rate song: {e}")
+            return f"Failed to rate song: {e}"
+
+    def create_library_playlist(self, name, description="", privacy="PRIVATE"):
+        """Create a new playlist. Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            playlist_id = self.yt.create_playlist(
+                name=name,
+                description=description,
+                privacy=privacy
+            )
+            return f"Created playlist '{name}' (ID: {playlist_id})"
+        except Exception as e:
+            self.logger.error(f"Failed to create playlist: {e}")
+            return f"Failed to create playlist: {e}"
+
+    def add_to_playlist(self, playlist_id, video_ids):
+        """Add videos to a playlist. Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            self.yt.add_playlist_items(playlist_id, video_ids)
+            return f"Added {len(video_ids)} tracks to playlist"
+        except Exception as e:
+            self.logger.error(f"Failed to add to playlist: {e}")
+            return f"Failed to add to playlist: {e}"
+
+    def get_account_info(self):
+        """Get current account info. Requires authentication."""
+        if not self._authenticated:
+            return "Not signed in. Use 'google_login' to authenticate with YouTube Music."
+        try:
+            info = self.yt.get_account_info()
+            return f"Signed in as: {info}"
+        except Exception as e:
+            self.logger.error(f"Failed to get account info: {e}")
+            return f"Failed to get account info: {e}"

@@ -92,6 +92,9 @@ except ImportError:
     from backend.task_manager import TaskManager
     from message_deduplicator import MessageDeduplicator
 
+from backend.oauth_manager import OAuthManager
+from backend.providers import register_all_providers
+
 class AudioLoop:
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
         self.sio = sio
@@ -203,6 +206,13 @@ class AudioLoop:
         self.github_agent = GitHubAgent(self.project_manager)
         self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
         self.research_agent = ResearchAgent(self.tool_registry, self.browser_agent)
+
+        # Initialize OAuth Manager and register providers
+        self.oauth_manager = OAuthManager(sio=self.sio)
+        register_all_providers(self.oauth_manager)
+        
+        # Check for existing YouTube Music credentials and set up authenticated client
+        self._setup_authenticated_music_agent()
 
         self.sct = None
 
@@ -963,6 +973,72 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("play_music", self.music_agent.play)
         self.tool_registry.register("control_music", self.music_agent.control)
         self.tool_registry.register("create_playlist", self.music_agent.create_playlist)
+
+        # OAuth / Google Authentication Tools
+        self.tool_registry.register("google_login", self.handle_google_login)
+        self.tool_registry.register("google_logout", self.handle_google_logout)
+        self.tool_registry.register("google_auth_status", self.handle_google_auth_status)
+        self.tool_registry.register("youtube_library_playlists", self.music_agent.get_library_playlists)
+        self.tool_registry.register("youtube_library_songs", self.music_agent.get_library_songs)
+        self.tool_registry.register("youtube_history", self.music_agent.get_history)
+        self.tool_registry.register("youtube_rate_song", self.music_agent.rate_song)
+        self.tool_registry.register("youtube_create_playlist", self.music_agent.create_library_playlist)
+        self.tool_registry.register("youtube_add_to_playlist", self.music_agent.add_to_playlist)
+
+    def _setup_authenticated_music_agent(self):
+        """Check for existing YouTube Music credentials and set up authenticated client."""
+        try:
+            if self.oauth_manager.is_authenticated("youtube_music"):
+                print("[ADA] Found existing YouTube Music credentials, setting up authenticated client...")
+                config = self.oauth_manager.get_provider("youtube_music")
+                if config and config.get("client_factory"):
+                    creds = self.oauth_manager.get_credentials("youtube_music")
+                    if creds:
+                        yt_client = config["client_factory"](creds)
+                        if yt_client:
+                            self.music_agent.set_authenticated_client(yt_client)
+                            print("[ADA] YouTube Music authenticated successfully")
+        except Exception as e:
+            print(f"[ADA] Warning: Failed to set up authenticated music agent: {e}")
+
+    async def handle_google_login(self, service):
+        """Handler for google_login tool."""
+        if service not in self.oauth_manager.list_providers():
+            return f"Unknown service: {service}. Available services: {', '.join(self.oauth_manager.list_providers())}"
+        
+        result = await self.oauth_manager.start_login(service, sio=self.sio)
+        
+        if result["status"] == "success":
+            # Re-setup the music agent if YouTube Music was authenticated
+            if service == "youtube_music":
+                self._setup_authenticated_music_agent()
+        
+        return result.get("message", "Login completed")
+
+    async def handle_google_logout(self, service):
+        """Handler for google_logout tool."""
+        self.oauth_manager.clear_credentials(service)
+        
+        # Reset music agent to unauthenticated if YouTube Music
+        if service == "youtube_music":
+            from ytmusicapi import YTMusic
+            self.music_agent.yt = YTMusic()
+            self.music_agent._authenticated = False
+        
+        return f"Logged out of {service}"
+
+    async def handle_google_auth_status(self):
+        """Handler for google_auth_status tool."""
+        providers = self.oauth_manager.list_providers()
+        if not providers:
+            return "No authentication providers configured."
+        
+        status = []
+        for provider in providers:
+            authenticated = self.oauth_manager.is_authenticated(provider)
+            status.append(f"{provider}: {'Signed in' if authenticated else 'Not signed in'}")
+        
+        return "Authentication Status:\n" + "\n".join(status)
 
     # --- Wrapper Methods for Async Tasks (to return immediate response) ---
     async def handle_cad_request(self, prompt):
