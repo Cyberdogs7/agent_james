@@ -18,6 +18,13 @@ const TOOLS = [
     { id: 'iterate_cad', label: 'Iterate CAD' },
 ];
 
+const FREE_MODELS = [
+    { id: 'opencode/big-pickle', label: 'Big Pickle (Free)' },
+    { id: 'opencode/deepseek-v4-flash-free', label: 'DeepSeek V4 Flash (Free)' },
+    { id: 'opencode/minimax-m2.5-free', label: 'MiniMax M2.5 (Free)' },
+    { id: 'opencode/nemotron-3-super-free', label: 'Nemotron 3 Super (Free)' },
+];
+
 const SettingsWindow = ({
     socket,
     micDevices,
@@ -40,6 +47,29 @@ const SettingsWindow = ({
     const [faceAuthEnabled, setFaceAuthEnabled] = useState(false);
     const [apiKeys, setApiKeys] = useState({});
     const [showKey, setShowKey] = useState({});
+    const [opencodeSettings, setOpencodeSettings] = useState({
+        server_url: 'http://127.0.0.1:4096',
+        server_port: 4096,
+        auto_start: true,
+        use_worktrees: true,
+        use_interceptor: true,
+        model_tiers: {
+            high: 'opencode/big-pickle',
+            medium: 'opencode/deepseek-v4-flash-free',
+            low: 'opencode/nemotron-3-super-free'
+        }
+    });
+
+    const updateOpencodeSetting = (key, value) => {
+        setOpencodeSettings(prev => ({ ...prev, [key]: value }));
+    };
+
+    const updateModelTier = (tier, modelId) => {
+        setOpencodeSettings(prev => ({
+            ...prev,
+            model_tiers: { ...prev.model_tiers, [tier]: modelId }
+        }));
+    };
 
     useEffect(() => {
         // Request initial permissions and keys
@@ -54,6 +84,21 @@ const SettingsWindow = ({
                 if (typeof settings.face_auth_enabled !== 'undefined') {
                     setFaceAuthEnabled(settings.face_auth_enabled);
                     localStorage.setItem('face_auth_enabled', settings.face_auth_enabled);
+                }
+                // Load OpenCode settings
+                if (settings.opencode_server_url) {
+                    setOpencodeSettings({
+                        server_url: settings.opencode_server_url || 'http://127.0.0.1:4096',
+                        server_port: settings.opencode_server_port || 4096,
+                        auto_start: settings.opencode_auto_start !== false,
+                        use_worktrees: settings.opencode_use_worktrees !== false,
+                        use_interceptor: settings.opencode_use_interceptor !== false,
+                        model_tiers: settings.opencode_model_tiers || {
+                            high: 'opencode/big-pickle',
+                            medium: 'opencode/deepseek-v4-flash-free',
+                            low: 'opencode/nemotron-3-super-free'
+                        }
+                    });
                 }
             }
         };
@@ -253,6 +298,99 @@ const SettingsWindow = ({
                             </div>
                         );
                     })}
+                </div>
+            </div>
+
+            {/* OpenCode Section */}
+            <div className="mb-6">
+                <h3 className="text-gold9 font-bold mb-3 text-xs uppercase tracking-wider opacity-80">OpenCode Configuration</h3>
+                <div className="space-y-3">
+                    {/* Server URL */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-gold8/60 uppercase">Server URL</label>
+                        <input
+                            type="text"
+                            value={opencodeSettings.server_url || 'http://127.0.0.1:4096'}
+                            onChange={(e) => updateOpencodeSetting('server_url', e.target.value)}
+                            className="w-full bg-gray-900 border border-gold8 rounded p-2 text-xs text-gold9 focus:border-gold9 outline-none font-mono"
+                        />
+                    </div>
+
+                    {/* Port */}
+                    <div className="flex flex-col gap-1">
+                        <label className="text-[10px] text-gold8/60 uppercase">Server Port</label>
+                        <input
+                            type="number"
+                            value={opencodeSettings.server_port || 4096}
+                            onChange={(e) => updateOpencodeSetting('server_port', parseInt(e.target.value) || 4096)}
+                            className="w-full bg-gray-900 border border-gold8 rounded p-2 text-xs text-gold9 focus:border-gold9 outline-none font-mono"
+                        />
+                    </div>
+
+                    {/* Toggles */}
+                    <div className="flex items-center justify-between text-xs bg-gray-900/50 p-2 rounded border border-gold9/30">
+                        <span className="text-gold9/80">Auto-start Server</span>
+                        <button
+                            onClick={() => updateOpencodeSetting('auto_start', !opencodeSettings.auto_start)}
+                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${opencodeSettings.auto_start ? 'bg-gold9/80' : 'bg-gray-700'}`}
+                        >
+                            <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${opencodeSettings.auto_start ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs bg-gray-900/50 p-2 rounded border border-gold9/30">
+                        <span className="text-gold9/80">Use Workspaces (Git Worktrees)</span>
+                        <button
+                            onClick={() => updateOpencodeSetting('use_worktrees', !opencodeSettings.use_worktrees)}
+                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${opencodeSettings.use_worktrees ? 'bg-gold9/80' : 'bg-gray-700'}`}
+                        >
+                            <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${opencodeSettings.use_worktrees ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs bg-gray-900/50 p-2 rounded border border-gold9/30">
+                        <span className="text-gold9/80">Use Triage Interceptor</span>
+                        <button
+                            onClick={() => updateOpencodeSetting('use_interceptor', !opencodeSettings.use_interceptor)}
+                            className={`relative w-8 h-4 rounded-full transition-colors duration-200 ${opencodeSettings.use_interceptor ? 'bg-gold9/80' : 'bg-gray-700'}`}
+                        >
+                            <div className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform duration-200 ${opencodeSettings.use_interceptor ? 'translate-x-4' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    {/* Model Tiers */}
+                    <div className="mt-3">
+                        <label className="text-[10px] text-gold8/60 uppercase block mb-2">Model Tiers (Free Models)</label>
+                        {['high', 'medium', 'low'].map(tier => (
+                            <div key={tier} className="flex items-center gap-2 mb-2">
+                                <span className="text-[10px] text-gold9/60 uppercase w-12">{tier}</span>
+                                <select
+                                    value={opencodeSettings.model_tiers?.[tier] || ''}
+                                    onChange={(e) => updateModelTier(tier, e.target.value)}
+                                    className="flex-1 bg-gray-900 border border-gold8 rounded p-2 text-xs text-gold9 focus:border-gold9 outline-none"
+                                >
+                                    {FREE_MODELS.map(m => (
+                                        <option key={m.id} value={m.id}>{m.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Save Button */}
+                    <button
+                        onClick={() => socket.emit('update_settings', {
+                            opencode_server_url: opencodeSettings.server_url,
+                            opencode_server_port: opencodeSettings.server_port,
+                            opencode_auto_start: opencodeSettings.auto_start,
+                            opencode_use_worktrees: opencodeSettings.use_worktrees,
+                            opencode_use_interceptor: opencodeSettings.use_interceptor,
+                            opencode_model_tiers: opencodeSettings.model_tiers
+                        })}
+                        className="w-full mt-2 py-2 bg-gold9/20 hover:bg-gold9/30 text-gold9 border border-gold9/50 rounded text-xs uppercase tracking-wider font-bold transition-colors"
+                    >
+                        Save OpenCode Settings
+                    </button>
                 </div>
             </div>
 

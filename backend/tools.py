@@ -895,6 +895,103 @@ run_openhands_agent_tool = {
     }
 }
 
+run_opencode_agent_tool = {
+    "name": "run_opencode_agent",
+    "description": "Creates a new OpenCode coding task. Best for local codebase work with workspace isolation. Use when the user specifically asks for OpenCode.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {
+                "type": "STRING",
+                "description": "The description of the coding task."
+            },
+            "repo_path": {
+                "type": "STRING",
+                "description": "Optional: The local repository path. Defaults to current project."
+            },
+            "model_tier": {
+                "type": "STRING",
+                "enum": ["high", "medium", "low"],
+                "description": "Optional: Model complexity tier. Maps to configured model in settings. If not provided, ADA will ask."
+            }
+        },
+        "required": ["prompt"]
+    }
+}
+
+send_opencode_feedback_tool = {
+    "name": "send_opencode_feedback",
+    "description": "Sends feedback or a follow-up message to an existing OpenCode session.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The OpenCode session ID."
+            },
+            "feedback": {
+                "type": "STRING",
+                "description": "The feedback message to send."
+            }
+        },
+        "required": ["session_id", "feedback"]
+    }
+}
+
+list_opencode_sessions_tool = {
+    "name": "list_opencode_sessions",
+    "description": "Lists all active OpenCode sessions with their status.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {}
+    }
+}
+
+list_opencode_messages_tool = {
+    "name": "list_opencode_messages",
+    "description": "Lists messages in an OpenCode session to check progress.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The OpenCode session ID."
+            }
+        },
+        "required": ["session_id"]
+    }
+}
+
+abort_opencode_session_tool = {
+    "name": "abort_opencode_session",
+    "description": "Aborts a running OpenCode session.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The OpenCode session ID to abort."
+            }
+        },
+        "required": ["session_id"]
+    }
+}
+
+dismiss_opencode_session_tool = {
+    "name": "dismiss_opencode_session",
+    "description": "Stops polling and dismisses an OpenCode session.",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "session_id": {
+                "type": "STRING",
+                "description": "The OpenCode session ID to dismiss."
+            }
+        },
+        "required": ["session_id"]
+    }
+}
+
 create_coding_task_tool = {
     "name": "create_coding_task",
     "description": "Initiates a coding task. Always use this tool when the user asks you to perform a coding task, write code, or fix a bug.",
@@ -1740,6 +1837,12 @@ all_tools_list = [
     create_coding_task_tool,
     run_jules_agent_tool,
     run_openhands_agent_tool,
+    run_opencode_agent_tool,
+    send_opencode_feedback_tool,
+    list_opencode_sessions_tool,
+    list_opencode_messages_tool,
+    abort_opencode_session_tool,
+    dismiss_opencode_session_tool,
     run_ollama_agent_tool,
     run_lm_studio_agent_tool,
     run_openrouter_agent_tool,

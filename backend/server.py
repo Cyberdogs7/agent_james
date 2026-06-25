@@ -204,7 +204,27 @@ DEFAULT_SETTINGS = {
     "printers": [], # List of {host, port, name, type}
     "kasa_devices": [], # List of {ip, alias, model}
     "camera_flipped": False, # Invert cursor horizontal direction
-    "auto_merge_master": False
+    "auto_merge_master": False,
+    "opencode_server_url": "http://127.0.0.1:4096",
+    "opencode_server_port": 4096,
+    "opencode_auto_start": True,
+    "opencode_use_worktrees": True,
+    "opencode_use_interceptor": True,
+    "opencode_model_tiers": {
+        "high": "opencode/big-pickle",
+        "medium": "opencode/deepseek-v4-flash-free",
+        "low": "opencode/nemotron-3-super-free"
+    },
+    "opencode_permission_rules": {
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "ask",
+        "bash": "ask",
+        "task": "ask",
+        "webfetch": "ask",
+        "doom_loop": "deny"
+    }
 }
 
 SETTINGS = copy.deepcopy(DEFAULT_SETTINGS)
@@ -1336,6 +1356,16 @@ async def update_settings(sid, data):
     if "auto_merge_master" in data:
         SETTINGS["auto_merge_master"] = data["auto_merge_master"]
 
+    # OpenCode settings
+    opencode_keys = [
+        "opencode_server_url", "opencode_server_port", "opencode_auto_start",
+        "opencode_use_worktrees", "opencode_use_interceptor",
+        "opencode_model_tiers", "opencode_permission_rules"
+    ]
+    for key in opencode_keys:
+        if key in data:
+            SETTINGS[key] = data[key]
+
     save_settings()
     # Broadcast new full settings
     await sio.emit('settings', SETTINGS)
@@ -1975,6 +2005,73 @@ async def send_jules_message(sid, data):
         activities = await audio_loop.handle_list_jules_activities(session_id)
         if isinstance(activities, list):
             await sio.emit('jules_activities', {'id': session_id, 'activities': activities})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+# --- OpenCode Socket.IO Events ---
+
+@sio.event
+async def get_opencode_sessions(sid):
+    """Lists all OpenCode sessions."""
+    if audio_loop and getattr(audio_loop, 'opencode_agent', None):
+        directory = None
+        if audio_loop.project_manager:
+            directory = str(audio_loop.project_manager.get_current_project_path())
+        sessions = await audio_loop.opencode_agent.list_sessions(directory=directory)
+        await sio.emit('opencode_sessions', sessions)
+    else:
+        await sio.emit('opencode_sessions', [])
+
+@sio.event
+async def send_opencode_message(sid, data):
+    """Sends a message to an OpenCode session."""
+    session_id = data.get('id')
+    message = data.get('message')
+    if audio_loop and getattr(audio_loop, 'opencode_agent', None):
+        result = await audio_loop.handle_opencode_feedback(session_id, message)
+        await sio.emit('status', {'msg': result})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
+async def dismiss_opencode_session(sid, data):
+    """Dismisses an OpenCode session."""
+    session_id = data.get('id')
+    if audio_loop and getattr(audio_loop, 'opencode_agent', None):
+        result = audio_loop.opencode_agent.dismiss_session(session_id)
+        await sio.emit('status', {'msg': result})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
+async def abort_opencode_session(sid, data):
+    """Aborts a running OpenCode session."""
+    session_id = data.get('id')
+    if audio_loop and getattr(audio_loop, 'opencode_agent', None):
+        directory = None
+        if audio_loop.project_manager:
+            directory = str(audio_loop.project_manager.get_current_project_path())
+        await audio_loop.opencode_agent.abort_session(session_id, directory=directory)
+        audio_loop.opencode_agent.stop_polling(session_id)
+        await sio.emit('status', {'msg': f"Session {session_id} aborted."})
+    else:
+        await sio.emit('error', {'msg': "System not ready"})
+
+@sio.event
+async def opencode_permission_response(sid, data):
+    """Responds to an OpenCode permission request."""
+    session_id = data.get('session_id')
+    permission_id = data.get('permission_id')
+    response = data.get('response')  # "allow" or "deny"
+    remember = data.get('remember', False)
+    if audio_loop and getattr(audio_loop, 'opencode_agent', None):
+        directory = None
+        if audio_loop.project_manager:
+            directory = str(audio_loop.project_manager.get_current_project_path())
+        await audio_loop.opencode_agent.respond_permission(
+            session_id, permission_id, response, remember, directory=directory
+        )
+        await sio.emit('status', {'msg': f"Permission {response}ed."})
     else:
         await sio.emit('error', {'msg': "System not ready"})
 

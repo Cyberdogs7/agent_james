@@ -357,3 +357,59 @@ class FleetManager:
                         self.save_state()
 
         return stuck_agents, agents_to_reallocate
+
+    # --- OpenCode Session Tracking ---
+
+    def track_opencode_session(self, session_id, repo_name=None, task_prompt=None):
+        """Track an OpenCode session in the fleet state."""
+        if repo_name:
+            self.ensure_repo(repo_name)
+            # Create a virtual agent entry for OpenCode
+            agent_id = f"opencode_{session_id[:8]}"
+            self.agents[agent_id] = {
+                "id": agent_id,
+                "status": "working",
+                "current_repo": repo_name,
+                "current_session": session_id,
+                "last_active": time.time(),
+                "error": None,
+                "api_key": None,
+                "account_name": "OpenCode"
+            }
+
+            # Add task to queue if provided
+            if task_prompt:
+                task_id = self.add_task_to_queue(repo_name, task_prompt)
+                self.update_task_status(repo_name, task_id, "in_progress", agent_id=agent_id)
+                self.update_task_session(repo_name, task_id, session_id)
+
+            self.save_state()
+            return agent_id
+        return None
+
+    def update_opencode_session(self, session_id, status):
+        """Update the status of a tracked OpenCode session."""
+        for agent_id, agent in self.agents.items():
+            if agent.get("current_session") == session_id and agent.get("account_name") == "OpenCode":
+                agent["status"] = status
+                agent["last_active"] = time.time()
+                self.save_state()
+                return True
+        return False
+
+    def untrack_opencode_session(self, session_id):
+        """Remove tracking for an OpenCode session."""
+        for agent_id, agent in list(self.agents.items()):
+            if agent.get("current_session") == session_id and agent.get("account_name") == "OpenCode":
+                # Mark task as completed if exists
+                for repo_data in self.repos.values():
+                    for task in repo_data.get("queue", []):
+                        if task.get("session_id") == session_id:
+                            task["status"] = "completed"
+                            break
+
+                # Remove the virtual agent
+                del self.agents[agent_id]
+                self.save_state()
+                return True
+        return False

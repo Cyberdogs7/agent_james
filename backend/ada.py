@@ -70,6 +70,7 @@ from backend.printer_agent import PrinterAgent
 from backend.trello_agent import TrelloAgent
 from backend.jules_agent import JulesAgent
 from backend.openhands_agent import OpenHandsAgent
+from backend.opencode_agent import OpenCodeAgent
 from backend.timer_agent import TimerAgent
 from backend.update_agent import UpdateAgent
 from backend.search_agent import SearchAgent
@@ -167,6 +168,7 @@ class AudioLoop:
         # Instantiate JulesAgent for session management and monitoring
         self.jules_agent = JulesAgent(project_manager=self.project_manager)
         self.openhands_agent = OpenHandsAgent()
+        self.opencode_agent = OpenCodeAgent(project_manager=self.project_manager)
 
         self.stop_event = asyncio.Event()
         self._reconnect_needed = asyncio.Event()
@@ -897,6 +899,14 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
         self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
+        # OpenCode Agent Tools
+        self.tool_registry.register("run_opencode_agent", self.handle_opencode_request)
+        self.tool_registry.register("send_opencode_feedback", self.handle_opencode_feedback)
+        self.tool_registry.register("list_opencode_sessions", self.opencode_agent.list_sessions_formatted)
+        self.tool_registry.register("list_opencode_messages", self.opencode_agent.list_messages_formatted)
+        self.tool_registry.register("abort_opencode_session", self.opencode_agent.abort_session)
+        self.tool_registry.register("dismiss_opencode_session", self.opencode_agent.dismiss_session)
+
         self.tool_registry.register("update_user_preferences", self.update_user_preferences)
         self.tool_registry.register("forget_memory", lambda keys: self.project_manager.forget_memory(keys)[1])
         self.tool_registry.register("schedule_routine", self.handle_schedule_routine)
@@ -992,14 +1002,14 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self._pending_coding_task_source = source
 
         # Instruct the model to immediately ask the user to choose
-        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or Jules for this coding task?' and then immediately display a select window with those two options. Do not do anything else until they respond."
+        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands, Jules, or OpenCode for this coding task?' and then immediately display a select window with those three options. Do not do anything else until they respond."
 
         if self.on_display_content:
             self.on_display_content({
                 "content_type": "widget",
                 "widget_type": "select",
                 "data": {
-                    "options": ["OpenHands", "Jules"]
+                    "options": ["OpenHands", "Jules", "OpenCode"]
                 }
             })
 
@@ -1031,6 +1041,215 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
 
         return f"Agent started. ID: {session.get('conversation_id') if session else 'Failed'}"
 
+    async def handle_opencode_request(self, prompt, repo_path=None, model_tier=None):
+        """Creates and starts a new OpenCode coding task."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENCODE] Task: '{prompt}' (Repo: {repo_path}, Tier: {model_tier})")
+
+        # Ensure server is running
+        server_ok = await self.opencode_agent.ensure_server_running()
+        if not server_ok:
+            msg = "System Notification: Failed to start OpenCode server. Please ensure 'opencode' is installed."
+            try:
+                await self.session.send(input=msg, end_of_turn=True)
+            except Exception:
+                pass
+            return "OpenCode server unavailable."
+
+        # Resolve directory
+        directory = repo_path
+        if not directory and self.project_manager:
+            directory = str(self.project_manager.get_current_project_path())
+
+        # Create workspace if worktrees enabled
+        task_id = f"task_{int(time.time() * 1000)}"
+        use_worktrees = SETTINGS.get("opencode_use_worktrees", True)
+        if use_worktrees and directory:
+            worktree_path = await self.opencode_agent.create_workspace(directory, task_id)
+            if worktree_path:
+                directory = worktree_path
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [OPENCODE] Created workspace: {worktree_path}")
+
+        # Resolve model tier
+        model = None
+        if model_tier:
+            model_tiers = SETTINGS.get("opencode_model_tiers", {})
+            model_str = model_tiers.get(model_tier, "")
+            if model_str and "/" in model_str:
+                parts = model_str.split("/", 1)
+                model = {"providerID": parts[0], "modelID": parts[1]}
+        else:
+            # Default to medium tier
+            model_tiers = SETTINGS.get("opencode_model_tiers", {})
+            model_str = model_tiers.get("medium", "opencode/deepseek-v4-flash-free")
+            if model_str and "/" in model_str:
+                parts = model_str.split("/", 1)
+                model = {"providerID": parts[0], "modelID": parts[1]}
+
+        # Duplicate detection
+        clean_title = prompt.replace("\n", " ").strip()[:50]
+        try:
+            existing = await self.opencode_agent.list_sessions(directory=directory)
+            if existing:
+                sessions_list = existing if isinstance(existing, list) else list(existing.values()) if isinstance(existing, dict) else []
+                for s in sessions_list:
+                    s_title = s.get("title", "")
+                    if s_title and (clean_title in s_title or s_title in clean_title):
+                        msg = f"System Notification: A similar OpenCode task '{s_title}' already exists."
+                        try:
+                            await self.session.send(input=msg, end_of_turn=True)
+                        except Exception:
+                            pass
+                        return "Duplicate task detected."
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OPENCODE] Duplicate check failed: {e}")
+
+        # Create session
+        session = await self.opencode_agent.create_session(title=f"OpenCode: {clean_title}", directory=directory)
+        if not session:
+            msg = "System Notification: Failed to create OpenCode session."
+            try:
+                await self.session.send(input=msg, end_of_turn=True)
+            except Exception:
+                pass
+            return "Failed to create session."
+
+        session_id = session.get("id", "")
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENCODE] Session created: {session_id}")
+
+        # Send prompt
+        parts = [{"type": "text", "text": prompt}]
+        await self.opencode_agent.send_prompt(session_id, parts, model=model, directory=directory, async_mode=True)
+
+        # Start polling
+        use_interceptor = SETTINGS.get("opencode_use_interceptor", True)
+        interceptor = self._handle_opencode_triage if use_interceptor else None
+
+        async def _opencode_update_callback(message):
+            if self.session:
+                try:
+                    await asyncio.wait_for(
+                        self.session.send(input=f"System Notification: {message}", end_of_turn=False),
+                        timeout=10.0
+                    )
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to send OpenCode update: {e}")
+
+        self.opencode_agent.start_polling(session_id, callback=_opencode_update_callback, interceptor_callback=interceptor, directory=directory)
+
+        # Notify user
+        try:
+            title = session.get("title", session_id)
+            await self.session.send(input=f"System Notification: OpenCode session created: '{title}'", end_of_turn=True)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Failed to send OpenCode notification: {e}")
+
+        return f"OpenCode task started. Session ID: {session_id}"
+
+    async def handle_opencode_feedback(self, session_id, feedback):
+        """Sends feedback to an existing OpenCode session."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENCODE] Sending feedback to session: {session_id}")
+
+        directory = None
+        if self.project_manager:
+            directory = str(self.project_manager.get_current_project_path())
+
+        parts = [{"type": "text", "text": feedback}]
+        result = await self.opencode_agent.send_prompt(session_id, parts, directory=directory, async_mode=True)
+
+        # Ensure polling is active
+        if session_id not in self.opencode_agent.polling_tasks:
+            async def _opencode_update_callback(message):
+                if self.session:
+                    try:
+                        await asyncio.wait_for(
+                            self.session.send(input=f"System Notification: {message}", end_of_turn=False),
+                            timeout=10.0
+                        )
+                    except Exception:
+                        pass
+
+            use_interceptor = SETTINGS.get("opencode_use_interceptor", True)
+            interceptor = self._handle_opencode_triage if use_interceptor else None
+            self.opencode_agent.start_polling(session_id, callback=_opencode_update_callback, interceptor_callback=interceptor, directory=directory)
+
+        return f"Feedback sent to session {session_id}."
+
+    async def _handle_opencode_triage(self, session_id, message_content):
+        """
+        Intercepts OpenCode agent messages, triages via Ollama,
+        and either auto-replies or escalates to the human user.
+        """
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENCODE] [TRIAGE] Intercepted message for {session_id}: {message_content[:80]}...")
+
+        context = ""
+        if self.project_manager:
+            context = self.project_manager.get_project_context(max_file_size=5000) or "No specific project context available."
+
+        triage_prompt = f"""
+You are an engineering manager. Your developer 'OpenCode' (Session ID: {session_id}) just sent this message:
+
+"{message_content}"
+
+Project Context:
+{context}
+
+Can you answer this question or resolve this blocker immediately?
+If YES: Output ONLY a direct, helpful response to send back to OpenCode.
+If NO (requires human approval, complex decisions, or external input): Output EXACTLY "ESCALATE:" followed by a brief summary.
+"""
+
+        try:
+            triage_response = await self.ollama_agent.chat(triage_prompt, role="manager_triage")
+
+            if not triage_response:
+                self.notify_user(f"OpenCode update ({session_id}): {message_content[:100]}...", duration=5000, send_voice=False)
+                return
+
+            triage_response = triage_response.strip()
+
+            if triage_response.startswith("ESCALATE:"):
+                escalation_reason = triage_response.replace("ESCALATE:", "").strip()
+                self.notify_user(f"OpenCode task {session_id} escalated: {escalation_reason}", duration=20000)
+
+                try:
+                    from backend.server import fleet_manager, sio
+                    agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
+                    if agent_id and repo_name and task_id:
+                        fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
+                        fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
+                        asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [ERR] Failed to sync fleet status: {e}")
+
+                if self.session:
+                    try:
+                        message = f"System Notification: OpenCode session '{session_id}' escalated: {escalation_reason}. Please use 'send_opencode_feedback' to respond."
+                        asyncio.create_task(self.session.send(input=message, end_of_turn=False))
+                    except Exception as e:
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[ADA DEBUG] [ERR] Failed to notify Ada: {e}")
+            else:
+                # Auto-reply
+                directory = None
+                if self.project_manager:
+                    directory = str(self.project_manager.get_current_project_path())
+                parts = [{"type": "text", "text": triage_response}]
+                await self.opencode_agent.send_prompt(session_id, parts, directory=directory, async_mode=True)
+                self.notify_user(f"Auto-replied to OpenCode task {session_id}.", duration=5000, send_voice=False)
+
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Triage failed for {session_id}: {e}")
+            self.notify_user(f"OpenCode task {session_id} sent a message: {message_content[:80]}...", duration=20000)
 
     async def handle_spawn_swarm_agent(self, role, prompt, source=None, swarm_id=None):
         if INCLUDE_RAW_LOGS:
@@ -2128,6 +2347,20 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                                 # Tell the model the user chose Jules
                                                 try:
                                                     await self.session.send(input="System Notification: The user chose Jules. The task has been routed.", end_of_turn=True)
+                                                except Exception:
+                                                    pass
+
+                                            elif "opencode" in lower_transcript or "open code" in lower_transcript:
+                                                if INCLUDE_RAW_LOGS:
+                                                    print("[ADA DEBUG] [ROUTING] Intercepted 'opencode'.")
+                                                p = self._pending_coding_task_prompt
+                                                s = self._pending_coding_task_source
+                                                self._pending_coding_task_prompt = None
+                                                self._pending_coding_task_source = None
+                                                asyncio.create_task(self.handle_opencode_request(p, repo_path=s))
+                                                # Tell the model the user chose OpenCode
+                                                try:
+                                                    await self.session.send(input="System Notification: The user chose OpenCode. The task has been routed.", end_of_turn=True)
                                                 except Exception:
                                                     pass
 
