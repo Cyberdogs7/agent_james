@@ -332,6 +332,19 @@ stop_web_agent_tool = {
     }
 }
 
+run_research_agent_tool = {
+    "name": "run_research_agent",
+    "description": "Launches a deep research agent that iteratively searches the web, analyzes findings, identifies gaps, and produces a comprehensive report. Use for complex topics requiring multi-source investigation. Add 'deep' for thorough research (10 iterations), 'quick' for fast research (2 iterations).",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "prompt": {"type": "STRING", "description": "The research topic or question. Add 'deep' for thorough research (10 iterations), 'quick' for fast research (2 iterations)."}
+        },
+        "required": ["prompt"]
+    },
+    "behavior": "NON_BLOCKING"
+}
+
 create_project_tool = {
     "name": "create_project",
     "description": "Creates a new project folder to organize files.",
@@ -1700,6 +1713,7 @@ all_tools_list = [
     generate_cad_tool,
     run_web_agent_tool,
     stop_web_agent_tool,
+    run_research_agent_tool,
     create_project_tool,
     switch_project_tool,
     list_projects_tool,

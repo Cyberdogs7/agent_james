@@ -75,6 +75,7 @@ from backend.update_agent import UpdateAgent
 from backend.search_agent import SearchAgent
 from backend.scraper_agent import ScraperAgent
 from backend.proactive_agent import ProactiveAgent
+from backend.research_agent import ResearchAgent, research_agent_tool
 from backend.os_agent import OSAgent
 from backend.music_agent import MusicAgent
 from backend.writing_agent import WritingAgent
@@ -199,6 +200,7 @@ class AudioLoop:
         self.git_agent = GitAgent(self.project_manager)
         self.github_agent = GitHubAgent(self.project_manager)
         self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
+        self.research_agent = ResearchAgent(self.tool_registry, self.browser_agent)
 
         self.sct = None
 
@@ -803,6 +805,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("browser_scroll", self.browser_agent.browser_scroll)
         self.tool_registry.register("browser_wait", self.browser_agent.browser_wait)
         self.tool_registry.register("create_coding_task", self.handle_create_coding_task)
+        self.tool_registry.register("run_research_agent", self.handle_research_request)
         self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_openhands_agent", self.handle_openhands_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
@@ -963,6 +966,20 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
              print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
         asyncio.create_task(self._run_web_agent_task(prompt))
         return "Web Navigation started. Do not reply to this message."
+
+    async def handle_research_request(self, prompt):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_research_agent' with prompt='{prompt}'")
+        
+        async def update_callback(msg):
+            if self.on_display_content:
+                self.on_display_content({
+                    "content_type": "research_update",
+                    "message": msg
+                })
+        
+        asyncio.create_task(self._run_research_task(prompt, update_callback))
+        return "Deep Research started. Do not reply to this message."
 
     # --- New Handler Methods ---
 
@@ -1232,6 +1249,27 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         except Exception as e:
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
+
+    async def _run_research_task(self, prompt, update_callback):
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [RESEARCH] Background Task Started: _run_research_task('{prompt}')")
+        
+        try:
+            result = await self.research_agent.run_research_task(prompt, update_callback)
+            
+            # Send the final result back to the main model
+            await self.session.send(input=f"System Notification: Deep Research completed.\n\n{result}", end_of_turn=True)
+            
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [RESEARCH] Research Task Returned: {result[:200]}...")
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [ERR] Research task failed: {e}")
+            try:
+                await self.session.send(input=f"System Notification: Research task failed: {e}", end_of_turn=True)
+            except Exception as e2:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Failed to send error notification: {e2}")
 
     async def handle_create_swarm_mission(self, title):
         if INCLUDE_RAW_LOGS:

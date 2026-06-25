@@ -96,11 +96,156 @@ class LocalWebAgent:
             print(f"[LocalWebAgent] Error taking screenshot: {e}")
             await update_callback(None, f"Screenshot error: {e}")
 
+    async def search_and_extract(self, query: str, update_callback=None) -> dict:
+        """
+        Search for a query and extract key information from search results.
+        Returns a dict with query, results (list of {url, title, snippet}), and raw_content.
+        """
+        self._is_interrupted = False
+        await self._send_screenshot(update_callback, f"Searching: {query}")
+
+        messages = [
+            {"role": "system", "content": """You are a web research assistant. Search for the given query, visit the top results, extract key information, and compile a summary.
+
+Steps:
+1. Navigate to Google and search for the query
+2. Visit the top 3-5 search results
+3. Extract relevant information from each page
+4. Compile findings into a structured response
+
+Output your findings as a JSON object with:
+- "query": the original search query
+- "results": array of {url, title, snippet, key_facts}
+- "summary": a 2-3 paragraph synthesis of findings
+- "sources": array of URLs used"""},
+            {"role": "user", "content": query}
+        ]
+
+        while not self._is_interrupted:
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=self.openai_tools,
+                    temperature=0.2
+                )
+
+                message = response.choices[0].message
+                messages.append(message)
+
+                if message.tool_calls:
+                    for call in message.tool_calls:
+                        print(f"[LocalWebAgent] Executing {call.function.name}...")
+                        try:
+                            args = json.loads(call.function.arguments)
+                            result = await self.tool_registry.dispatch(call.function.name, args)
+                        except Exception as e:
+                            result = f"Error: {e}"
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "name": call.function.name,
+                            "content": str(result)
+                        })
+                        await asyncio.sleep(1)
+                else:
+                    # Parse the final response
+                    try:
+                        content = message.content
+                        if content.startswith("```json"):
+                            content = content[7:]
+                        if content.startswith("```"):
+                            content = content[3:]
+                        if content.endswith("```"):
+                            content = content[:-3]
+                        return json.loads(content.strip())
+                    except:
+                        return {"query": query, "summary": message.content, "results": [], "sources": []}
+            except Exception as e:
+                print(f"[LocalWebAgent] Search error: {e}")
+                return {"query": query, "summary": "", "results": [], "sources": [], "error": str(e)}
+
+        return {"query": query, "summary": "Search interrupted", "results": [], "sources": []}
+
+    async def deep_research(self, question: str, context: str = "", update_callback=None) -> str:
+        """
+        Perform deep research on a specific question by browsing multiple sources.
+        Returns a comprehensive answer with citations.
+        """
+        self._is_interrupted = False
+        await self._send_screenshot(update_callback, f"Deep researching: {question[:80]}...")
+
+        system_prompt = """You are an expert research analyst. Your task is to thoroughly research a question by:
+1. Searching for the question on the web
+2. Visiting multiple authoritative sources
+3. Extracting key facts and evidence
+4. Synthesizing a comprehensive answer
+
+Always cite your sources. If information is uncertain or conflicting, note this clearly.
+Provide your answer in a clear, structured format with sections for key findings, evidence, and sources."""
+
+        user_prompt = f"""Research Question: {question}
+
+{f'Context: {context}' if context else ''}
+
+Please provide a comprehensive research report on this topic. Include:
+1. Key findings (3-5 bullet points)
+2. Detailed analysis (2-3 paragraphs)
+3. Evidence and citations from sources
+4. Any caveats or uncertainties"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        max_turns = 15
+        for turn in range(max_turns):
+            if self._is_interrupted:
+                return "Research interrupted."
+
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=self.openai_tools,
+                    temperature=0.2
+                )
+
+                message = response.choices[0].message
+                messages.append(message)
+
+                if message.tool_calls:
+                    for call in message.tool_calls:
+                        print(f"[LocalWebAgent] Turn {turn+1}: {call.function.name}")
+                        await self._send_screenshot(update_callback, f"Turn {turn+1}: {call.function.name}")
+                        try:
+                            args = json.loads(call.function.arguments)
+                            result = await self.tool_registry.dispatch(call.function.name, args)
+                        except Exception as e:
+                            result = f"Error: {e}"
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": call.id,
+                            "name": call.function.name,
+                            "content": str(result)
+                        })
+                        await asyncio.sleep(1)
+                else:
+                    return message.content or "Research completed."
+            except Exception as e:
+                print(f"[LocalWebAgent] Deep research error: {e}")
+                return f"Research error: {e}"
+
+        return "Maximum research turns reached."
+
     async def run_task(self, prompt, update_callback=None):
         self._is_interrupted = False
         print(f"[LocalWebAgent] Starting task with prompt: {prompt}")
         await self._send_screenshot(update_callback, "Initializing Local Web Agent...")
-        
+
         messages = [
             {"role": "system", "content": "You are an advanced web automation agent. First, create a high-level plan for how you will achieve the user's request, breaking it down into specific steps. Then, execute the steps using your tools. You may execute multiple tools in sequence if it makes sense (like typing and pressing enter), but ensure you wait for elements to appear before interacting with them."},
             {"role": "user", "content": prompt}
