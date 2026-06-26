@@ -207,6 +207,14 @@ class FleetManager:
                     return task
         return None
 
+    def get_task_by_session(self, session_id):
+        """Find a task across all repos by its session_id."""
+        for repo_name, repo_data in self.repos.items():
+            for task in repo_data.get("queue", []):
+                if task.get("session_id") == session_id:
+                    return repo_name, task
+        return None, None
+
     def update_task_status(self, repo_name, task_id, status, agent_id=None, error_message=None):
         if repo_name in self.repos:
             for task in self.repos[repo_name]["queue"]:

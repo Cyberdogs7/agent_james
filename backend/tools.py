@@ -913,6 +913,11 @@ run_opencode_agent_tool = {
                 "type": "STRING",
                 "enum": ["high", "medium", "low"],
                 "description": "Optional: Model complexity tier. Maps to configured model in settings. If not provided, ADA will ask."
+            },
+            "kanban_status": {
+                "type": "STRING",
+                "enum": ["backlog", "todo_planning", "dev_implementation"],
+                "description": "Optional: Kanban lane status. 'todo_planning' sets Plan mode (no code changes). 'dev_implementation' sets Execute mode. Defaults to 'todo_planning'."
             }
         },
         "required": ["prompt"]

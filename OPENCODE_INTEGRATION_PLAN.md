@@ -112,7 +112,39 @@ run_opencode_agent(prompt="Add dark mode", repo_path="/path/to/repo", model_tier
 
 ## Next Steps (Future Enhancements)
 - [ ] SSE event stream for real-time permission handling
-- [ ] FleetManager integration for Kanban board display
+- [x] FleetManager integration for Kanban board display
 - [ ] Permission approval via voice/UI
 - [ ] Session history and replay
 - [ ] Multi-workspace merge conflict detection
+
+## Kanban Board Integration (Implemented)
+
+### Overview
+OpenCode tasks are now integrated with the WorkspaceBoard kanban system. Tasks automatically receive mode prefixes (Plan/Execute) based on their kanban lane status.
+
+### Workflow
+1. **Task Created** → Status: `backlog` → ADA dispatches with Plan mode prefix
+2. **User Reviews** → Drags to `dev_implementation` → Socket.IO triggers mode switch
+3. **ADA Re-prompts** → Same session receives Execute mode prefix
+4. **OpenCode Completes** → Auto-moves task to `completed` lane
+
+### Mode Prefixes
+| Kanban Status | Mode | Behavior |
+|--------------|------|----------|
+| `todo_planning` | Plan | Analyzes task, creates implementation plan, no code changes |
+| `dev_implementation` | Execute | Implements the task, makes all code changes |
+
+### Tool Parameter
+The `run_opencode_agent` tool now accepts `kanban_status` parameter:
+```python
+run_opencode_agent(
+    prompt="Fix the login bug",
+    kanban_status="todo_planning"  # or "dev_implementation"
+)
+```
+
+### Files Modified
+- `backend/tools.py` - Added `kanban_status` enum parameter
+- `backend/ada.py` - Added mode prefix injection and fleet tracking
+- `backend/server.py` - Enhanced `update_task_status_lane` handler
+- `backend/fleet_manager.py` - Added `get_task_by_session` helper

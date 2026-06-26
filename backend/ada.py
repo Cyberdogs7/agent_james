@@ -1117,10 +1117,25 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
 
         return f"Agent started. ID: {session.get('conversation_id') if session else 'Failed'}"
 
-    async def handle_opencode_request(self, prompt, repo_path=None, model_tier=None):
+    # Kanban mode prefixes for OpenCode plan/execute workflow
+    OPENCODE_MODE_PREFIXES = {
+        "todo_planning": (
+            "You are in PLAN MODE. Analyze the task and create a detailed implementation plan. "
+            "Do NOT make any code changes. Output: 1) Analysis 2) Files affected 3) Step-by-step plan 4) Risks.\n\n"
+        ),
+        "dev_implementation": (
+            "You are in EXECUTE MODE. Implement the following task. Make all necessary code changes.\n\n"
+        ),
+    }
+
+    async def handle_opencode_request(self, prompt, repo_path=None, model_tier=None, kanban_status=None):
         """Creates and starts a new OpenCode coding task."""
+        # Default to planning mode if no kanban status provided
+        if not kanban_status:
+            kanban_status = "todo_planning"
+
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENCODE] Task: '{prompt}' (Repo: {repo_path}, Tier: {model_tier})")
+            print(f"[ADA DEBUG] [OPENCODE] Task: '{prompt}' (Repo: {repo_path}, Tier: {model_tier}, Kanban: {kanban_status})")
 
         # Ensure server is running
         server_ok = await self.opencode_agent.ensure_server_running()
@@ -1196,9 +1211,28 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         if INCLUDE_RAW_LOGS:
             print(f"[ADA DEBUG] [OPENCODE] Session created: {session_id}")
 
+        # Inject mode prefix based on kanban status
+        mode_prefix = self.OPENCODE_MODE_PREFIXES.get(kanban_status, "")
+        prefixed_prompt = f"{mode_prefix}{prompt}" if mode_prefix else prompt
+
         # Send prompt
-        parts = [{"type": "text", "text": prompt}]
+        parts = [{"type": "text", "text": prefixed_prompt}]
         await self.opencode_agent.send_prompt(session_id, parts, model=model, directory=directory, async_mode=True)
+
+        # Track in fleet manager
+        try:
+            from backend.server import fleet_manager, sio
+            repo_name = repo_path or "default"
+            agent_id = fleet_manager.track_opencode_session(session_id, repo_name=repo_name, task_prompt=prompt)
+            if agent_id:
+                # Update task status to match kanban_status
+                task_repo, task = fleet_manager.get_task_by_session(session_id)
+                if task:
+                    fleet_manager.update_task_status(task_repo, task["id"], kanban_status, agent_id=agent_id)
+                    asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OPENCODE] Fleet tracking failed: {e}")
 
         # Start polling
         use_interceptor = SETTINGS.get("opencode_use_interceptor", True)
@@ -1215,6 +1249,20 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                     if INCLUDE_RAW_LOGS:
                         print(f"[ADA DEBUG] [ERR] Failed to send OpenCode update: {e}")
 
+            # Auto-update fleet manager task status on completion
+            if "appears completed" in message or "session failed" in message:
+                try:
+                    from backend.server import fleet_manager, sio
+                    task_status = "completed" if "appears completed" in message else "failed"
+                    # Find and update the task by session_id
+                    task_repo, task = fleet_manager.get_task_by_session(session_id)
+                    if task:
+                        fleet_manager.update_task_status(task_repo, task["id"], task_status)
+                        asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[ADA DEBUG] [OPENCODE] Auto-complete update failed: {e}")
+
         self.opencode_agent.start_polling(session_id, callback=_opencode_update_callback, interceptor_callback=interceptor, directory=directory)
 
         # Notify user
@@ -1226,6 +1274,40 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                 print(f"[ADA DEBUG] [ERR] Failed to send OpenCode notification: {e}")
 
         return f"OpenCode task started. Session ID: {session_id}"
+
+    async def handle_opencode_mode_switch(self, session_id, kanban_status, repo_name=None):
+        """Re-prompts an OpenCode session with the appropriate mode prefix when task moves lanes."""
+        if INCLUDE_RAW_LOGS:
+            print(f"[ADA DEBUG] [OPENCODE] Mode switch: Session {session_id} -> {kanban_status}")
+
+        mode_prefix = self.OPENCODE_MODE_PREFIXES.get(kanban_status, "")
+        if not mode_prefix:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OPENCODE] No mode prefix for status: {kanban_status}")
+            return
+
+        # Get directory
+        directory = repo_name
+        if not directory and self.project_manager:
+            directory = str(self.project_manager.get_current_project_path())
+
+        # Send mode switch instruction to existing session
+        switch_prompt = f"{mode_prefix}Continue working on the current task with the above mode constraints."
+        parts = [{"type": "text", "text": switch_prompt}]
+        result = await self.opencode_agent.send_prompt(session_id, parts, directory=directory, async_mode=True)
+
+        if result:
+            try:
+                await self.session.send(
+                    input=f"System Notification: OpenCode session switched to {'PLAN' if kanban_status == 'todo_planning' else 'EXECUTE'} mode.",
+                    end_of_turn=False
+                )
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[ADA DEBUG] [ERR] Failed to send mode switch notification: {e}")
+        else:
+            if INCLUDE_RAW_LOGS:
+                print(f"[ADA DEBUG] [OPENCODE] Failed to send mode switch prompt")
 
     async def handle_opencode_feedback(self, session_id, feedback):
         """Sends feedback to an existing OpenCode session."""

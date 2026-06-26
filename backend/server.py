@@ -2690,6 +2690,17 @@ async def update_task_status_lane(sid, data):
         if status in ["dev_implementation", "review_verification", "todo_planning"]:
             await check_and_start_next_task(repo_name)
 
+        # Handle OpenCode mode switch when task moves lanes
+        if status in ["todo_planning", "dev_implementation"]:
+            task = fleet_manager.get_task(repo_name, task_id)
+            if task and task.get("session_id") and audio_loop:
+                session_id = task["session_id"]
+                # Check if this is an OpenCode session
+                for agent_id, agent in fleet_manager.agents.items():
+                    if agent.get("current_session") == session_id and agent.get("account_name") == "OpenCode":
+                        asyncio.create_task(audio_loop.handle_opencode_mode_switch(session_id, status, repo_name))
+                        break
+
 # ==================== OAuth / Google Authentication Socket Events ====================
 
 @sio.event
