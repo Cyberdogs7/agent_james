@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0a0f">
+    <title>A.D.A Mobile</title>
+    <link rel="manifest" href="/mobile/manifest.json">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0f; --surface: #12121a; --border: #1e1e2e;
+            --text: #e0e0e0; --muted: #666; --accent: #7c5cfc;
+            --accent-dim: #5a3fd4; --danger: #ef4444; --success: #22c55e;
+            --radius: 12px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg); color: var(--text);
+            height: 100dvh; display: flex; flex-direction: column;
+            overflow: hidden; -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Auth Screen */
+        #auth-screen {
+            position: fixed; inset: 0; background: var(--bg);
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; z-index: 100; gap: 16px; padding: 24px;
+        }
+        #auth-screen.hidden { display: none; }
+        #auth-screen h1 { font-size: 24px; font-weight: 600; }
+        #auth-screen p { color: var(--muted); font-size: 14px; text-align: center; }
+        #auth-screen input {
+            width: 100%; max-width: 300px; padding: 12px 16px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); color: var(--text); font-size: 16px;
+            text-align: center; outline: none;
+        }
+        #auth-screen input:focus { border-color: var(--accent); }
+        #auth-screen button {
+            padding: 12px 32px; background: var(--accent); color: white;
+            border: none; border-radius: var(--radius); font-size: 16px;
+            font-weight: 600; cursor: pointer;
+        }
+        #auth-screen button:active { background: var(--accent-dim); }
+        #auth-error { color: var(--danger); font-size: 13px; min-height: 18px; }
+
+        /* Header */
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+            flex-shrink: 0; min-height: 48px;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--danger); transition: background 0.3s;
+        }
+        .status-dot.connected { background: var(--success); }
+        .header-right { display: flex; align-items: center; gap: 8px; }
+        .header-right span { font-size: 12px; color: var(--muted); }
+
+        /* Feed */
+        .feed {
+            flex: 1; overflow-y: auto; padding: 12px 16px;
+            display: flex; flex-direction: column; gap: 8px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .feed::-webkit-scrollbar { width: 4px; }
+        .feed::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .msg {
+            padding: 10px 14px; border-radius: var(--radius);
+            max-width: 85%; animation: fadeIn 0.2s ease;
+        }
+        .msg.user { align-self: flex-end; background: var(--accent); color: white; }
+        .msg.ada { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
+        .msg.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; padding: 4px 8px; }
+        .msg .sender { font-size: 11px; color: var(--muted); margin-bottom: 2px; font-weight: 600; }
+        .msg.user .sender { color: rgba(255,255,255,0.7); }
+        .msg .text { font-size: 15px; line-height: 1.4; word-break: break-word; }
+        .msg .time { font-size: 10px; color: var(--muted); margin-top: 4px; }
+        .msg.user .time { color: rgba(255,255,255,0.5); }
+        .msg.tool {
+            align-self: center; background: var(--surface); border: 1px solid var(--accent);
+            font-size: 12px; max-width: 90%;
+        }
+        .msg.tool .tool-name { color: var(--accent); font-weight: 600; }
+        .msg.fleet {
+            align-self: center; background: var(--surface); border: 1px solid var(--success);
+            font-size: 12px; max-width: 90%;
+        }
+        .msg.fleet .fleet-label { color: var(--success); font-weight: 600; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Controls */
+        .controls {
+            padding: 12px 16px; background: var(--surface); border-top: 1px solid var(--border);
+            display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        .input-row { display: flex; gap: 8px; align-items: center; }
+        .input-row input {
+            flex: 1; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius); color: var(--text); font-size: 15px; outline: none;
+        }
+        .input-row input:focus { border-color: var(--accent); }
+        .input-row button.send-btn {
+            padding: 10px 16px; background: var(--accent); color: white;
+            border: none; border-radius: var(--radius); font-size: 15px;
+            font-weight: 600; cursor: pointer; white-space: nowrap;
+        }
+        .input-row button.send-btn:active { background: var(--accent-dim); }
+
+        .ptt-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+        #ptt-btn {
+            width: 64px; height: 64px; border-radius: 50%;
+            background: var(--bg); border: 3px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.15s; -webkit-user-select: none; user-select: none;
+        }
+        #ptt-btn:active, #ptt-btn.recording {
+            background: var(--danger); border-color: var(--danger);
+            transform: scale(0.95);
+        }
+        #ptt-btn .mic-icon {
+            width: 24px; height: 24px; fill: var(--text);
+            transition: fill 0.15s;
+        }
+        #ptt-btn:active .mic-icon, #ptt-btn.recording .mic-icon { fill: white; }
+        .ptt-label { font-size: 12px; color: var(--muted); }
+
+        .audio-bar {
+            height: 3px; background: var(--border); border-radius: 2px; overflow: hidden;
+        }
+        .audio-bar .fill {
+            height: 100%; background: var(--accent); width: 0%;
+            transition: width 0.1s;
+        }
+        .audio-bar.active .fill {
+            animation: audioPulse 1s ease-in-out infinite;
+        }
+        @keyframes audioPulse {
+            0%, 100% { width: 20%; }
+            50% { width: 80%; }
+        }
+
+        /* Notifications badge */
+        .notif-badge {
+            position: fixed; top: 56px; right: 16px;
+            background: var(--danger); color: white; font-size: 11px;
+            padding: 2px 8px; border-radius: 10px; font-weight: 600;
+            display: none; z-index: 50;
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="hidden">
+        <h1>A.D.A</h1>
+        <p>Enter your access token to connect</p>
+        <input id="token-input" type="password" placeholder="Access Token" autocomplete="off">
+        <button id="token-submit">Connect</button>
+        <div id="auth-error"></div>
+    </div>
+
+    <!-- Main App -->
+    <div class="header">
+        <h1>A.D.A</h1>
+        <div class="header-right">
+            <span id="status-text">Disconnected</span>
+            <div class="status-dot" id="status-dot"></div>
+        </div>
+    </div>
+
+    <div class="feed" id="feed"></div>
+    <div class="notif-badge" id="notif-badge">0</div>
+
+    <div class="controls">
+        <div class="audio-bar" id="audio-bar"><div class="fill" id="audio-fill"></div></div>
+        <div class="input-row">
+            <input id="text-input" type="text" placeholder="Type a message..." autocomplete="off">
+            <button class="send-btn" id="send-btn">Send</button>
+        </div>
+        <div class="ptt-row">
+            <div class="ptt-label">Hold to talk</div>
+            <div id="ptt-btn">
+                <svg class="mic-icon" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            </div>
+            <div class="ptt-label" id="ptt-status"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+    (function() {
+        const $ = s => document.querySelector(s);
+        const feed = $('#feed');
+        const textInput = $('#text-input');
+        const sendBtn = $('#send-btn');
+        const pttBtn = $('#ptt-btn');
+        const pttStatus = $('#ptt-status');
+        const statusDot = $('#status-dot');
+        const statusText = $('#status-text');
+        const audioBar = $('#audio-bar');
+        const audioFill = $('#audio-fill');
+        const authScreen = $('#auth-screen');
+        const tokenInput = $('#token-input');
+        const tokenSubmit = $('#token-submit');
+        const authError = $('#auth-error');
+        const notifBadge = $('#notif-badge');
+
+        let socket = null;
+        let mediaRecorder = null;
+        let audioContext = null;
+        let isRecording = false;
+        let notifCount = 0;
+        let currentADAChunk = null;
+        let token = localStorage.getItem('ada_token') || '';
+
+        // --- Auth ---
+        if (window.location.search.includes('token=')) {
+            token = new URLSearchParams(window.location.search).get('token');
+            localStorage.setItem('ada_token', token);
+            window.history.replaceState({}, '', '/mobile');
+        }
+
+        if (!token) {
+            authScreen.classList.remove('hidden');
+        }
+
+        tokenSubmit.addEventListener('click', () => {
+            token = tokenInput.value.trim();
+            if (token) {
+                localStorage.setItem('ada_token', token);
+                authScreen.classList.add('hidden');
+                connectSocket();
+            }
+        });
+        tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') tokenSubmit.click(); });
+
+        // --- Socket ---
+        function connectSocket() {
+            const port = window.location.port || '8180';
+            const url = `${window.location.protocol}//${window.location.hostname}:${port}`;
+            socket = io(url + '?token=' + encodeURIComponent(token), {
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+            });
+
+            socket.on('connect', () => {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Connected';
+                addMessage('system', 'Connected to A.D.A');
+                notifCount = 0;
+                notifBadge.style.display = 'none';
+            });
+
+            socket.on('disconnect', () => {
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+                addMessage('system', 'Disconnected from A.D.A');
+            });
+
+            socket.on('auth_required', (data) => {
+                authError.textContent = data.msg || 'Authentication required';
+                authScreen.classList.remove('hidden');
+            });
+
+            socket.on('transcription', (data) => {
+                const sender = data.sender || 'ADA';
+                const text = data.text || '';
+                if (sender === 'ADA') {
+                    appendADAMessage(text);
+                } else {
+                    addMessage('user', text, 'You');
+                }
+            });
+
+            socket.on('audio_data', (data) => {
+                playAudio(data.data);
+            });
+
+            socket.on('status', (data) => {
+                addMessage('system', data.msg || 'Status update');
+            });
+
+            socket.on('error', (data) => {
+                addMessage('system', 'Error: ' + (data.msg || 'Unknown error'));
+            });
+
+            socket.on('tool_confirmation_request', (data) => {
+                addMessage('tool', `Tool: ${data.tool}\n${JSON.stringify(data.args || {}, null, 2)}`, 'Tool Request');
+                notifCount++;
+                notifBadge.textContent = notifCount;
+                notifBadge.style.display = 'block';
+                if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+            });
+
+            socket.on('fleet_state_update', (data) => {
+                const agents = data.agents || [];
+                const active = agents.filter(a => a.status === 'active').length;
+                if (active > 0) {
+                    addMessage('fleet', `${active} agent${active !== 1 ? 's' : ''} active in fleet`, 'Fleet');
+                }
+            });
+
+            socket.on('proactive_suggestion', (data) => {
+                addMessage('ada', data.suggestion || 'Suggestion received', 'A.D.A');
+            });
+
+            socket.on('display_content', (data) => {
+                if (data.content_type === 'notification') {
+                    addMessage('system', data.data?.text || 'Notification');
+                    if (navigator.vibrate) navigator.vibrate(100);
+                }
+            });
+        }
+
+        if (token) connectSocket();
+
+        // --- Messages ---
+        function addMessage(type, text, sender) {
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            if (type === 'system') {
+                div.textContent = text;
+            } else if (type === 'tool' || type === 'fleet') {
+                div.innerHTML = `<div class="${type === 'tool' ? 'tool-name' : 'fleet-label'}">${sender || type}</div><div class="text">${escHtml(text)}</div>`;
+            } else {
+                div.innerHTML = `<div class="sender">${escHtml(sender || type)}</div><div class="text">${escHtml(text)}</div><div class="time">${time}</div>`;
+            }
+            feed.appendChild(div);
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function appendADAMessage(text) {
+            if (currentADAChunk && !currentADAChunk.dataset.done) {
+                currentADAChunk.querySelector('.text').textContent += text;
+            } else {
+                const div = document.createElement('div');
+                div.className = 'msg ada';
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                div.innerHTML = `<div class="sender">A.D.A</div><div class="text">${escHtml(text)}</div><div class="time">${time}</div>`;
+                feed.appendChild(div);
+                currentADAChunk = div;
+                div.dataset.done = '0';
+                setTimeout(() => { div.dataset.done = '1'; currentADAChunk = null; }, 2000);
+            }
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function escHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+        }
+
+        // --- Text Input ---
+        sendBtn.addEventListener('click', sendText);
+        textInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendText(); });
+
+        function sendText() {
+            const text = textInput.value.trim();
+            if (!text || !socket || !socket.connected) return;
+            socket.emit('user_input', { text, id: crypto.randomUUID() });
+            addMessage('user', text, 'You');
+            textInput.value = '';
+            textInput.blur();
+        }
+
+        // --- Push-to-Talk ---
+        async function startRecording() {
+            if (isRecording) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+                });
+
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                // Visualize audio level
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                function updateLevel() {
+                    if (!isRecording) return;
+                    analyser.getByteFrequencyData(dataArray);
+                    const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    audioFill.style.width = Math.min(100, avg * 1.5) + '%';
+                    requestAnimationFrame(updateLevel);
+                }
+                updateLevel();
+
+                // Use AudioWorklet to capture raw PCM
+                const scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+                source.connect(scriptNode);
+                scriptNode.connect(audioContext.destination);
+
+                const chunks = [];
+                scriptNode.onaudioprocess = (e) => {
+                    if (!isRecording) return;
+                    const float32 = e.inputBuffer.getChannelData(0);
+                    // Resample from AudioContext rate to 16kHz if needed
+                    const resampled = resample(float32, audioContext.sampleRate, 16000);
+                    const int16 = float32ToInt16(resampled);
+                    chunks.push(int16);
+                };
+
+                mediaRecorder = { stream, scriptNode, chunks, source, analyser };
+                isRecording = true;
+                pttBtn.classList.add('recording');
+                pttStatus.textContent = 'Listening...';
+                audioBar.classList.add('active');
+
+                socket.emit('start_audio', { source: 'mobile', muted: false });
+            } catch (err) {
+                console.error('Mic error:', err);
+                addMessage('system', 'Microphone access denied');
+            }
+        }
+
+        function stopRecording() {
+            if (!isRecording || !mediaRecorder) return;
+            isRecording = false;
+            pttBtn.classList.remove('recording');
+            pttStatus.textContent = '';
+            audioBar.classList.remove('active');
+            audioFill.style.width = '0%';
+
+            mediaRecorder.scriptNode.disconnect();
+            mediaRecorder.source.disconnect();
+            mediaRecorder.stream.getTracks().forEach(t => t.stop());
+            if (audioContext) audioContext.close();
+
+            // Combine all chunks and send
+            const totalLength = mediaRecorder.chunks.reduce((acc, c) => acc + c.length, 0);
+            const combined = new Int16Array(totalLength);
+            let offset = 0;
+            for (const chunk of mediaRecorder.chunks) {
+                combined.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            if (combined.length > 0) {
+                // Send in ~100ms chunks (1600 samples at 16kHz)
+                const chunkSize = 1600;
+                for (let i = 0; i < combined.length; i += chunkSize) {
+                    const slice = combined.slice(i, i + chunkSize);
+                    const b64 = int16ToBase64(slice);
+                    socket.emit('mobile_audio', { audio: b64 });
+                }
+                socket.emit('mobile_audio_end');
+            }
+
+            mediaRecorder = null;
+        }
+
+        function float32ToInt16(float32Array) {
+            const int16 = new Int16Array(float32Array.length);
+            for (let i = 0; i < float32Array.length; i++) {
+                const s = Math.max(-1, Math.min(1, float32Array[i]));
+                int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return int16;
+        }
+
+        function resample(input, fromRate, toRate) {
+            if (fromRate === toRate) return input;
+            const ratio = fromRate / toRate;
+            const newLength = Math.round(input.length / ratio);
+            const result = new Float32Array(newLength);
+            for (let i = 0; i < newLength; i++) {
+                const srcIdx = i * ratio;
+                const low = Math.floor(srcIdx);
+                const high = Math.min(low + 1, input.length - 1);
+                const frac = srcIdx - low;
+                result[i] = input[low] * (1 - frac) + input[high] * frac;
+            }
+            return result;
+        }
+
+        function int16ToBase64(int16Array) {
+            const bytes = new Uint8Array(int16Array.buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        // PTT events (touch + mouse)
+        pttBtn.addEventListener('mousedown', e => { e.preventDefault(); startRecording(); });
+        pttBtn.addEventListener('mouseup', stopRecording);
+        pttBtn.addEventListener('mouseleave', stopRecording);
+        pttBtn.addEventListener('touchstart', e => { e.preventDefault(); startRecording(); });
+        pttBtn.addEventListener('touchend', e => { e.preventDefault(); stopRecording(); });
+        pttBtn.addEventListener('touchcancel', stopRecording);
+
+        // --- Audio Playback ---
+        const audioQueue = [];
+        let isPlaying = false;
+
+        function playAudio(pcmData) {
+            if (!pcmData) return;
+            try {
+                const binary = atob(pcmData);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+                const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+                const int16 = new Int16Array(bytes.buffer);
+                const float32 = new Float32Array(int16.length);
+                for (let i = 0; i < int16.length; i++) {
+                    float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7FFF);
+                }
+                const buffer = ctx.createBuffer(1, float32.length, 24000);
+                buffer.getChannelData(0).set(float32);
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                source.start();
+                source.onended = () => ctx.close();
+            } catch (e) {
+                console.error('Playback error:', e);
+            }
+        }
+
+        // --- PWA Install ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/mobile/sw.js').catch(() => {});
+        }
+    })();
+    </script>
+</body>
+</html>

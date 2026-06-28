@@ -12,10 +12,12 @@ from backend.fleet_manager import FleetManager
 from backend.openai_agent import LMStudioAgent, OpenRouterAgent
 from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
 from backend.jules_agent import JulesAgent
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+import socket
 import asyncio
 import threading
 import sys
@@ -71,6 +73,25 @@ ALLOWED_ORIGINS = [
     "http://localhost:8180",
     "http://127.0.0.1:8180",
 ]
+
+# Detect LAN IP for mobile access
+def get_lan_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+LAN_IP = get_lan_ip()
+MOBILE_AUTH_TOKEN = os.getenv("MOBILE_AUTH_TOKEN", "")
+print(f"[SERVER] LAN IP: {LAN_IP}")
+if MOBILE_AUTH_TOKEN:
+    print(f"[SERVER] Mobile auth token configured")
+ALLOWED_ORIGINS.append(f"http://{LAN_IP}:8180")
+ALLOWED_ORIGINS.append(f"http://{LAN_IP}:5173")
 
 # Create a Socket.IO server with restricted CORS
 sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins=ALLOWED_ORIGINS)
@@ -375,9 +396,55 @@ async def startup_event():
 async def status():
     return {"status": "running", "service": "A.D.A Backend"}
 
+@app.get("/mobile", response_class=HTMLResponse)
+async def mobile_ui():
+    """Serve the mobile voice interface."""
+    mobile_html_path = os.path.join(os.path.dirname(__file__), "templates", "mobile.html")
+    if os.path.exists(mobile_html_path):
+        with open(mobile_html_path, "r") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Mobile UI not found</h1><p>backend/templates/mobile.html missing</p>", status_code=404)
+
+@app.get("/mobile/manifest.json")
+async def mobile_manifest():
+    """Serve PWA manifest for mobile."""
+    from fastapi.responses import JSONResponse
+    manifest_path = os.path.join(os.path.dirname(__file__), "templates", "manifest.json")
+    if os.path.exists(manifest_path):
+        with open(manifest_path, "r") as f:
+            return JSONResponse(content=json.load(f))
+    return JSONResponse(content={}, status_code=404)
+
+@app.get("/mobile/sw.js")
+async def mobile_sw():
+    """Serve service worker for mobile PWA."""
+    sw_path = os.path.join(os.path.dirname(__file__), "templates", "sw.js")
+    if os.path.exists(sw_path):
+        with open(sw_path, "r") as f:
+            return HTMLResponse(content=f.read(), media_type="application/javascript")
+    return HTMLResponse(content="// SW not found", status_code=404, media_type="application/javascript")
+
 @sio.event
 async def connect(sid, environ):
     print(f"Client connected: {sid}")
+
+    # Mobile token auth - check query string for token
+    if MOBILE_AUTH_TOKEN:
+        query = environ.get('QUERY_STRING', '')
+        is_localhost = environ.get('REMOTE_ADDR', '') in ('127.0.0.1', '::1', 'localhost')
+        if not is_localhost:
+            # Extract token from query string
+            token = ''
+            for param in query.split('&'):
+                if param.startswith('token='):
+                    token = param.split('=', 1)[1]
+                    break
+            if token != MOBILE_AUTH_TOKEN:
+                print(f"[SERVER] Rejecting mobile client {sid}: invalid token")
+                await sio.emit('auth_required', {'msg': 'Authentication required'}, room=sid)
+                await sio.disconnect(sid)
+                return
+
     await sio.emit('status', {'msg': 'Connected to A.D.A Backend'}, room=sid)
 
     global authenticator
@@ -894,6 +961,39 @@ async def user_input(sid, data):
         except Exception as e:
              print(f"[SERVER DEBUG] Failed to send text to model: {e}")
              await sio.emit('error', {'msg': f"Failed to send message: {e}"})
+
+@sio.event
+async def mobile_audio(sid, data):
+    """Receive audio chunks from mobile client and forward to Gemini session."""
+    if not audio_loop or not audio_loop.session:
+        await sio.emit('error', {'msg': 'System not ready (Audio Loop inactive)'})
+        return
+
+    audio_b64 = data.get('audio')
+    if not audio_b64:
+        return
+
+    try:
+        audio_bytes = base64.b64decode(audio_b64)
+        # Mobile sends raw PCM 16-bit 16kHz mono (same as desktop mic)
+        # Convert to the format Gemini expects
+        chunk = {"data": audio_bytes, "mime_type": "audio/pcm"}
+
+        if audio_loop.out_queue and not audio_loop._is_tool_call_pending:
+            await audio_loop.out_queue.put(chunk)
+            print(f"[SERVER] Mobile audio chunk forwarded to Gemini ({len(audio_bytes)} bytes)")
+    except Exception as e:
+        print(f"[SERVER] Error processing mobile audio: {e}")
+        await sio.emit('error', {'msg': f'Audio processing error: {e}'})
+
+@sio.event
+async def mobile_audio_end(sid, data=None):
+    """Signal that mobile client finished recording. Triggers end-of-turn for Gemini."""
+    if not audio_loop or not audio_loop.session:
+        return
+    # The Gemini model treats silence/end-of-audio as end of user turn
+    # No explicit action needed - the model handles this naturally
+    print("[SERVER] Mobile audio recording ended")
 
 import json
 from datetime import datetime
@@ -2775,9 +2875,10 @@ async def oauth_logout(sid, data):
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
     print(f"[SERVER] Starting server on port {port}")
+    print(f"[SERVER] Access from phone: http://{LAN_IP}:{port}/mobile")
     uvicorn.run(
         "server:app_socketio",
-        host="127.0.0.1",
+        host="0.0.0.0",
         port=port,
         reload=False, # Reload enabled causes spawn of worker which might miss the event loop policy patch
         loop="asyncio",

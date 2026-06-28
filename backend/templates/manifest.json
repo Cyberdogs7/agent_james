@@ -1,0 +1,10 @@
+{
+    "name": "A.D.A Mobile",
+    "short_name": "A.D.A",
+    "start_url": "/mobile",
+    "display": "standalone",
+    "background_color": "#0a0a0f",
+    "theme_color": "#0a0a0f",
+    "orientation": "portrait",
+    "icons": []
+}
