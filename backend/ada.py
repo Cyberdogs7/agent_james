@@ -205,6 +205,11 @@ class AudioLoop:
         self.git_agent = GitAgent(self.project_manager)
         self.github_agent = GitHubAgent(self.project_manager)
         self.writing_agent = WritingAgent(self.project_manager, self.git_agent)
+
+        # Initialize Tool Registry (must be before agents that reference it)
+        self.tool_registry = ToolRegistry()
+        self._register_tools()
+
         self.research_agent = ResearchAgent(self.tool_registry, self.browser_agent)
 
         # Initialize OAuth Manager and register providers
@@ -229,15 +234,45 @@ class AudioLoop:
         self._last_face_check_time = 0
         self.notification_deduplicator = MessageDeduplicator(max_size=100)
 
-        # Initialize Tool Registry
-        self.tool_registry = ToolRegistry()
-        self._register_tools()
         self.mcp_manager = MCPClientManager(self.tool_registry, reconnect_callback=self.reconnect)
         self.web_agent = LocalWebAgent(self.browser_agent, self.tool_registry)
 
         # Sync Initial Project State
         if self.on_project_update:
             pass
+
+    def interrupt(self):
+        """Interrupts the current agent task, clears audio queues, and cancels any running tool."""
+        print("[ADA DEBUG] Interrupting agent...", flush=True)
+        # Clear audio queues
+        if self.audio_in_queue:
+            while not self.audio_in_queue.empty():
+                try:
+                    self.audio_in_queue.get_nowait()
+                except Exception:
+                    pass
+        if self.out_queue:
+            while not self.out_queue.empty():
+                try:
+                    self.out_queue.get_nowait()
+                except Exception:
+                    pass
+        
+        # Stop current playback if active
+        self._play_audio_stop_event.set()
+        
+        # Cancel running tool
+        if hasattr(self, '_current_tool_task') and self._current_tool_task:
+            self._current_tool_task.cancel()
+            
+        # Clear pending confirmations
+        if hasattr(self, '_pending_confirmations') and self._pending_confirmations:
+            for req_id, future in self._pending_confirmations.items():
+                if not future.done():
+                    future.set_result("User interrupted the task.")
+            self._pending_confirmations.clear()
+            if self.sio:
+                asyncio.create_task(self.sio.emit('status', {'msg': 'Tool cancelled by user input'}))
 
     async def _trigger_morning_briefing_offer(self):
         """Triggers the morning briefing offer if pending."""
@@ -1154,6 +1189,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
 
         # Create workspace if worktrees enabled
         task_id = f"task_{int(time.time() * 1000)}"
+        from backend.server import SETTINGS
         use_worktrees = SETTINGS.get("opencode_use_worktrees", True)
         if use_worktrees and directory:
             worktree_path = await self.opencode_agent.create_workspace(directory, task_id)
@@ -1333,6 +1369,7 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
                     except Exception:
                         pass
 
+            from backend.server import SETTINGS
             use_interceptor = SETTINGS.get("opencode_use_interceptor", True)
             interceptor = self._handle_opencode_triage if use_interceptor else None
             self.opencode_agent.start_polling(session_id, callback=_opencode_update_callback, interceptor_callback=interceptor, directory=directory)
@@ -2289,18 +2326,21 @@ You have access to a real-time video feed of the user and their environment.
 - If the user asks "what is this?" or shows you something, use the video feed to answer.
 - You do NOT need to ask for permission to see; you are already looking.
 
-**Example 1: Ambiguous Location**
+**Example 1: Ambiguous Weather Request**
 User: "What's the weather in Paris?"
 1.  **You call:** `get_weather(location='Paris')`.
 2.  **You receive:** "1. Paris, France; 2. Paris, Texas".
 3.  **You respond:** "I found a few places named Paris. Which one did you mean? 1. Paris, France or 2. Paris, Texas?"
 
-**Example 2: Unambiguous Location**
+**Example 2: Unambiguous Weather Request**
 User: "What's the weather in London?"
 1.  **You call:** `get_weather(location='London')`.
 2.  **You receive:** (forecast data object)
 3.  **You call:** `display_content(content_type='widget', widget_type='weather', data=<forecast_data>)`.
 4.  **You respond:** "I've pulled up the weather for London for you."
+
+**General Conversation:**
+If the user asks a playful or unrelated question (e.g. "dance with me", "tell me a joke"), respond naturally and optionally use `search_gifs` to display a relevant GIF. Do NOT execute a weather search unless explicitly asked about the weather.
 """
 
         # Load personality prompt from project config, with a default
@@ -2629,7 +2669,17 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                     continue
 
                                 # Execute Tool via Registry
-                                result = await self.tool_registry.dispatch(fc.name, fc.args)
+                                if INCLUDE_RAW_LOGS:
+                                    print(f"[ADA DEBUG] Executing tool {fc.name}...", flush=True)
+                                
+                                self._current_tool_task = asyncio.create_task(self.tool_registry.dispatch(fc.name, fc.args))
+                                try:
+                                    result = await self._current_tool_task
+                                except asyncio.CancelledError:
+                                    print(f"[ADA DEBUG] Tool {fc.name} execution was cancelled.")
+                                    result = "Tool execution was cancelled by the user."
+                                finally:
+                                    self._current_tool_task = None
 
                                 # Construct Response
                                 function_response = types.FunctionResponse(

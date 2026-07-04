@@ -7,6 +7,8 @@ interface ButterchurnVisualizerOptions {
   pixelRatio?: number;
   presetCycleInterval?: number;
   autoRotatePresets?: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  socket?: any;
 }
 
 interface ButterchurnVisualizerReturn {
@@ -25,6 +27,13 @@ let butterchurnModule: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let butterchurnPresetsModule: any = null;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getPresetsMap = (module: any) => {
+  if (!module) return {};
+  const mod = module.default || module;
+  return typeof mod.getPresets === 'function' ? mod.getPresets() : mod;
+};
+
 export function useButterchurnVisualizer(
   state: AgentState | undefined,
   volume: number = 0,
@@ -36,12 +45,14 @@ export function useButterchurnVisualizer(
     pixelRatio = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
     presetCycleInterval = 15000,
     autoRotatePresets = true,
+    socket,
   } = options;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const visualizerRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const cycleIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -67,7 +78,7 @@ export function useButterchurnVisualizer(
 
   const getPresetNames = useCallback(() => {
     if (!butterchurnPresetsModule) return [];
-    const presets = butterchurnPresetsModule.default || butterchurnPresetsModule;
+    const presets = getPresetsMap(butterchurnPresetsModule);
     return Object.keys(presets).sort();
   }, []);
 
@@ -86,7 +97,7 @@ export function useButterchurnVisualizer(
       if (!butterchurnPresetsModule || !visualizerRef.current) return;
 
       presetHistoryRef.current.push(presetIndexRef.current);
-      const presets = butterchurnPresetsModule.default || butterchurnPresetsModule;
+      const presets = getPresetsMap(butterchurnPresetsModule);
       const keys = Object.keys(presets).sort();
       presetIndexRef.current = Math.floor(Math.random() * keys.length);
       const presetName = keys[presetIndexRef.current];
@@ -99,7 +110,7 @@ export function useButterchurnVisualizer(
     (blendTime = 5.7) => {
       if (!butterchurnPresetsModule || !visualizerRef.current) return;
 
-      const presets = butterchurnPresetsModule.default || butterchurnPresetsModule;
+      const presets = getPresetsMap(butterchurnPresetsModule);
       const keys = Object.keys(presets).sort();
 
       if (presetHistoryRef.current.length > 0) {
@@ -118,7 +129,7 @@ export function useButterchurnVisualizer(
     (name: string, blendTime = 5.7) => {
       if (!butterchurnPresetsModule || !visualizerRef.current) return;
 
-      const presets = butterchurnPresetsModule.default || butterchurnPresetsModule;
+      const presets = getPresetsMap(butterchurnPresetsModule);
       if (presets[name]) {
         visualizerRef.current.loadPreset(presets[name], blendTime);
       }
@@ -159,6 +170,28 @@ export function useButterchurnVisualizer(
     }
   }, []);
 
+  useEffect(() => {
+    if (canvasRef.current) {
+      // Set actual canvas size to match display size, but capped to prevent GPU OOM
+      const rect = canvasRef.current.getBoundingClientRect();
+      const MAX_WIDTH = 1280;
+      const MAX_HEIGHT = 720;
+      
+      let w = rect.width;
+      let h = rect.height;
+      
+      // Scale down proportionally if it exceeds max bounds
+      if (w > MAX_WIDTH || h > MAX_HEIGHT) {
+          const ratio = Math.min(MAX_WIDTH / w, MAX_HEIGHT / h);
+          w = Math.floor(w * ratio);
+          h = Math.floor(h * ratio);
+      }
+      
+      canvasRef.current.width = w || window.innerWidth;
+      canvasRef.current.height = h || window.innerHeight;
+    }
+  }, [canvasRef]);
+
   // Initialize butterchurn
   useEffect(() => {
     let mounted = true;
@@ -169,9 +202,30 @@ export function useButterchurnVisualizer(
 
         if (!mounted || !canvasRef.current) return;
 
-        // Create audio context
+        // Create audio context (without passing options to maximize compatibility)
         audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+        
+        // Force resume context (fixes black screen if browser auto-suspended it)
+        if (audioContextRef.current.state === 'suspended') {
+            audioContextRef.current.resume();
+        }
 
+        const canvas = canvasRef.current;
+        let width = canvas.width || window.innerWidth;
+        let height = canvas.height || window.innerHeight;
+        
+        // Clamp dimensions to prevent massive GPU allocations on large screens
+        const MAX_WIDTH = 1280;
+        const MAX_HEIGHT = 720;
+        if (width > MAX_WIDTH || height > MAX_HEIGHT) {
+            const ratio = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+            width = Math.floor(width * ratio);
+            height = Math.floor(height * ratio);
+        }
+        
+        // Force pixelRatio to 1 to prevent massive WebGL framebuffers on High-DPI screens
+        const pixelRatio = 1;
+        
         // Create visualizer
         visualizerRef.current = butterchurn.createVisualizer(
           audioContextRef.current,
@@ -184,9 +238,85 @@ export function useButterchurnVisualizer(
           },
         );
 
+        if (socket) {
+          const bufferSize = 4096;
+          const scriptNode = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
+          
+          let audioBuffer = new Float32Array(0);
+
+          const handlePCM = (payload: { data: string, rate: number }) => {
+            const binaryStr = window.atob(payload.data);
+            const len = binaryStr.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const dataView = new DataView(bytes.buffer);
+            const numSamples = len / 2;
+            const floatSamples = new Float32Array(numSamples);
+            for (let i = 0; i < numSamples; i++) {
+                const int16 = dataView.getInt16(i * 2, true); // little-endian
+                floatSamples[i] = int16 / 32768.0;
+            }
+            
+            const newBuffer = new Float32Array(audioBuffer.length + floatSamples.length);
+            newBuffer.set(audioBuffer);
+            newBuffer.set(floatSamples, audioBuffer.length);
+            
+            if (newBuffer.length > 24000 * 5) {
+               audioBuffer = newBuffer.slice(newBuffer.length - 24000 * 5);
+            } else {
+               audioBuffer = newBuffer;
+            }
+          };
+
+          socket.on('music_pcm_stream', handlePCM);
+          
+          scriptNode.onaudioprocess = (audioProcessingEvent) => {
+             const outputBuffer = audioProcessingEvent.outputBuffer;
+             const channelData = outputBuffer.getChannelData(0);
+             
+             if (audioBuffer.length >= channelData.length) {
+                 channelData.set(audioBuffer.slice(0, channelData.length));
+                 audioBuffer = audioBuffer.slice(channelData.length);
+             } else {
+                 channelData.set(audioBuffer);
+                 for(let i = audioBuffer.length; i < channelData.length; i++) {
+                     channelData[i] = 0;
+                 }
+                 audioBuffer = new Float32Array(0);
+             }
+          };
+          
+          const gainNode = audioContextRef.current.createGain();
+          gainNode.gain.value = 0; // Mute to prevent echoing the backend PyAudio
+          scriptNode.connect(gainNode);
+          gainNode.connect(audioContextRef.current.destination);
+          
+          visualizerRef.current.connectAudio(scriptNode);
+          
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (scriptNode as any)._cleanup = () => {
+             socket.off('music_pcm_stream', handlePCM);
+             scriptNode.disconnect();
+             gainNode.disconnect();
+          };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          mediaStreamRef.current = scriptNode as any;
+        } else {
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaStreamRef.current = stream;
+            const source = audioContextRef.current.createMediaStreamSource(stream);
+            visualizerRef.current.connectAudio(source);
+          } catch (e) {
+            console.warn("Microphone access denied for butterchurn visualizer", e);
+          }
+        }
+
         // Load initial preset
         const { presets } = await loadModules();
-        const presetModule = presets.default || presets;
+        const presetModule = getPresetsMap(presets);
         const presetKeys = Object.keys(presetModule).sort();
         if (presetKeys.length > 0) {
           presetIndexRef.current = Math.floor(Math.random() * presetKeys.length);
@@ -211,6 +341,17 @@ export function useButterchurnVisualizer(
       mounted = false;
       stopRenderer();
       stopPresetCycle();
+
+      if (mediaStreamRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((mediaStreamRef.current as any)._cleanup) {
+           // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           (mediaStreamRef.current as any)._cleanup();
+        } else if (typeof mediaStreamRef.current.getTracks === 'function') {
+           mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        }
+        mediaStreamRef.current = null;
+      }
 
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(console.error);

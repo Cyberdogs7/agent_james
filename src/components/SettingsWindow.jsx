@@ -250,7 +250,17 @@ const SettingsWindow = ({
             <div className="mb-6">
                 <h3 className="text-gold9 font-bold mb-3 text-xs uppercase tracking-wider opacity-80">API Configuration</h3>
                 <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                    {['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'LM_STUDIO_BASE_URL', 'LM_STUDIO_MODEL', 'JULES_API_KEY', 'TRELLO_API_KEY', 'GIPHY_API_KEY'].map(keyName => (
+                    {[
+                        'GEMINI_API_KEY', 
+                        'OPENROUTER_API_KEY', 
+                        'OPENROUTER_MODEL', 
+                        'LM_STUDIO_BASE_URL', 
+                        'LM_STUDIO_MODEL', 
+                        'JULES_API_KEY',
+                        ...Object.keys(apiKeys || {}).filter(k => k.startsWith('JULES_API_KEY_')),
+                        'TRELLO_API_KEY', 
+                        'GIPHY_API_KEY'
+                    ].map(keyName => (
                         <div key={keyName} className="flex flex-col gap-1">
                             <label className="text-[10px] text-gold8/60 uppercase">{keyName.replace(/_/g, ' ')}</label>
                             <div className="flex gap-2">
@@ -265,6 +275,20 @@ const SettingsWindow = ({
                                     className="text-gold8 hover:text-gold9 px-2 bg-gray-900 border border-gold8 rounded text-[10px] uppercase tracking-wider"
                                 >
                                     {showKey[keyName] ? 'Hide' : 'Show'}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        socket.emit('delete_api_key', keyName);
+                                        setApiKeys(prev => {
+                                            const newKeys = { ...prev };
+                                            delete newKeys[keyName];
+                                            return newKeys;
+                                        });
+                                    }}
+                                    className="text-red-500 hover:text-red-400 px-2 bg-gray-900 border border-red-500/50 rounded text-[10px] uppercase tracking-wider"
+                                    title="Delete Key"
+                                >
+                                    Delete
                                 </button>
                             </div>
                         </div>

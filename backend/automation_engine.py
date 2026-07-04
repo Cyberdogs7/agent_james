@@ -421,19 +421,21 @@ class AutomationEngine:
                         if auto_merge_master:
                             msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks. Auto merging..."
                             print(f"[AutomationEngine] SMART MERGE (AUTO): {msg}")
-                            await self.ada.handle_external_event({
-                                "type": "notification",
-                                "message": msg
-                            })
+                            if self.ada:
+                                await self.ada.handle_external_event({
+                                    "type": "notification",
+                                    "message": msg
+                                })
                             await client.merge_pull_request(owner, name, number)
                             self.last_nag_times[f"merge_{pr_url}"] = now
                         else:
                             msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks and has been stable for over 24 hours. Shall I merge it for you?"
                             print(f"[AutomationEngine] SMART MERGE: {msg}")
-                            await self.ada.handle_external_event({
-                                "type": "notification",
-                                "message": msg
-                            })
+                            if self.ada:
+                                await self.ada.handle_external_event({
+                                    "type": "notification",
+                                    "message": msg
+                                })
                             self.last_nag_times[f"merge_{pr_url}"] = now
 
             except Exception as e:
@@ -590,10 +592,11 @@ class AutomationEngine:
                             if now - last_nag > self.NAG_COOLDOWN:
                                 msg = f"Sir, Jules session '{title}' has been stalling for over 2 hours. Shall I intervene?"
                                 print(f"[AutomationEngine] NAGGING: {msg}")
-                                await self.ada.handle_external_event({
-                                    "type": "notification",
-                                    "message": msg
-                                })
+                                if self.ada:
+                                    await self.ada.handle_external_event({
+                                        "type": "notification",
+                                        "message": msg
+                                    })
                                 self.last_nag_times[session_id] = now
 
                     except Exception as e:
@@ -649,10 +652,11 @@ class AutomationEngine:
                             if now - last_nag > self.NAG_COOLDOWN:
                                 msg = f"Sir, Pull Request #{number} ('{title}') on repository {owner}/{name} has been stalled for over 2 hours. Shall I merge it?"
                                 print(f"[AutomationEngine] NAGGING: {msg}")
-                                await self.ada.handle_external_event({
-                                    "type": "notification",
-                                    "message": msg
-                                })
+                                if self.ada:
+                                    await self.ada.handle_external_event({
+                                        "type": "notification",
+                                        "message": msg
+                                    })
                                 self.last_nag_times[pr_url] = now
                 except Exception as e:
                      print(f"[AutomationEngine] Error checking PRs for {repo.get('name')}: {e}")

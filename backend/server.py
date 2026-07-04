@@ -1198,6 +1198,14 @@ async def discover_printers(sid):
         await sio.emit('error', {'msg': f"Printer Discovery Failed: {str(e)}"})
 
 @sio.event
+async def interrupt(sid, data=None):
+    if audio_loop:
+        audio_loop.interrupt()
+        await sio.emit('status', {'msg': 'Agent interrupted.'})
+    else:
+        await sio.emit('error', {'msg': 'System not ready (Audio Loop inactive)'})
+
+@sio.event
 async def add_printer(sid, data):
     # data: { host: "192.168.1.50", name: "My Printer", type: "moonraker" }
     raw_host = data.get('host')
@@ -1500,6 +1508,22 @@ async def update_api_keys(sid, data):
     keys = await asyncio.to_thread(_sync_update_api_keys_io)
     await sio.emit('api_keys', keys)
     await sio.emit('status', {'msg': 'API Keys saved successfully'})
+
+@sio.event
+async def delete_api_key(sid, key_name):
+    print(f"Deleting API key {key_name}...")
+    env_path = os.path.join(project_root, ".env")
+
+    def _sync_delete_api_key_io():
+        if os.path.exists(env_path):
+            dotenv.unset_key(env_path, key_name)
+        if key_name in os.environ:
+            del os.environ[key_name]
+        return dotenv.dotenv_values(env_path)
+
+    keys = await asyncio.to_thread(_sync_delete_api_key_io)
+    await sio.emit('api_keys', keys)
+    await sio.emit('status', {'msg': f'API Key {key_name} deleted successfully'})
 
 @sio.event
 async def delete_timer(sid, data):

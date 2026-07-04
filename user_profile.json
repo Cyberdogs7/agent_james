@@ -17,5 +17,101 @@
     "default_repository_branch": "main",
     "coding_task_agent_preference": "jules",
     "prefer_jules_agent_for_coding_tasks": true,
-    "agent_usage_preference": "Prefer using Jules for coding and fixing tasks."
+    "agent_usage_preference": "Prefer using Jules for coding and fixing tasks.",
+    "acknowledgment_style": "non_verbal_gif_for_music_actions",
+    "music_search_fallback": "broaden_query_on_no_results",
+    "preferred_music_genres": [
+        "90s Euro Techno",
+        "Techno"
+    ],
+    "music_acknowledgment_method": "gif",
+    "minimize_interruptions_during_music": true,
+    "preferred_music_genre": "90s euro techno",
+    "flexible_music_search_on_failure": true,
+    "music_acknowledgment_during_playback": "non_verbal_gif",
+    "always_remember_user_location": true,
+    "user_current_location": "Litchfield, IL",
+    "merge_marketing_agent_prs_if_stable": true,
+    "prevent_merges_if_conflicts_exist": true,
+    "avoid_verbal_communication_during_music_playback": true,
+    "nonverbal_acknowledgment_for_music_playback": "gif",
+    "avoid_verbal_communication_for_music_controls_during_playback": true,
+    "use_gifs_for_acknowledgment": true,
+    "avoid_verbal_communication_when_music_is_playing": true,
+    "use_non_verbal_acknowledgments_like_gifs": true,
+    "minimize_interruptions_during_music_playback": true,
+    "non_verbal_acknowledgment_type": "GIF",
+    "critical_system_interactions_override_music_interruption_preference": true,
+    "avoid_verbal_response": true,
+    "preferred_confirmation_method": "visual_gif",
+    "avoid_verbal_responses_globally": true,
+    "no_verbal_interruptions_during_music_playback": true,
+    "merge_policy": "merge_if_no_conflicts_prevent_if_conflicts_exist",
+    "prefer_direct_ada_execution": true,
+    "automatic_merges_for_stable_pull_requests": true,
+    "communication_tone": "professional and witty",
+    "acknowledgement_method": "non-verbal cues",
+    "acknowledgement_type": "GIF",
+    "automatic_merge_policy": "merge_if_no_conflicts",
+    "prefer_verbal_confirmation_for_important_system_actions": true,
+    "non_verbal_acknowledgment_type_during_music_playback": "GIF",
+    "verbal_output_preference": "minimal",
+    "acknowledgment_method": "non_verbal_via_gif",
+    "preferred_communication_style": "minimal_verbal_output",
+    "non_verbal_acknowledgment_method": "GIFs",
+    "verbal_communication_override_conditions": [
+        "critical_system_events",
+        "direct_commands"
+    ],
+    "verbal_communication_level_preference": "minimal",
+    "default_feedback_mode": "non-verbal_gifs",
+    "verbal_communication_required_for": [
+        "important_actions",
+        "critical_interactions",
+        "direct_commands"
+    ],
+    "verbal_communication_priority_override": "critical_system_events",
+    "pull_request_auto_merge_policy_enabled": true,
+    "pull_request_auto_merge_conditions": {
+        "status": "stable",
+        "conflicts": "none",
+        "type": "not_draft"
+    },
+    "pull_request_auto_merge_pre_check": "conflicts",
+    "default_non_verbal_feedback_method": "GIFs",
+    "verbal_output_overrides": [
+        "critical_system_events",
+        "direct_commands",
+        "critical_interactions"
+    ],
+    "critical_action_confirmation_method": "verbal",
+    "default_communication_mode": "non-verbal",
+    "non_verbal_feedback_method": "GIFs",
+    "verbal_communication_triggers": [
+        "important actions",
+        "critical system events",
+        "direct commands"
+    ],
+    "pull_request_merge_preferences": {
+        "stable_pr_merging": "automatic",
+        "conflict_handling": "prevent_merge_if_conflicts_exist",
+        "repository_specific_merge_method": {
+            "NLevelSoftware/open-horizons-frontend": "rebase"
+        }
+    },
+    "task_execution_preference": "direct_ada_execution",
+    "minimal_verbal_output": true,
+    "override_minimal_verbal_output_conditions": [
+        "critical_system_event",
+        "direct_command",
+        "important_actions"
+    ],
+    "non_verbal_acknowledgment_preferred": "GIF",
+    "verbal_confirmation_for_important_actions": true,
+    "merge_method_for_NLevelSoftware/open-horizons-frontend": "rebase",
+    "default_communication_mode_when_music_playing": "non_verbal",
+    "override_communication_mode_for_critical_events": "verbal",
+    "override_communication_mode_for_direct_commands": "verbal",
+    "merge_policy_on_conflicts": "prevent_merge_if_conflicts_exist",
+    "merge_strategy_for_NLevelSoftware/open-horizons-frontend_repo": "rebase"
 }

@@ -1,6 +1,7 @@
 import httpx
 import traceback
 import os
+import urllib.parse
 
 class WeatherAgent:
     def __init__(self):
@@ -10,124 +11,73 @@ class WeatherAgent:
         if self.include_raw:
             print(*args, **kwargs)
 
+    def _wwo_to_wmo(self, wwo_code):
+        try:
+            wwo_code = int(wwo_code)
+        except (ValueError, TypeError):
+            return 0
+            
+        mapping = {
+            113: 0, 116: 2, 119: 3, 122: 3, 143: 45, 176: 80, 179: 85, 182: 85,
+            185: 56, 200: 95, 227: 71, 230: 71, 248: 45, 260: 48, 263: 51,
+            266: 53, 281: 56, 284: 57, 293: 61, 296: 61, 299: 63, 302: 63,
+            305: 65, 308: 65, 311: 66, 314: 67, 317: 71, 320: 73, 323: 71,
+            326: 71, 329: 73, 332: 73, 335: 75, 338: 75, 350: 77, 353: 80,
+            356: 81, 359: 82, 362: 85, 365: 85, 368: 85, 371: 86, 374: 77,
+            377: 77, 386: 95, 389: 96, 392: 95, 395: 99
+        }
+        return mapping.get(wwo_code, 0)
+
     async def get_weather(self, location, forecast_days=7, past_days=0, hourly=None, daily=None):
         if self.include_raw:
-            print(f"[WeatherAgent] Getting weather for: '{location}' with params: forecast_days={forecast_days}, past_days={past_days}, hourly={hourly}, daily={daily}")
+            print(f"[WeatherAgent] Getting weather for: '{location}'")
 
         try:
-            # Step 1: Geocoding
-            parts = [p.strip() for p in location.split(',')]
-            city = parts[0]
-            state = parts[1] if len(parts) > 1 else None
-            country = parts[2] if len(parts) > 2 else None
-
-            async with httpx.AsyncClient() as client:
-                params = {"name": city, "count": 15, "language": "en", "format": "json"}
-                url = "https://geocoding-api.open-meteo.com/v1/search"
-
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                encoded_location = urllib.parse.quote(location)
+                url = f"https://wttr.in/{encoded_location}?format=j1"
+                
                 if self.include_raw:
-                    print(f"[WeatherAgent] Requesting Geocoding URL: {url} with params: {params}")
-
-                geo_response = await client.get(url, params=params)
-
-                if self.include_raw:
-                    print(f"[WeatherAgent] Geocoding Response Status: {geo_response.status_code}")
-                    print(f"[WeatherAgent] Geocoding Response Text: {geo_response.text}")
-
-                geo_response.raise_for_status()
-                geo_data = geo_response.json()
-                results = geo_data.get("results")
-
-                if not results:
-                    if self.include_raw:
-                        print(f"[WeatherAgent] Geocoding returned no results. Raw response: {geo_response.text}")
-                    return f"Could not find location: {location}"
-
-                # Step 2: Filter results if state/country was provided
-                if state or country:
-                    filtered_results = []
-                    for r in results:
-                        match = True
-                        # State/Admin1 must match if provided
-                        if state and not (r.get('admin1') and state.lower() in r.get('admin1').lower()):
-                            match = False
-                        # Country must match if provided
-                        if country and not (r.get('country') and country.lower() in r.get('country').lower()):
-                            match = False
-
-                        if match:
-                            filtered_results.append(r)
-
-                    # If we found any matches, use the filtered list. Otherwise, stick with the original broad list.
-                    if filtered_results:
-                        results = filtered_results
-
-                # Step 3: Handle ambiguity
-                if len(results) > 1:
-                    locations = [
-                        f"{i+1}. {r.get('name', 'N/A')}, {r.get('admin1', 'N/A')}, {r.get('country', 'N/A')}"
-                        for i, r in enumerate(results)
-                    ]
-                    return f"Multiple locations found. Please be more specific:\n" + "\n".join(locations)
-
-                lat = results[0]["latitude"]
-                lon = results[0]["longitude"]
-
-            # Step 2: Weather Forecast
-            params = {
-                "latitude": lat,
-                "longitude": lon,
-                "timezone": "auto"
-            }
-            if forecast_days is not None:
-                params["forecast_days"] = forecast_days
-            if past_days is not None:
-                params["past_days"] = past_days
-            if hourly:
-                params["hourly"] = ",".join(hourly)
-            if daily:
-                params["daily"] = ",".join(daily)
-
-            # Add default daily if nothing is specified
-            if not hourly and not daily:
-                params["daily"] = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum"
-
-
-            async with httpx.AsyncClient() as client:
-                forecast_response = await client.get(
-                    "https://api.open-meteo.com/v1/forecast",
-                    params=params
-                )
-                forecast_response.raise_for_status()
-                weather_data = forecast_response.json()
-
-                # The widget expects a simple daily forecast structure.
-                # If daily data is present, format it for the widget.
-                # Otherwise, return the full JSON for the model to interpret.
-                daily_data = weather_data.get('daily', {})
-                if 'time' in daily_data and daily_data['time']:
-                    forecast = []
-                    num_days = len(daily_data['time'])
-                    weather_codes = daily_data.get('weather_code', [None] * num_days)
-                    temp_maxes = daily_data.get('temperature_2m_max', [None] * num_days)
-                    temp_mins = daily_data.get('temperature_2m_min', [None] * num_days)
-                    precipitations = daily_data.get('precipitation_sum', [None] * num_days)
-
-                    for i in range(num_days):
-                        forecast.append({
-                            "date": daily_data['time'][i],
-                            "weather_code": weather_codes[i],
-                            "temp_max": temp_maxes[i],
-                            "temp_min": temp_mins[i],
-                            "precipitation": precipitations[i]
-                        })
-                    return forecast
-                else:
-                    return weather_data
-
+                    print(f"[WeatherAgent] Requesting wttr.in URL: {url}")
+                
+                response = await client.get(url)
+                response.raise_for_status()
+                weather_data = response.json()
+                
+                forecast = []
+                for day in weather_data.get('weather', []):
+                    date = day.get('date')
+                    temp_max = float(day.get('maxtempC', 0))
+                    temp_min = float(day.get('mintempC', 0))
+                    
+                    hourly_data = day.get('hourly', [])
+                    weather_code = 0
+                    precipitation = 0.0
+                    
+                    if hourly_data:
+                        noon_hour = hourly_data[len(hourly_data)//2]
+                        wwo_code = noon_hour.get('weatherCode', 0)
+                        weather_code = self._wwo_to_wmo(wwo_code)
+                        
+                        # Sum up precipitation for the day
+                        precipitation = sum(float(h.get('precipMM', 0)) for h in hourly_data)
+                        
+                    forecast.append({
+                        "date": date,
+                        "weather_code": weather_code,
+                        "temp_max": temp_max,
+                        "temp_min": temp_min,
+                        "precipitation": precipitation
+                    })
+                    
+                if not forecast:
+                    return f"Could not find weather data for: {location}"
+                    
+                return forecast
+                
         except httpx.HTTPStatusError as e:
             if self.include_raw:
-                print(f"[WeatherAgent] [ERR] HTTP error in weather tool: {e}")
+                print(f"[WeatherAgent] [ERR] HTTP error: {e}")
             return f"Error processing weather request: {e.response.status_code}"
         except Exception as e:
             if self.include_raw:

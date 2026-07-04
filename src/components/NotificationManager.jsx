@@ -12,7 +12,7 @@ const NotificationManager = ({ socket, onNewNotification }) => {
       if (data.content_type === 'notification') {
         const newNotification = {
           id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          text: data.data.text,
+          text: data.text || (data.data && data.data.text),
           duration: data.duration || 10000,
           timestamp: new Date().toISOString(),
         };
@@ -71,10 +71,10 @@ const NotificationManager = ({ socket, onNewNotification }) => {
             {/* Optional Progress Bar for Duration */}
             {notification.duration > 0 && (
                 <motion.div
-                    initial={{ width: '100%' }}
-                    animate={{ width: 0 }}
+                    initial={{ scaleX: 1 }}
+                    animate={{ scaleX: 0 }}
                     transition={{ duration: notification.duration / 1000, ease: 'linear' }}
-                    className="absolute bottom-0 left-0 h-1 bg-blue-500/50"
+                    className="absolute bottom-0 left-0 h-1 bg-blue-500/50 origin-left"
                 />
             )}
           </motion.div>

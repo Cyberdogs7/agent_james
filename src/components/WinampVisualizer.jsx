@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { AgentAudioVisualizerButterchurn } from './agents-ui/agent-audio-visualizer-butterchurn';
 
 const VISUALIZER_MODES = [
   "spectrum",
@@ -15,6 +17,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
   const [visData, setVisData] = useState(new Array(64).fill(0));
   const [status, setStatus] = useState({ status: "stopped", track: null });
   const [mode, setMode] = useState("spectrum"); // 'spectrum' or 'oscilloscope'
+  const [showLyrics, setShowLyrics] = useState(true);
   const animationRef = useRef(null);
   const dataRef = useRef(new Array(64).fill(0));
   const smoothDataRef = useRef(new Array(64).fill(0));
@@ -259,6 +262,22 @@ const WinampVisualizer = ({ socket, onClose }) => {
     }
   }, [activeLineIndex, lyricLines.length]);
 
+  useEffect(() => {
+    if (mode === 'milkshake') {
+      const handleKeyDown = (e) => {
+        // Prevent default browser behavior (e.g., scrolling or searching)
+        e.preventDefault();
+        e.stopPropagation();
+        setMode('spectrum');
+      };
+      // Use capture phase to ensure we catch it before anything else
+      window.addEventListener('keydown', handleKeyDown, true);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown, true);
+      };
+    }
+  }, [mode]);
+
   return (
     <div className="flex flex-col h-full bg-[#1a1a1a] text-[#00FF00] font-mono text-xs select-none pb-1">
       {/* Header / Title Bar */}
@@ -272,15 +291,20 @@ const WinampVisualizer = ({ socket, onClose }) => {
         </div>
         <div className="flex gap-1">
           <button
+            onClick={() => setShowLyrics((prev) => !prev)}
+            className={`hover:text-white ${!showLyrics ? "text-[#4a4a4a]" : ""}`}
+            title="Toggle Lyrics"
+            aria-label="Toggle Lyrics"
+          >
+            L
+          </button>
+          <button
             onClick={() =>
-              setMode((m) => {
-                const currentIndex = VISUALIZER_MODES.indexOf(m);
-                return VISUALIZER_MODES[(currentIndex + 1) % VISUALIZER_MODES.length];
-              })
+              setMode((m) => (m === "milkshake" ? "spectrum" : "milkshake"))
             }
-            className="hover:text-white"
-            title="Toggle Mode"
-            aria-label="Toggle Mode"
+            className={`hover:text-white ${mode !== 'milkshake' ? "text-[#4a4a4a]" : ""}`}
+            title="Toggle Milkshake"
+            aria-label="Toggle Milkshake"
           >
             M
           </button>
@@ -303,6 +327,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
         <canvas
           ref={canvasRef}
           className="w-full h-full"
+          style={{ display: mode === 'milkshake' ? 'none' : 'block' }}
           onClick={() =>
             setMode((m) => {
               const currentIndex = VISUALIZER_MODES.indexOf(m);
@@ -310,6 +335,28 @@ const WinampVisualizer = ({ socket, onClose }) => {
             })
           }
         />
+        
+        {mode === 'milkshake' && createPortal(
+          <div 
+             className="fixed inset-0 z-[9999] bg-black"
+             onContextMenu={(e) => {
+                 e.preventDefault();
+                 setMode('spectrum');
+             }}
+             onDoubleClick={(e) => {
+                 e.preventDefault();
+                 setMode('spectrum');
+             }}
+          >
+             <AgentAudioVisualizerButterchurn
+                 state={status.status === "playing" ? "speaking" : "idle"}
+                 volume={1}
+                 socket={socket}
+                 className="w-full h-full"
+             />
+          </div>,
+          document.body
+        )}
 
         {/* Track Info Overlay */}
         <div className="absolute top-1 left-1 text-[#00FF00] bg-black/80 px-1">
@@ -324,7 +371,7 @@ const WinampVisualizer = ({ socket, onClose }) => {
         </div>
 
         {/* Lyrics Display */}
-        {status.track && status.track.lyrics && (
+        {showLyrics && status.track && status.track.lyrics && (
           <div
             ref={lyricsRef}
             className="absolute bottom-6 left-1 right-1 text-[#00FF00] bg-black/80 px-2 py-1 text-center whitespace-pre-wrap max-h-24 overflow-y-auto"

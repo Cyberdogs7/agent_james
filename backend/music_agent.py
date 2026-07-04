@@ -617,6 +617,17 @@ class MusicAgent:
                             self.logger.debug(f"Emit error: {emit_err}")
 
                     asyncio.run_coroutine_threadsafe(safe_emit(), self.main_loop)
+                    
+                # Emit raw PCM stream for Butterchurn (not rate-limited to prevent audio gaps)
+                import base64
+                pcm_b64 = base64.b64encode(process_data).decode('ascii')
+                async def safe_emit_pcm():
+                    try:
+                        await self.sio.emit('music_pcm_stream', {"data": pcm_b64, "rate": 24000})
+                    except Exception as emit_err:
+                        self.logger.debug(f"PCM emit error: {emit_err}")
+                asyncio.run_coroutine_threadsafe(safe_emit_pcm(), self.main_loop)
+                
             except Exception as e:
                 self.logger.debug(f"Vis error: {e}")
 

@@ -42,7 +42,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
     // Auto-scroll thoughts panel
     useEffect(() => {
         if (thoughtsEndRef.current) {
-            thoughtsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            thoughtsEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [thoughts]);
 
@@ -107,7 +107,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
     };
 
     return (
-        <div className="w-full h-full relative group bg-gray2 rounded-lg overflow-hidden border border-gold9/20">
+        <div className="w-full h-full relative group bg-gray-900 rounded-lg overflow-hidden border border-gold9/20">
             {/* Close Button */}
             <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={onClose} className="bg-red9/20 hover:bg-red9/50 text-red9 p-1 rounded">X</button>
@@ -138,8 +138,8 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
             {/* Iteration / Generation Overlay */}
             {/* Show if iterating OR if no data exists (and not loading) */}
             {(isIterating || (!data && data?.format !== 'loading')) && (
-                <div className={`absolute inset-0 z-20 ${!data ? 'bg-gray2' : 'bg-black/80'} flex items-center justify-center p-4`}>
-                    <div className="bg-gray3 border border-gold9/50 rounded p-4 w-full max-w-sm pointer-events-auto shadow-[0_0_20px_rgba(255,215,0,0.2)]">
+                <div className={`absolute inset-0 z-20 ${!data ? 'bg-gray-900' : 'bg-black/80'} flex items-center justify-center p-4`}>
+                    <div className="bg-gray-800 border border-gold9/50 rounded p-4 w-full max-w-sm pointer-events-auto shadow-[0_0_20px_rgba(255,215,0,0.2)]">
                         <h4 className="text-gold9 text-sm mb-2 font-sans">
                             {!data ? "New Design" : "Refine Design"}
                         </h4>
@@ -147,7 +147,7 @@ const CadWindow = ({ data, thoughts, retryInfo = {}, onClose, socket }) => {
                             value={prompt}
                             onChange={(e) => setPrompt(e.target.value)}
                             placeholder={!data ? "Describe what you want to create..." : "e.g., Make the wheels bigger..."}
-                            className="w-full bg-gray2 border border-gray7 rounded p-2 text-gray11 text-sm mb-3 focus:outline-none focus:border-gold9 h-24 resize-none"
+                            className="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-300 text-sm mb-3 focus:outline-none focus:border-gold9 h-24 resize-none"
                             autoFocus
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {

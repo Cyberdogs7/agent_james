@@ -51,6 +51,11 @@ export interface AgentAudioVisualizerButterchurnProps {
    * Preset name to use. If provided, will lock to this preset.
    */
   preset?: string;
+  /**
+   * Socket connection to receive raw PCM stream from the backend.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  socket?: any;
 }
 
 /**
@@ -74,6 +79,7 @@ export function AgentAudioVisualizerButterchurn({
   autoRotatePresets = true,
   preset,
   className,
+  socket,
   ref,
   ...props
 }: AgentAudioVisualizerButterchurnProps & ComponentProps<'div'>) {
@@ -82,9 +88,11 @@ export function AgentAudioVisualizerButterchurn({
     isReady,
     error,
     setPresetByName,
+    nextPreset,
   } = useButterchurnVisualizer(state, volume, {
     presetCycleInterval,
     autoRotatePresets,
+    socket,
   });
 
   // If a specific preset is provided, load it
@@ -95,7 +103,15 @@ export function AgentAudioVisualizerButterchurn({
   }, [isReady, preset, setPresetByName]);
 
   return (
-    <div ref={ref} className={cn(AgentAudioVisualizerButterchurnVariants({ size }), className)} {...props}>
+    <div 
+      ref={ref} 
+      className={cn(AgentAudioVisualizerButterchurnVariants({ size }), className)} 
+      onClick={(e) => {
+        nextPreset();
+        props.onClick?.(e);
+      }}
+      {...props}
+    >
       {error && (
         <div className="flex items-center justify-center w-full h-full text-red-500 text-sm">
           {error}

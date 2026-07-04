@@ -4,6 +4,7 @@ import { Copy, Check } from 'lucide-react';
 const ChatModule = ({
     messages,
     onSend,
+    onInterrupt,
     isModularMode,
     activeDragElement,
     position,
@@ -16,7 +17,7 @@ const ChatModule = ({
     const [localInputValue, setLocalInputValue] = useState("");
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
     };
 
     const handleCopy = (msg) => {
@@ -34,7 +35,7 @@ const ChatModule = ({
         <div
             id="chat"
             onMouseDown={onMouseDown}
-            className={`absolute px-6 py-4 pointer-events-auto ${activeDragElement === "chat" ? "" : "transition-all duration-200"}
+            className={`absolute px-6 py-4 pointer-events-auto
              bg-black/80 border border-gold9/20  rounded-2xl
             ${isModularMode ? (activeDragElement === 'chat' ? 'ring-2 ring-green-500' : 'ring-1 ring-yellow-500/30') : ''}
         `}
@@ -87,6 +88,13 @@ const ChatModule = ({
                     placeholder="INITIALIZE COMMAND..."
                     className="flex-1 bg-black/80 border border-gold9/30 rounded-lg p-3 text-gold9 focus:outline-none focus:border-gold9 focus:ring-1 focus:ring-gold9/50 transition-all placeholder-gold9/50 "
                 />
+                <button 
+                    onClick={onInterrupt}
+                    className="px-4 py-2 bg-red-600/30 hover:bg-red-500/50 border border-red-500/50 text-red-100 rounded-lg font-bold tracking-widest transition-colors flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                    title="Stop Agent Task"
+                >
+                    STOP
+                </button>
             </div>
             {isModularMode && <div className={`absolute -top-6 left-0 text-xs font-bold tracking-widest ${activeDragElement === 'chat' ? 'text-green-500' : 'text-yellow-500/50'}`}>CHAT MODULE</div>}
         </div>

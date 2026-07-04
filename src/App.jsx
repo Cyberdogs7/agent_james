@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import io from "socket.io-client";
 
 import DisplayArea from "./components/DisplayArea";
@@ -83,7 +83,6 @@ function App() {
     maxAttempts: 3,
     error: null,
   }); // Retry status
-  const [browserData, setBrowserData] = useState({ image: null, logs: [] });
   // showMemoryPrompt removed - memory is now actively saved to project
   const [confirmationRequest, setConfirmationRequest] = useState(null); // { id, tool, args }
   const [kasaDevices, setKasaDevices] = useState([]);
@@ -113,12 +112,34 @@ function App() {
 
   const [reaction, setReaction] = useState('idle');
   const reactionTimerRef = useRef(null);
+  const currentReactionRef = useRef('idle'); // Track synchronously
+
+  const REACTION_PRIORITY = {
+      idle: 0,
+      thinking: 1,
+      intense_thinking: 2,
+      delegate_task: 3,
+      success: 4,
+      alert: 5
+  };
 
   const triggerReaction = (newReaction, duration = 0) => {
+      const currentPriority = REACTION_PRIORITY[currentReactionRef.current] || 0;
+      const newPriority = REACTION_PRIORITY[newReaction] || 0;
+
+      // Do not interrupt a higher priority reaction
+      if (newPriority < currentPriority) return;
+
       setReaction(newReaction);
+      currentReactionRef.current = newReaction;
+      
       if (reactionTimerRef.current) clearTimeout(reactionTimerRef.current);
+      
       if (duration > 0) {
-          reactionTimerRef.current = setTimeout(() => setReaction('idle'), duration);
+          reactionTimerRef.current = setTimeout(() => {
+              setReaction('idle');
+              currentReactionRef.current = 'idle';
+          }, duration);
       }
   };
 
@@ -206,7 +227,7 @@ function App() {
   const isCameraFlippedRef = useRef(false);
   const handLandmarkerRef = useRef(null);
   const faceLandmarkerRef = useRef(null);
-  const [facePosition, setFacePosition] = useState(null); // Normalized coordinates
+  const facePositionRef = useRef(null); // Use ref instead of state to avoid re-render storm at 30fps
   const cursorTrailRef = useRef([]); // Stores last N positions for trail
   const [ripples, setRipples] = useState([]); // Visual ripples on click
 
@@ -524,7 +545,11 @@ function App() {
             }
         });
         socket.on('error', (data) => {
-            console.error("Socket Error:", data);
+            console.error("Agent Error:", data);
+            if (data.msg === 'Please wait for the current action to finish.') {
+                // Ignore this error to avoid UI flickering during tool execution
+                return;
+            }
             addMessage('System', `Error: ${data.msg}`);
             triggerReaction('alert', 5000);
         });
@@ -578,20 +603,7 @@ function App() {
             setCadThoughts(prev => prev + data.text);
         });
         socket.on('browser_frame', (data) => {
-            setBrowserData(prev => ({
-                image: data.image || prev.image,
-                logs: [...prev.logs, data.log].filter(l => l).slice(-50) // Keep last 50 logs
-            }));
             setShowBrowserWindow(true);
-            // Auto-show browser window if hidden, clamped to viewport
-            if (!elementPositions.browser) {
-                const size = { w: 550, h: 380 };
-                const clamped = clampToViewport({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 }, size);
-                setElementPositions(prev => ({
-                    ...prev,
-                    browser: clamped
-                }));
-            }
         });
 
         // Handle streaming transcription
@@ -1068,7 +1080,7 @@ function App() {
         const landmarks = faceResults.faceLandmarks[0];
         // Use Nose Tip (Index 1) as face center reference
         const nose = landmarks[1];
-        setFacePosition({ x: nose.x, y: nose.y, z: nose.z });
+        facePositionRef.current = { x: nose.x, y: nose.y, z: nose.z };
       }
     }
 
@@ -1706,7 +1718,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-gray2 text-gray11 font-sans overflow-hidden flex flex-col relative selection:bg-gold-900/50 selection:text-white">
+    <div className="h-screen w-screen bg-black text-gray11 font-sans overflow-hidden flex flex-col relative selection:bg-gold-900/50 selection:text-white">
       <NotificationManager socket={socket} onNewNotification={(n) => setNotificationHistory(prev => [n, ...prev])} />
       {/* --- PREMIUM UI LAYER --- */}
 
@@ -1874,7 +1886,7 @@ function App() {
         {/* Central Visualizer (AI Audio) */}
         <div
           id="visualizer"
-          className={`absolute flex items-center justify-center ${activeDragElement === "visualizer" ? "" : "transition-all duration-200"}
+          className={`absolute flex items-center justify-center
                          bg-black/80 border border-white/10  overflow-visible
                         ${isModularMode ? (activeDragElement === "visualizer" ? "ring-2 ring-green-500 bg-green-500/10" : "ring-1 ring-yellow-500/30 bg-yellow-500/5") + " rounded-2xl pointer-events-auto" : "rounded-2xl pointer-events-none"}
                     `}
@@ -1893,7 +1905,7 @@ function App() {
               isListening={isConnected && !isMuted}
               timers={timers}
               currentProject={currentProject}
-              facePosition={facePosition}
+              facePositionRef={facePositionRef}
               reaction={reaction}
             />
           </div>
@@ -1914,7 +1926,7 @@ function App() {
 
         <div
           id="video"
-          className={`fixed bottom-4 right-4 ${activeDragElement === "video" ? "" : "transition-all duration-200"}
+          className={`fixed bottom-4 right-4
                         ${isVideoOn ? "opacity-100" : "opacity-0 pointer-events-none"}
                          bg-black/80 border border-white/10 shadow-xl rounded-xl
                     `}
@@ -1977,7 +1989,7 @@ function App() {
         {showCadWindow && (
           <div
             id="cad"
-            className={`absolute flex flex-col ${activeDragElement === "cad" ? "" : "transition-all duration-200"}
+            className={`absolute flex flex-col
                          bg-black/80 border border-white/10  overflow-hidden rounded-2xl
                         ${activeDragElement === "cad" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
@@ -2023,7 +2035,7 @@ function App() {
         {showBrowserWindow && (
           <div
             id="browser"
-            className={`absolute flex flex-col ${activeDragElement === "browser" ? "" : "transition-all duration-200"}
+            className={`absolute flex flex-col
                          bg-black/80 border border-white/10  overflow-hidden rounded-lg
                         ${activeDragElement === "browser" ? "ring-2 ring-green-500 bg-green-500/10" : ""}
                     `}
@@ -2040,8 +2052,6 @@ function App() {
           >
             <div className="relative z-20 w-full h-full">
               <BrowserWindow
-                imageSrc={browserData.image}
-                logs={browserData.logs}
                 onClose={() => setShowBrowserWindow(false)}
                 socket={socket}
               />
@@ -2053,6 +2063,7 @@ function App() {
         <ChatModule
           messages={messages}
           onSend={handleSend}
+          onInterrupt={() => socket.emit("interrupt")}
           isModularMode={isModularMode}
           activeDragElement={activeDragElement}
           position={elementPositions.chat}
@@ -2146,7 +2157,7 @@ function App() {
           <div
             id="music"
             ref={musicWindowRef}
-            className={`absolute flex flex-col ${activeDragElement === "music" ? "" : "transition-all duration-200"}
+            className={`absolute flex flex-col
                           overflow-hidden rounded-md
                         ${activeDragElement === "music" ? "ring-2 ring-green-500" : ""}
                     `}

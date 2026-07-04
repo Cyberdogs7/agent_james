@@ -1,13 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 const FpsCounter = ({ fpsRef }) => {
-    const displayRef = useRef(null);
+    const [fps, setFps] = useState(0);
+    const lastFpsRef = useRef(-1);
 
     useEffect(() => {
         let frameId;
         const updateFps = () => {
-            if (displayRef.current && fpsRef.current !== undefined) {
-                displayRef.current.innerText = `FPS: ${fpsRef.current}`;
+            if (fpsRef.current !== undefined && fpsRef.current !== lastFpsRef.current) {
+                setFps(fpsRef.current);
+                lastFpsRef.current = fpsRef.current;
             }
             frameId = requestAnimationFrame(updateFps);
         };
@@ -16,8 +18,8 @@ const FpsCounter = ({ fpsRef }) => {
     }, [fpsRef]);
 
     return (
-        <div ref={displayRef} className="text-[10px] text-green-500 border border-green-900 px-1 rounded ml-2">
-            FPS: 0
+        <div className="text-[10px] text-green-500 border border-green-900 px-1 rounded ml-2">
+            FPS: {fps}
         </div>
     );
 };

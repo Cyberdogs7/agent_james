@@ -1,14 +1,28 @@
 import React, { useEffect, useRef } from 'react';
 import { Globe, X } from 'lucide-react';
 
-const BrowserWindow = ({ imageSrc, logs, onClose, socket }) => {
+const BrowserWindow = ({ onClose, socket }) => {
     const [input, setInput] = React.useState('');
+    const [imageSrc, setImageSrc] = React.useState('');
+    const [logs, setLogs] = React.useState([]);
     const logsEndRef = useRef(null);
+
+    useEffect(() => {
+        if (!socket) return;
+        const handleFrame = (data) => {
+            if (data.image) setImageSrc(data.image);
+            if (data.log) {
+                setLogs(prev => [...prev, data.log].filter(l => l).slice(-50));
+            }
+        };
+        socket.on('browser_frame', handleFrame);
+        return () => socket.off('browser_frame', handleFrame);
+    }, [socket]);
 
     // Auto-scroll logs to bottom
     useEffect(() => {
         if (logsEndRef.current) {
-            logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+            logsEndRef.current.scrollIntoView({ behavior: 'auto' });
         }
     }, [logs]);
 
@@ -23,14 +37,14 @@ const BrowserWindow = ({ imageSrc, logs, onClose, socket }) => {
     };
 
     return (
-        <div className="w-full h-full relative group bg-gray2 rounded-lg overflow-hidden flex flex-col border border-gold9/20">
+        <div className="w-full h-full relative group bg-gray-900 rounded-lg overflow-hidden flex flex-col border border-gold9/20">
             {/* Header Bar - Drag Handle */}
-            <div data-drag-handle className="h-8 bg-gray4 border-b border-gold9/20 flex items-center justify-between px-2 shrink-0 cursor-grab active:cursor-grabbing">
-                <div className="flex items-center gap-2 text-gray11 text-xs font-sans">
+            <div data-drag-handle className="h-8 bg-gray-800 border-b border-gold9/20 flex items-center justify-between px-2 shrink-0 cursor-grab active:cursor-grabbing">
+                <div className="flex items-center gap-2 text-gray-400 text-xs font-sans">
                     <Globe size={14} className="text-gold9" />
                     <span>WEB_AGENT_VIEW</span>
                 </div>
-                <button onClick={onClose} className="hover:bg-red9/20 text-gray11 hover:text-red9 p-1 rounded transition-colors">
+                <button onClick={onClose} className="hover:bg-red9/20 text-gray-400 hover:text-red9 p-1 rounded transition-colors">
                     <X size={14} />
                 </button>
             </div>
@@ -55,7 +69,7 @@ const BrowserWindow = ({ imageSrc, logs, onClose, socket }) => {
             </div>
 
             {/* Input Bar */}
-            <div className="h-10 bg-gray3 border-t border-gold9/20 flex items-center px-2 gap-2">
+            <div className="h-10 bg-gray-800 border-t border-gold9/20 flex items-center px-2 gap-2">
                 <span className="text-gold9 font-sans text-xs">{'>'}</span>
                 <input
                     type="text"

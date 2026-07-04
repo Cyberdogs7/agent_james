@@ -7,13 +7,13 @@ import SelectWindow from './SelectWindow';
 import VideoAvatar from './VideoAvatar';
 import { X } from 'lucide-react';
 
-const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition, reaction }) => {
+const DisplayArea = ({ socket, isListening, timers, currentProject, facePositionRef, reaction }) => {
   const [displayContent, setDisplayContent] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const timerRef = useRef(null);
 
-  const [aiAudioData, setAiAudioData] = useState(new Array(64).fill(0));
+  const aiAudioDataRef = useRef(new Array(64).fill(0));
   const audioHistoryRef = useRef([]);
 
   useEffect(() => {
@@ -59,20 +59,18 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
                 const silenceThreshold = 5;
                 const isSilent = smoothedData.every(val => val < silenceThreshold);
                 if (isSilent) {
-                    setAiAudioData(new Array(rawData.length).fill(0));
+                    aiAudioDataRef.current = new Array(rawData.length).fill(0);
                 } else {
-                    setAiAudioData(smoothedData);
+                    aiAudioDataRef.current = smoothedData;
                 }
             } else {
-                setAiAudioData(rawData);
+                aiAudioDataRef.current = rawData;
             }
         };
 
         socket.on('audio_data', handleAudio);
         return () => socket.off('audio_data', handleAudio);
   }, [socket]);
-
-  const intensity = aiAudioData.length > 0 ? aiAudioData.reduce((a, b) => a + b, 0) / aiAudioData.length / 255 : 0;
 
   // Check for project-specific avatar
   useEffect(() => {
@@ -108,6 +106,10 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
     if (data.content_type === 'clear') {
       handleDismiss();
       return;
+    }
+    
+    if (data.content_type === 'notification') {
+      return; // Handled by NotificationManager
     }
 
     setDisplayContent(data);
@@ -152,7 +154,11 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
       }
       // Render Avatar if available
       if (avatarUrl) {
-          return <AvatarCanvas audioData={aiAudioData} vrmUrl={avatarUrl} facePosition={facePosition} />;
+          return <AvatarCanvas audioDataRef={aiAudioDataRef} vrmUrl={avatarUrl} facePositionRef={facePositionRef} />;
+      }
+      
+      if (reaction === 'idle') {
+          return <Visualizer isListening={isListening} audioDataRef={aiAudioDataRef} />;
       }
       return <VideoAvatar reaction={reaction} />;
     }
@@ -169,6 +175,9 @@ const DisplayArea = ({ socket, isListening, timers, currentProject, facePosition
         }
         return null;
       default:
+        if (reaction === 'idle') {
+            return <Visualizer isListening={isListening} audioDataRef={aiAudioDataRef} />;
+        }
         return <VideoAvatar reaction={reaction} />;
     }
   };

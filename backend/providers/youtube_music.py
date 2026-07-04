@@ -44,7 +44,12 @@ async def _capture_youtube_music_cookies(config: Dict, sio=None) -> Optional[Dic
     try:
         async with async_playwright() as p:
             # Launch visible browser so user can log in
-            browser = await p.chromium.launch(headless=False)
+            try:
+                browser = await p.chromium.launch(headless=False, channel="chrome")
+            except Exception as e:
+                print(f"[YouTubeMusic] Failed to launch chrome channel, falling back to default chromium: {e}")
+                browser = await p.chromium.launch(headless=False)
+                
             context = await browser.new_context(
                 viewport={"width": 1280, "height": 800},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -161,14 +166,31 @@ async def _wait_for_login(page, context, sio=None, timeout=300) -> bool:
         if elapsed > timeout:
             print("[YouTubeMusic] Login timeout")
             return False
+            
+        if page.is_closed():
+            print("[YouTubeMusic] Browser page was closed by user")
+            # If closed, maybe they finished login, so check cookies one last time
+            try:
+                cookies = await context.cookies()
+                youtube_cookies = [c for c in cookies if "youtube" in c.get("domain", "")]
+                auth_cookie_names = ["__Secure-3PAPISID", "SAPISID", "SID", "HSID", "SSID", "APISID"]
+                found = [c["name"] for c in youtube_cookies if c["name"] in auth_cookie_names]
+                if len(found) >= 2:
+                    return True
+            except Exception:
+                pass
+            return False
         
         # Also check for auth cookies as a fallback detection
         try:
             cookies = await context.cookies()
+            youtube_cookies = [c for c in cookies if "youtube" in c.get("domain", "")]
             auth_cookie_names = ["__Secure-3PAPISID", "SAPISID", "SID", "HSID", "SSID", "APISID"]
-            found = [c["name"] for c in cookies if c["name"] in auth_cookie_names]
+            found = [c["name"] for c in youtube_cookies if c["name"] in auth_cookie_names]
             
-            if len(found) >= 3:  # Multiple auth cookies = likely logged in
+            if len(found) >= 2:  # Multiple auth cookies on youtube domain = likely logged in
+                # Wait a tiny bit for any final redirects to finish
+                await asyncio.sleep(2)
                 print(f"[YouTubeMusic] Detected login via cookies: {found}")
                 return True
         except Exception:
@@ -213,6 +235,10 @@ def _create_ytmusic_client(credentials: Dict) -> "YTMusic":
     # Add auth user
     if "x-goog-authuser" in headers:
         ytmusic_headers["x-goog-authuser"] = headers["x-goog-authuser"]
+        
+    # Add authorization header (critical for ytmusicapi to recognize BROWSER auth)
+    if "authorization" in headers:
+        ytmusic_headers["authorization"] = headers["authorization"]
     
     # Try to use the browser auth setup
     try:

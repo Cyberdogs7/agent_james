@@ -127,11 +127,24 @@ function createWindow() {
 }
 
 function startPythonBackend() {
-    console.log(`Starting Python backend: python3 -m backend.server`);
+    let pythonExecutable = 'python';
+    const winVenvPath = path.join(__dirname, '..', '.venv', 'Scripts', 'python.exe');
+    const unixVenvPath = path.join(__dirname, '..', '.venv', 'bin', 'python');
+    
+    if (fs.existsSync(winVenvPath)) {
+        pythonExecutable = winVenvPath;
+    } else if (fs.existsSync(unixVenvPath)) {
+        pythonExecutable = unixVenvPath;
+    }
 
-    // Assuming 'python' is in PATH. In prod, this would be the executable.
-    pythonProcess = spawn('python', ['-m', 'backend.server'], {
+    console.log(`Starting Python backend: ${pythonExecutable} -m backend.server`);
+
+    pythonProcess = spawn(pythonExecutable, ['-m', 'backend.server'], {
         cwd: path.join(__dirname, '..'),
+    });
+
+    pythonProcess.on('error', (err) => {
+        console.error(`[Python Spawn Error]: Failed to start Python backend. Error:`, err);
     });
 
     pythonProcess.stdout.on('data', (data) => {

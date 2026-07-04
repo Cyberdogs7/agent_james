@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import * as THREE from 'three';
 
-function AvatarModel({ url, audioData, facePosition }) {
+function AvatarModel({ url, audioDataRef, facePositionRef }) {
   const [vrm, setVrm] = useState(null);
   const lookAtTargetRef = useRef({ yaw: 0, pitch: 0 });
 
@@ -42,6 +42,7 @@ function AvatarModel({ url, audioData, facePosition }) {
     vrm.update(delta);
 
     // --- Lip Sync ---
+    const audioData = audioDataRef?.current;
     if (audioData && audioData.length > 0) {
       // Audio Data is typically 0-255 Uint8
       const sum = audioData.reduce((a, b) => a + b, 0);
@@ -99,6 +100,7 @@ function AvatarModel({ url, audioData, facePosition }) {
         let targetYaw = 0;
         let targetPitch = 0;
 
+        const facePosition = facePositionRef?.current;
         if (facePosition) {
             // Map 0..1 to Radians
             // User Right (x=1) -> Avatar Looks Left (Yaw +)
@@ -142,7 +144,7 @@ function AvatarModel({ url, audioData, facePosition }) {
   return vrm ? <primitive object={vrm.scene} position={[0, -1.4, 0]} /> : null;
 }
 
-export default function AvatarCanvas({ audioData, vrmUrl, facePosition }) {
+export default function AvatarCanvas({ audioDataRef, vrmUrl, facePositionRef }) {
   if (!vrmUrl) return null;
 
   return (
@@ -153,7 +155,7 @@ export default function AvatarCanvas({ audioData, vrmUrl, facePosition }) {
         <directionalLight position={[-1, 0.5, 1]} intensity={0.5} />
 
         <React.Suspense fallback={null}>
-            <AvatarModel url={vrmUrl} audioData={audioData} facePosition={facePosition} />
+            <AvatarModel url={vrmUrl} audioDataRef={audioDataRef} facePositionRef={facePositionRef} />
         </React.Suspense>
         </Canvas>
     </div>
