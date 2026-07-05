@@ -93,6 +93,7 @@ function App() {
   const [showWarRoom, setShowWarRoom] = useState(false);
   const [showProjectWindow, setShowProjectWindow] = useState(false);
   const [showMusicPlayer, setShowMusicPlayer] = useState(false);
+  const [musicStatus, setMusicStatus] = useState({ status: 'stopped', track: null });
   const [isWritingMode, setIsWritingMode] = useState(false);
   const [warRoomData, setWarRoomData] = useState(null);
   const [inputValue, setInputValue] = useState("");
@@ -502,7 +503,7 @@ function App() {
 
             // Update Reaction State
             const lower = data.msg.toLowerCase();
-            if (lower.includes('delegate') || lower.includes('spawning') || lower.includes('jules') || lower.includes('agent')) {
+            if (lower.includes('delegate') || lower.includes('spawning') || lower.includes('agent')) {
                 triggerReaction('delegate_task', 5000);
             } else if (lower.includes('task prompt') || lower.includes('generating') || lower.includes('planning')) {
                 triggerReaction('intense_thinking', 10000);
@@ -744,8 +745,12 @@ function App() {
     });
 
     socket.on("music_status", (data) => {
-      if (data.status === "playing") {
+      setMusicStatus(data);
+      if (data.status === "playing" || data.status === "paused" || data.track) {
         setShowMusicPlayer(true);
+      }
+      if (data.status === "stopped" && !data.track) {
+        setShowMusicPlayer(false);
       }
     });
 
@@ -893,6 +898,35 @@ function App() {
       socket.emit("get_project_config");
     }
   }, []);
+
+  // Media key handler (works globally, even when music player is hidden)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      switch (e.code) {
+        case 'MediaPlayPause':
+          e.preventDefault();
+          socket.emit('control_music', { action: musicStatus.status === 'playing' ? 'pause' : 'resume' });
+          break;
+        case 'MediaStop':
+          e.preventDefault();
+          socket.emit('control_music', { action: 'stop' });
+          break;
+        case 'MediaTrackNext':
+          e.preventDefault();
+          socket.emit('control_music', { action: 'next' });
+          break;
+        case 'MediaTrackPrevious':
+          e.preventDefault();
+          socket.emit('control_music', { action: 'previous' });
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [musicStatus.status, socket]);
 
   // Persist device selections to localStorage when they change
   useEffect(() => {

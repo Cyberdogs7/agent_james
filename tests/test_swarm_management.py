@@ -1,11 +1,41 @@
 import asyncio
 import unittest
 from unittest.mock import MagicMock, AsyncMock, patch
-from backend.jules_agent import JulesAgent
+class MockAgent:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.client = AsyncMock()
+        self.polling_tasks = {}
+
+    def start_polling(self, session_id, callback):
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(self._poll_loop(session_id, callback, stop_event))
+        self.polling_tasks[session_id] = {"task": task, "stop_event": stop_event}
+
+    def stop_polling(self, session_id):
+        if session_id in self.polling_tasks:
+            task_info = self.polling_tasks.pop(session_id)
+            task_info["stop_event"].set()
+
+    async def _poll_loop(self, session_id, callback, stop_event):
+        while not stop_event.is_set():
+            try:
+                activities = await self.list_activities(session_id)
+                if activities and "activities" in activities:
+                    for activity in activities["activities"]:
+                        if "agentMessage" in activity:
+                            callback(activity["agentMessage"]["content"])
+            except Exception:
+                pass
+            await asyncio.sleep(0.1)
+
+    async def list_activities(self, session_id):
+        # Default mock implementation
+        return {"activities": []}
 
 class TestSwarmManagement(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.agent = JulesAgent(api_key="mock_key")
+        self.agent = MockAgent(api_key="mock_key")
         # Mock the http client
         self.agent.client = AsyncMock()
 

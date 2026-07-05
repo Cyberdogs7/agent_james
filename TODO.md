@@ -11,11 +11,11 @@ This document serves as the single source of truth for the evolution of the A.D.
 *Big, bold, aspirational capabilities that define identity.*
 
 - [ ] The Overseer (Fleet Commander)
-  - Description: Orchestrate a massive fleet of external developers (Jules instances). A.D.A acts as the Tech Lead/Manager, automatically triaging blockers, answering context questions, and reviewing PRs across 15-75 concurrent agents.
-  - Wow Factor: A massive multiplier effect. You act as "The Board", A.D.A acts as the Manager, and 50+ Jules agents act as your engineering team, all running asynchronously.
+  - Description: Orchestrate a massive fleet of external developers across multiple repositories. A.D.A acts as the Tech Lead/Manager, automatically triaging blockers, answering context questions, and reviewing PRs.
+  - Wow Factor: A massive multiplier effect. You act as "The Board", A.D.A acts as the Manager, and agents act as your engineering team, all running asynchronously.
   - User Impact: Infinite scale. Stop micromanaging prompts and start managing a true software factory.
-  - Technical Notes: `JulesAgent` triage interceptor (`ada.py`), internal LLM routing (`OllamaAgent`), Git update hooks, and persistent dashboarding.
-  - Status: Partially Implemented (Triage Interceptor active; Auto-PR review pending)
+  - Technical Notes: Internal LLM routing (`OllamaAgent`), Git update hooks, and persistent dashboarding.
+  - Status: Partially Implemented (Dashboard active; Auto-PR review pending)
 
 - [ ] Project Recall
   - Description: A local, privacy-first vector database of everything the user has seen on screen, searchable by natural language.
@@ -82,15 +82,15 @@ This document serves as the single source of truth for the evolution of the A.D.
   - Description: Automatically surface relevant past architectural decisions and memories in the chat interface before the user asks.
   - Wow Factor: The assistant proactively references past struggles and provides the exact fix you need right now.
   - User Impact: Proactive error prevention and seamless continuation of thought.
-  - Technical Notes: Trigger `MemoryManager` vector search during task start via `JulesAgent`.
-  - Status: Partially Implemented (Context retrieval active in JulesAgent)
+  - Technical Notes: Trigger `MemoryManager` vector search during task start.
+  - Status: Partially Implemented (Context retrieval active)
 
 - [ ] Retro-Causality Debugger
   - Description: A visual scrubber that tracks codebase changes and user interactions, letting you replay state changes to debug issues visually.
   - Wow Factor: Rewinding to before a bug appeared and watching the system state un-break in real-time.
   - User Impact: Instant visual debugging and perfect historical recall of why decisions were made.
-  - Technical Notes: Merges 'The Historian' history tracking via `git_agent.py` and `jules_agent.py` with `ProactiveAgent` screenshots.
-  - Status: Partially Implemented (Tracking via git_agent and jules_agent active; Visual scrubber pending)
+  - Technical Notes: Merges 'The Historian' history tracking via `git_agent.py` with `ProactiveAgent` screenshots.
+  - Status: Partially Implemented (Tracking via git_agent active; Visual scrubber pending)
 
 - [ ] Dream State
   - Description: An idle-time optimizer that runs low-priority tasks, refactoring, and research in a separate branch while the user is away.

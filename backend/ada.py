@@ -68,7 +68,6 @@ from backend.browser_agent import ProgrammaticBrowserAgent
 from backend.kasa_agent import KasaAgent
 from backend.printer_agent import PrinterAgent
 from backend.trello_agent import TrelloAgent
-from backend.jules_agent import JulesAgent
 from backend.openhands_agent import OpenHandsAgent
 from backend.opencode_agent import OpenCodeAgent
 from backend.timer_agent import TimerAgent
@@ -168,8 +167,6 @@ class AudioLoop:
 
         self.update_agent = UpdateAgent(on_log=handle_update_log)
 
-        # Instantiate JulesAgent for session management and monitoring
-        self.jules_agent = JulesAgent(project_manager=self.project_manager)
         self.openhands_agent = OpenHandsAgent()
         self.opencode_agent = OpenCodeAgent(project_manager=self.project_manager)
 
@@ -345,216 +342,7 @@ class AudioLoop:
             print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
         self._reconnect_needed.set()
 
-    async def _handle_jules_status_change(self, session_id, title, new_state):
-        """Handles UI and voice notifications for Jules session status changes and syncs fleet."""
-        # Notification fires unconditionally — it's the reliable signal that the monitoring
-        # loop is working. The fleet sync happens separately and may fail independently.
-        notification_text = f"Jules task '{title}' has moved to {new_state}."
-        self.notify_user(notification_text, duration=20000, message_id=f"jules_status_{session_id}_{new_state}")
 
-        # Try to sync this state change with the fleet manager
-        try:
-            from backend.server import fleet_manager, sio, check_and_start_next_task, get_all_accounts
-
-            agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-            print(f"[ADA] [FLEET SYNC] session={session_id} state={new_state} -> repo={repo_name} task={task_id} agent={agent_id}")
-
-            if repo_name and task_id:
-                # Map Jules state to fleet manager state (Source of Truth)
-                local_status = new_state.lower()
-
-                fleet_manager.update_task_status(repo_name, task_id, local_status)
-
-                if agent_id:
-                    if new_state == "COMPLETED":
-                        fleet_manager.update_agent_session(agent_id, None, "idle")
-                    elif new_state == "FAILED":
-                        fleet_manager.update_agent_session(agent_id, None, "error")
-                    else:
-                        agent_status = "working"
-                        if new_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
-                            agent_status = "needing_feedback"
-                            message = f"Jules session '{title}' (ID: {session_id}) is currently {new_state}. Please review the session and provide feedback using the 'send_jules_feedback' tool."
-                            self.notify_user(message, duration=20000)
-                            if self.session:
-                                try:
-                                    asyncio.create_task(self.session.send(input=f"System Notification: {message}", end_of_turn=False))
-                                except Exception as e:
-                                    if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [ERR] Failed to send feedback system notification: {e}")
-                        elif new_state == "PAUSED":
-                            agent_status = "stuck"
-                        fleet_manager.update_agent_session(agent_id, session_id, agent_status)
-
-                if new_state == "FAILED":
-                    fleet_manager.update_task_status(repo_name, task_id, "failed", error_message="Jules session failed.")
-
-                print(f"[ADA] [FLEET SYNC] Emitting fleet_state_update: {session_id} -> {local_status}")
-                await sio.emit('fleet_state_update', fleet_manager.get_state())
-                print(f"[ADA] [FLEET SYNC] Emit complete.")
-
-                if new_state in ["COMPLETED", "FAILED"] and agent_id:
-                    await asyncio.sleep(1)
-                    await check_and_start_next_task(repo_name, agent_id)
-                elif new_state not in ["COMPLETED", "FAILED"] and not agent_id:
-                    # Task was resurrected but its agent was unassigned when it completed.
-                    # Ensure its status is not completed so check_and_start_next_task picks it up.
-                    fleet_manager.update_task_status(repo_name, task_id, "pending")
-                    await asyncio.sleep(1)
-                    await check_and_start_next_task(repo_name)
-
-            else:
-                # Session not yet mapped — return False so the monitoring loop retries next poll.
-                print(f"[ADA] [WARN] Could not find fleet task for Jules session {session_id} (state={new_state}). Will retry next poll.")
-                return False
-
-        except Exception as e:
-            # Always log this — silent failures here cause the task to appear permanently stuck.
-            print(f"[ADA] [ERR] Fleet sync failed for Jules session {session_id} (state={new_state}): {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-
-        return True
-
-    async def _handle_jules_triage(self, session_id, message_content):
-        """
-        Intercepts Jules agent messages, acts as a manager using Ollama to triage,
-        and either auto-replies or escalates to the human user.
-        """
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TRIAGE] Intercepted Jules message for session {session_id}: {message_content[:50]}...")
-
-        # 1. Construct Context
-        context = ""
-        if self.project_manager:
-            context = self.project_manager.get_project_context(max_file_size=5000) or "No specific project context available."
-            
-            try:
-                from backend.server import fleet_manager
-                agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-                if repo_name:
-                    fleet_config = self.project_manager.load_fleet()
-                    for r in fleet_config:
-                        if f"{r.get('owner')}/{r.get('name')}" == repo_name and r.get('auto_merge_enabled', False):
-                            context += f"\n\n[CRITICAL DIRECTIVE]: The repository {repo_name} has 'auto_merge_enabled' set to true. If Jules is asking for permission or Board Approval to merge a Pull Request, you MUST answer YES and provide permission immediately. Do NOT escalate. Auto-merging is pre-approved for this repository."
-                            break
-            except Exception as e:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to inject auto-merge context: {e}")
-
-        # 2. Build Triage Prompt
-        triage_prompt = f"""
-You are an engineering manager. Your developer 'Jules' (Session ID: {session_id}) just sent this message:
-
-"{message_content}"
-
-Project Context:
-{context}
-
-Can you answer this question or resolve this blocker immediately using your general engineering knowledge and the provided context?
-If YES: Output ONLY a direct, helpful, and concise response to send back to Jules. Do not include introductory text.
-If NO (it requires high-level human approval, PR review, external API keys, or complex product decisions): Output EXACTLY the word "ESCALATE:" followed by a brief summary of why human attention is needed.
-"""
-
-        # 3. Call internal LLM (Ollama)
-        try:
-            # Reusing the existing OllamaAgent for internal reasoning
-            triage_response = await self.ollama_agent.chat(triage_prompt, role="manager_triage")
-
-            if not triage_response:
-                # Fallback: Do not spam voice if local LLM is down. Just show in UI.
-                self.notify_user(f"Jules update ({session_id}): {message_content[:100]}...", duration=5000, send_voice=False)
-                return
-
-            triage_response = triage_response.strip()
-
-            if triage_response.startswith("ESCALATE:"):
-                # Human needed!
-                escalation_reason = triage_response.replace("ESCALATE:", "").strip()
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [TRIAGE] ESCALATING session {session_id}. Reason: {escalation_reason}")
-
-                # Notify the user
-                self.notify_user(f"Jules task {session_id} escalated: {escalation_reason}", duration=20000)
-
-                # Sync state to fleet manager and notify Ada to unblock
-                try:
-                    from backend.server import fleet_manager, sio
-                    agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-                    if agent_id and repo_name and task_id:
-                        fleet_manager.update_task_status(repo_name, task_id, "needing_feedback")
-                        fleet_manager.update_agent_session(agent_id, session_id, "needing_feedback")
-                        asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to sync fleet status on escalation for {session_id}: {e}")
-
-                if self.session:
-                    try:
-                        message = f"System Notification: Jules session '{session_id}' has been escalated and needs feedback. Reason: {escalation_reason}. Please review the issue and use the 'send_jules_feedback' tool."
-                        asyncio.create_task(self.session.send(input=message, end_of_turn=False))
-                    except Exception as e:
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [ERR] Failed to notify Ada on escalation: {e}")
-
-                # Optionally update UI or slack
-                if self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):
-                    self.slack_agent.send_message(f"🚨 *Escalation* for Jules Task `{session_id}`:\n{escalation_reason}")
-            else:
-                # Auto-reply!
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [TRIAGE] AUTO-REPLYING to session {session_id}: {triage_response}")
-
-                # Send message back to Jules
-                await self.jules_agent.send_message(session_id, triage_response)
-
-                # Briefly notify UI so user knows Ada handled it
-                self.notify_user(f"Auto-replied to Jules task {session_id}.", duration=5000, send_voice=False)
-
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Triage failed for {session_id}: {e}")
-            self.notify_user(f"Jules task {session_id} sent a message: {message_content[:50]}...", duration=20000)
-
-    async def _monitor_all_jules_accounts(self):
-        """Monitors Jules sessions across all configured accounts."""
-        from backend.server import get_all_accounts
-        
-        # Track monitored agents and their tasks
-        monitoring_tasks = {} # api_key -> task
-        
-        # We start the default agent first
-        monitoring_tasks[self.jules_agent.api_key] = asyncio.create_task(
-            self.jules_agent.start_monitoring(self._handle_jules_status_change)
-        )
-        
-        while True:
-            try:
-                accounts = get_all_accounts()
-                current_keys = {self.jules_agent.api_key}
-                
-                for account in accounts:
-                    api_key = account.get("api_key")
-                    if api_key:
-                        current_keys.add(api_key)
-                        if api_key not in monitoring_tasks:
-                            temp_agent = JulesAgent(api_key=api_key, project_manager=self.project_manager)
-                            monitoring_tasks[api_key] = asyncio.create_task(
-                                temp_agent.start_monitoring(self._handle_jules_status_change)
-                            )
-                
-                # Clean up deleted accounts
-                for key in list(monitoring_tasks.keys()):
-                    if key not in current_keys:
-                        monitoring_tasks[key].cancel()
-                        del monitoring_tasks[key]
-                        
-            except Exception as e:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Error in account monitor loop: {e}")
-                    
-            await asyncio.sleep(60) # Check for new/deleted accounts every 60s
 
 
     def resolve_tool_confirmation(self, request_id, confirmed):
@@ -853,16 +641,10 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("browser_wait", self.browser_agent.browser_wait)
         self.tool_registry.register("create_coding_task", self.handle_create_coding_task)
         self.tool_registry.register("run_research_agent", self.handle_research_request)
-        self.tool_registry.register("run_jules_agent", self.handle_jules_request)
         self.tool_registry.register("run_openhands_agent", self.handle_openhands_request)
         self.tool_registry.register("run_ollama_agent", self.handle_ollama_request)
         self.tool_registry.register("run_lm_studio_agent", self.handle_lm_studio_request)
         self.tool_registry.register("run_openrouter_agent", self.handle_openrouter_request)
-        self.tool_registry.register("send_jules_feedback", self.handle_jules_feedback)
-        self.tool_registry.register("list_jules_sources", self.jules_agent.list_sources_formatted)
-        self.tool_registry.register("list_jules_sessions", self.jules_agent.list_sessions_formatted)
-        self.tool_registry.register("sync_jules_sessions", self.handle_sync_jules_sessions)
-        self.tool_registry.register("list_jules_activities", self.jules_agent.list_activities_formatted)
         self.tool_registry.register("create_project", lambda name: self._execute_project_switch(self.project_manager.create_project, name))
         self.tool_registry.register("switch_project", lambda name: self._execute_project_switch(self.project_manager.switch_project, name))
         self.tool_registry.register("list_projects", lambda: f"Available projects: {', '.join(self.project_manager.list_projects())}")
@@ -894,13 +676,11 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self.tool_registry.register("append_system_prompt", lambda text: self._execute_project_action(self.project_manager.append_system_prompt, False, text))
         self.tool_registry.register("delete_custom_system_prompt", lambda: self._execute_project_action(self.project_manager.reset_system_prompt, False))
         self.tool_registry.register("get_system_prompt", lambda: self.project_manager.get_system_prompt())
-        self.tool_registry.register("toggle_jules_slack_notifications", lambda enabled: f"Slack notifications {'enabled' if enabled else 'disabled'}." if self.project_manager.update_project_config({"jules_slack_notifications": enabled})[0] else "Failed.")
         async def deliver_briefing_wrapper(force_refresh=False):
             if self.automation_engine:
                 return await self.automation_engine.deliver_morning_briefing(force_refresh)
             return "Automation engine not running."
         self.tool_registry.register("get_morning_briefing", deliver_briefing_wrapper)
-        self.tool_registry.register("spawn_swarm_agent", self.handle_spawn_swarm_agent)
         self.tool_registry.register("create_swarm_mission", self.handle_create_swarm_mission)
         self.tool_registry.register("control_os", self.os_agent.control)
 
@@ -941,8 +721,6 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
             return "Automation Engine not available."
 
         self.tool_registry.register("apply_task_fix", _apply_task_fix)
-        self.tool_registry.register("dismiss_jules_session", self.jules_agent.dismiss_session)
-        self.tool_registry.register("jules_get_diff", self.jules_agent.get_diff_formatted)
 
         # OpenCode Agent Tools
         self.tool_registry.register("run_opencode_agent", self.handle_opencode_request)
@@ -1113,14 +891,14 @@ If NO (it requires high-level human approval, PR review, external API keys, or c
         self._pending_coding_task_source = source
 
         # Instruct the model to immediately ask the user to choose
-        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands, Jules, or OpenCode for this coding task?' and then immediately display a select window with those three options. Do not do anything else until they respond."
+        msg = "System Notification: Please ask the user exactly this question: 'Would you like to use OpenHands or OpenCode for this coding task?' and then immediately display a select window with those two options. Do not do anything else until they respond."
 
         if self.on_display_content:
             self.on_display_content({
                 "content_type": "widget",
                 "widget_type": "select",
                 "data": {
-                    "options": ["OpenHands", "Jules", "OpenCode"]
+                    "options": ["OpenHands", "OpenCode"]
                 }
             })
 
@@ -1446,25 +1224,6 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 print(f"[ADA DEBUG] [ERR] Triage failed for {session_id}: {e}")
             self.notify_user(f"OpenCode task {session_id} sent a message: {message_content[:80]}...", duration=20000)
 
-    async def handle_spawn_swarm_agent(self, role, prompt, source=None, swarm_id=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'spawn_swarm_agent'")
-
-        # Prepend role to prompt for context, but also pass role explicitly
-        full_prompt = f"Role: {role}\nTask: {prompt}"
-
-        async def _on_created(sid):
-            if swarm_id:
-                success, msg = self.project_manager.add_session_to_swarm(swarm_id, sid)
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SWARM] Added session {sid} to swarm {swarm_id}: {msg}")
-
-                if self.sio:
-                    swarms = self.project_manager.get_swarms()
-                    await self.sio.emit('swarms_update', swarms)
-
-        result = await self.handle_jules_request(full_prompt, source, role=role, on_session_created=_on_created)
-        return result
 
     def _execute_project_action(self, action_func, notify_name=False, *args):
         """Consolidates wrapper logic for project settings that require a reconnect."""
@@ -1737,301 +1496,6 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
         return f"Agent started. ID: {session['id']}"
 
-    async def handle_sync_jules_sessions(self):
-        """Syncs external Jules sessions into the War Room (Fleet Manager)."""
-        try:
-            from backend.server import fleet_manager, sio, get_all_accounts
-            
-            accounts = get_all_accounts()
-            all_sessions = []
-            
-            # Fetch from default agent
-            default_sessions = await self.jules_agent.list_sessions(max_pages=50)
-            if default_sessions:
-                all_sessions.extend(default_sessions)
-                
-            # Fetch from all configured accounts
-            for account in accounts:
-                api_key = account.get("api_key")
-                if api_key and api_key != self.jules_agent.api_key:
-                    temp_agent = JulesAgent(api_key=api_key, project_manager=self.project_manager)
-                    account_sessions = await temp_agent.list_sessions(max_pages=50)
-                    if account_sessions:
-                        all_sessions.extend(account_sessions)
-            
-            # Deduplicate by session ID
-            unique_sessions = {}
-            for s in all_sessions:
-                if s.get("name"):
-                    unique_sessions[s.get("name")] = s
-                    
-            sessions = list(unique_sessions.values())
-            
-            if not sessions:
-                return "No sessions found to sync."
-
-            synced_count = 0
-            for session in sessions:
-                session_id = session.get("name")
-                state = session.get("state")
-                title = session.get("title", "Imported Jules Task")
-
-                agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-                if repo_name and task_id:
-                    continue  # Already tracked
-
-                # Try to extract repo name from source context
-                repo_name = "Imported"
-                source_context = session.get("sourceContext", {})
-                source = source_context.get("source", "")
-                if "github" in source:
-                    # e.g. sources/github/owner/repo
-                    parts = source.split("/")
-                    if len(parts) >= 4:
-                        repo_name = f"{parts[2]}/{parts[3]}"
-                
-                # Add to fleet manager
-                fleet_manager.ensure_repo(repo_name)
-                # Create a task
-                task_id = fleet_manager.add_task_to_queue(repo_name, title)
-                fleet_manager.update_task_session(repo_name, task_id, session_id)
-                
-                # Assign to an idle agent if not completed/failed
-                local_status = "in_progress" if state not in ["COMPLETED", "FAILED"] else state.lower()
-                fleet_manager.update_task_status(repo_name, task_id, local_status)
-
-                if local_status not in ["completed", "failed"]:
-                    # Find an idle agent
-                    idle_agent = None
-                    for a_id, a_data in fleet_manager.agents.items():
-                        if a_data.get("status") == "idle":
-                            idle_agent = a_id
-                            break
-                    
-                    if idle_agent:
-                        fleet_manager.assign_agent(idle_agent, repo_name)
-                        agent_status = "working"
-                        if state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
-                            agent_status = "needing_feedback"
-                        elif state == "PAUSED":
-                            agent_status = "stuck"
-                        fleet_manager.update_agent_session(idle_agent, session_id, agent_status)
-                        fleet_manager.update_task_status(repo_name, task_id, local_status, agent_id=idle_agent)
-                
-                synced_count += 1
-            
-            if synced_count > 0:
-                await sio.emit('fleet_state_update', fleet_manager.get_state())
-                return f"Successfully synced {synced_count} Jules sessions into the War Room."
-            else:
-                return "All Jules sessions are already tracked in the War Room."
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to sync Jules sessions: {e}")
-            return f"Error syncing Jules sessions: {str(e)}"
-
-    async def handle_jules_request(self, prompt, source=None, role=None, on_session_created=None):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Jules Agent Task: '{prompt}' (Role: {role})")
-
-        is_force_restart = False
-        if prompt.startswith("FORCE_RESTART:"):
-            is_force_restart = True
-            prompt = prompt.replace("FORCE_RESTART:", "", 1).strip()
-
-        # We use the persistent instance self.jules_agent instead of creating a new one
-        # to ensure centralized management of polling tasks.
-
-        if not is_force_restart:
-            clean_title_prompt = prompt.replace('\n', ' ').replace('\r', ' ').strip()[:40] # Jules truncates to 50, but let's be safe
-
-            try:
-                existing_sessions = await self.jules_agent.list_sessions()
-                for session in existing_sessions:
-                    s_title = session.get('title', '')
-                    if not s_title:
-                        continue
-                    if clean_title_prompt in s_title or s_title in clean_title_prompt:
-                        matching_title = s_title
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [JULES] Found potential duplicate session: {matching_title}")
-
-                        msg = f"System Notification: A similar Jules task '{matching_title}' already exists. Please ask the user if they want to restart it. If they approve, run the task again but prepend 'FORCE_RESTART:' to the prompt."
-                        try:
-                            await self.session.send(input=msg, end_of_turn=True)
-                        except Exception as e:
-                            if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [ERR] Failed to send duplicate task notification: {e}")
-                        return "Duplicate task detected. Asking user for permission."
-            except Exception as e:
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Failed to check for duplicate sessions: {e}")
-
-        if not source:
-            if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [JULES] No source provided, fetching available sources.")
-            
-            async def fetch_sources_and_notify():
-                sources_response = await self.jules_agent.list_sources()
-                if sources_response and "sources" in sources_response:
-                    sources = [s["name"] for s in sources_response["sources"]]
-                    sources_str = "\n".join(sources)
-                    msg = f"System Notification: Available Jules sources:\n{sources_str}\n\nPlease ask the user to select one."
-                else:
-                    msg = "System Notification: Failed to fetch Jules sources."
-                
-                try:
-                    await self.session.send(input=msg, end_of_turn=True)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send jules sources notification: {e}")
-
-            asyncio.create_task(fetch_sources_and_notify())
-            return "Fetching available Jules sources. I will notify you shortly."
-
-        async def _jules_update_callback(message):
-            """Callback for when Jules sends an update."""
-            if self.session:
-                 try:
-                    # Add a timeout to the send operation
-                    await asyncio.wait_for(
-                        self.session.send(input=f"System Notification: {message}", end_of_turn=False),
-                        timeout=10.0
-                    )
-                 except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send Jules update to model: {e}")
-
-        async def run_jules_task():
-            # Spawn the agent using the new enhanced method which handles RAG
-            session = await self.jules_agent.spawn_agent_with_context(prompt, source, role=role, callback=_jules_update_callback)
-
-            if session:
-                session_id = session['name']
-                if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [JULES] Session created: {session_id}")
-
-                if on_session_created:
-                    if asyncio.iscoroutinefunction(on_session_created):
-                        await on_session_created(session_id)
-                    else:
-                        on_session_created(session_id)
-
-                try:
-                    title = session.get('title', session_id)
-                    await self.session.send(input=f"System Notification: Jules session created: '{title}'", end_of_turn=True)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send jules session creation notification: {e}")
-            else:
-                if INCLUDE_RAW_LOGS:
-                    print("[ADA DEBUG] [JULES] Failed to create session.")
-                try:
-                    await self.session.send(input="System Notification: Failed to start Jules task.", end_of_turn=True)
-                except Exception as e:
-                    if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send jules failure notification: {e}")
-
-        asyncio.create_task(run_jules_task())
-        return "Jules task starting. I will notify you once the session is created."
-
-    async def handle_jules_feedback(self, session_id, feedback):
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [JULES] Sending feedback to session: {session_id}")
-        
-        # Check if it's an Ollama session
-        if session_id in self.ollama_agent.sessions:
-            return await self.ollama_agent.send_message(session_id, feedback)
-
-        # Use the existing agent instance
-        async def _jules_update_callback(message):
-            if self.session:
-                 try:
-                    await self.session.send(input=f"System Notification: {message}", end_of_turn=False)
-                 except Exception:
-                    pass
-
-        # Ensure we are polling this session (if not already)
-        if session_id not in self.jules_agent.polling_tasks:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [JULES] Starting polling for existing session: {session_id}")
-            self.jules_agent.start_polling(session_id, callback=_jules_update_callback, interceptor_callback=self._handle_jules_triage)
-
-        # If the task was completed and feedback is sent, try to make it pending again
-        # so check_and_start_next_task can assign an agent to it.
-        try:
-            from backend.server import fleet_manager, check_and_start_next_task
-            agent_id, repo_name, task_id = fleet_manager.get_by_session(session_id)
-            if repo_name and task_id:
-                task = fleet_manager.get_task(repo_name, task_id)
-                if task and task.get("status") in ["completed", "failed"]:
-                    fleet_manager.update_task_status(repo_name, task_id, "pending")
-                    await check_and_start_next_task(repo_name)
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to requeue task for feedback: {e}")
-
-        response = await self.jules_agent.send_message(session_id, feedback)
-        if response:
-            return "Feedback sent successfully."
-        else:
-            return "Failed to send feedback."
-
-
-    async def handle_focused_session(self, session_id):
-        """Notifies the model that the user is focusing on a specific session."""
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FOCUS] User focused session: {session_id}")
-
-        # Fetch summary context
-        activities = await self.jules_agent.list_activities(session_id)
-        summary = "No recent activity."
-        # activities is a dict {"activities": [...]}, but list_activities_formatted returns string.
-        # Ideally we want raw list here to summarize.
-        # list_activities returns dict.
-
-        acts_list = []
-        if isinstance(activities, dict) and "activities" in activities:
-            acts_list = activities["activities"]
-        elif isinstance(activities, list):
-            acts_list = activities
-
-        if acts_list:
-            # Get last 3 activities
-            recent = acts_list[-3:]
-            summary_lines = []
-            for act in recent:
-                if 'agentMessage' in act:
-                    summary_lines.append(f"Jules: {act['agentMessage']['content'][:100]}...")
-                elif 'userMessage' in act:
-                    summary_lines.append(f"User: {act['userMessage']['content'][:100]}...")
-            summary = "\n".join(summary_lines)
-
-        msg = (
-            f"System Notification: The user has opened the detailed view for Jules Session '{session_id}'.\n"
-            f"Context (Recent Activity):\n{summary}\n\n"
-            f"The user is now looking at this session. If they speak, assume it might be feedback or instructions for this specific session. "
-            f"Use the 'send_jules_feedback' tool if appropriate."
-        )
-
-        if self.session:
-            try:
-                await self.session.send(input=msg, end_of_turn=True)
-            except Exception as e:
-                print(f"[ADA DEBUG] Failed to send focus notification: {e}")
-
-    async def handle_clear_focused_session(self):
-        """Notifies the model that the user has closed the specific session view."""
-        if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [FOCUS] User cleared focus.")
-
-        msg = "System Notification: The user has closed the Jules Session detail view. You are back to general context."
-
-        if self.session:
-            try:
-                await self.session.send(input=msg, end_of_turn=True)
-            except Exception as e:
-                print(f"[ADA DEBUG] Failed to send clear focus notification: {e}")
 
     async def get_dashboard_data(self):
         """Gathers all data for the War Room Dashboard."""
@@ -2045,7 +1509,6 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         repo_path = self.project_manager.get_current_project_path()
 
         tasks = {
-            "jules": self.jules_agent.list_sessions(),
             "ollama": self.ollama_agent.list_sessions(),
             "trello_boards": self.trello_agent.list_boards(),
             "git_branch": self.git_agent.get_current_branch(repo_path),
@@ -2070,18 +1533,17 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                     print(f"[ADA DEBUG] [ERR] Dashboard task {k} failed: {res_dict[k]}")
                 res_dict[k] = None
 
-        jules_sessions = res_dict.get("jules") or []
         ollama_sessions = res_dict.get("ollama") or []
 
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DASHBOARD] Jules sessions: {len(jules_sessions)}, Ollama sessions: {len(ollama_sessions)}")
+            print(f"[ADA DEBUG] [DASHBOARD] Ollama sessions: {len(ollama_sessions)}")
 
         # 3. System Stats (REPLACED WITH AGENT STATS)
-        # Calculate stats from both sources
-        all_sessions = jules_sessions + ollama_sessions
+        # Calculate stats from Ollama sessions
+        all_sessions = ollama_sessions
         total_sessions = len(all_sessions)
 
-        # Jules states are uppercase, Ollama states are uppercase
+        # Ollama states are uppercase
         active_states = ['RUNNING', 'PENDING', 'IN_PROGRESS']
         failed_states = ['FAILED', 'ERROR']
         completed_states = ['COMPLETED', 'DONE']
@@ -2126,29 +1588,9 @@ If NO (requires human approval, complex decisions, or external input): Output EX
              if INCLUDE_RAW_LOGS:
                 print(f"[ADA DEBUG] [ERR] Failed to fetch Trello data: {e}")
 
-        # 6. Jules Data Enrichment
+        # 6. Session Data (Ollama only)
         enriched_sessions = []
         now = time.time()
-
-        # Efficiently manage local state
-        all_states = self.project_manager.get_all_jules_session_states()
-        new_session_ids = []
-
-        # Identify new sessions (Jules only for persistent tracking, but we treat Ollama as ephemeral for now or same?)
-        # Let's track Ollama sessions too if they have IDs
-        for s in all_sessions:
-            s_id = s.get('name') or s.get('id')
-            if not s_id: continue
-
-            if s_id not in all_states or "seen_at" not in all_states[s_id]:
-                new_session_ids.append(s_id)
-
-        # Batch update new sessions
-        if new_session_ids:
-            self.project_manager.batch_mark_jules_sessions_seen(new_session_ids)
-            for nid in new_session_ids:
-                if nid not in all_states: all_states[nid] = {}
-                all_states[nid]["seen_at"] = now
 
         for s in all_sessions:
             s_id = s.get('name') or s.get('id')
@@ -2157,39 +1599,8 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             s_state = s.get('state', 'UNKNOWN')
             s_title = s.get('title', 'Untitled')
 
-            # Local State Check (Dismissal / Seen)
-            ui_state = all_states.get(s_id, {})
-            if ui_state.get('dismissed'):
-                continue
-
-            seen_at = ui_state.get('seen_at', now)
-
-            # Auto-Archive Logic for Completed Sessions
-            if s_state in ['COMPLETED', 'FAILED']:
-                completion_time_str = s.get('updateTime') or s.get('createTime')
-                is_old = False
-                if completion_time_str:
-                    try:
-                        if completion_time_str.endswith('Z'):
-                             completion_time_str = completion_time_str[:-1] + '+00:00'
-                        dt = datetime.fromisoformat(completion_time_str)
-                        completion_ts = dt.timestamp()
-                        if (now - completion_ts) > (2 * 3600):
-                            is_old = True
-                    except Exception as e:
-                        pass
-
-                if is_old:
-                    if (now - seen_at) > 300:
-                        continue
-
-            # Determine source for insight
-            if s in ollama_sessions:
-                insight = self.ollama_agent.get_session_insight(s_id)
-                agent_type = "ollama"
-            else:
-                insight = self.jules_agent.get_session_insight(s_id)
-                agent_type = "jules"
+            insight = self.ollama_agent.get_session_insight(s_id)
+            agent_type = "ollama"
 
             enriched_sessions.append({
                 "id": s_id,
@@ -2237,7 +1648,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             "system_stats": system_stats,
             "tasks": tasks,
             "trello": trello_cards[:10],
-            "jules": enriched_sessions[:5],
+            "sessions": enriched_sessions[:5],
             "devices": devices,
             "printers": printers,
             "git": git_status
@@ -2260,7 +1671,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 title=title,
                 trigger_type="schedule",
                 trigger_value={"mode": "cron", "expression": cron_expression},
-                action_type="jules_task",
+                action_type="notify",
                 action_value=prompt
             )
             return f"Successfully scheduled routine '{title}' with cron expression '{cron_expression}'."
@@ -2368,6 +1779,22 @@ When music is playing (e.g., after you call `play_music` or resume it), you MUST
 - Once music is paused or stopped, you may resume normal voice communication.
 """
 
+        # YouTube Music Library Prompt
+        youtube_music_prompt = """
+**YouTube Music Library:**
+You have access to the user's YouTube Music account (when signed in). Use these tools when the user asks about their personal music library:
+- `youtube_library_playlists` — List the user's saved playlists. Use when the user asks about their playlists, saved music, or library.
+- `youtube_library_songs` — List the user's liked/saved songs. Use when the user asks about liked songs, favorites, or saved tracks.
+- `youtube_history` — Show the user's play history. Use when the user asks what they've been listening to.
+- `youtube_rate_song` — Like or dislike a song. Use when the user wants to rate the current song.
+- `youtube_create_playlist` — Create a new playlist in the user's library. Use when the user wants to save a playlist.
+- `youtube_add_to_playlist` — Add tracks to an existing playlist. Use when the user wants to add songs to a playlist.
+These tools require Google authentication. If the user is not signed in, guide them to use `google_login` with `service: "youtube_music"` first.
+
+**Radio/Mix Mode:**
+When the user asks to "start a radio", "play a mix", or "play something like" a song or artist, use `play_music` with `radio: true`. This generates a continuous radio playlist based on the seed track instead of playing the exact song.
+"""
+
         # Skill Generation Prompt
         skill_prompt = """
 **Skill Generation & Self-Improvement:**
@@ -2398,7 +1825,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 """
 
         # Combine prompts
-        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{skill_prompt}\n{memory_prompt}\n{mcp_prompt}"
+        system_prompt = f"{personality_prompt}\n{tool_prompt}\n{swarm_prompt}\n{music_prompt}\n{youtube_music_prompt}\n{skill_prompt}\n{memory_prompt}\n{mcp_prompt}"
 
         # Inject User Profile
         user_profile = self.project_manager.get_user_profile()
@@ -2531,20 +1958,6 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                                 # Tell the model the user chose OpenHands
                                                 try:
                                                     await self.session.send(input="System Notification: The user chose OpenHands. The task has been routed.", end_of_turn=True)
-                                                except Exception:
-                                                    pass
-
-                                            elif "jules" in lower_transcript:
-                                                if INCLUDE_RAW_LOGS:
-                                                    print("[ADA DEBUG] [ROUTING] Intercepted 'jules'.")
-                                                p = self._pending_coding_task_prompt
-                                                s = self._pending_coding_task_source
-                                                self._pending_coding_task_prompt = None
-                                                self._pending_coding_task_source = None
-                                                asyncio.create_task(self.handle_jules_request(p, source=s))
-                                                # Tell the model the user chose Jules
-                                                try:
-                                                    await self.session.send(input="System Notification: The user chose Jules. The task has been routed.", end_of_turn=True)
                                                 except Exception:
                                                     pass
 
@@ -3004,7 +2417,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 self._notification_batch_task = asyncio.create_task(process_notifications())
 
         # Slack
-        if send_slack and self.slack_agent and self.project_manager.get_project_config().get("jules_slack_notifications", False):
+        if send_slack and self.slack_agent and self.project_manager.get_project_config().get("slack_notifications", False):
             asyncio.create_task(self.slack_agent.send_message(text))
 
     async def handle_external_event(self, event):
@@ -3094,9 +2507,6 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                     # Start Context Nudging Engine
                     tasks.append(asyncio.create_task(self._context_nudging_task()))
-
-                    # Start the Jules session monitoring task
-                    tasks.append(asyncio.create_task(self._monitor_all_jules_accounts()))
 
                     # Git Fleet monitoring is now handled by AutomationEngine in server.py
                     # tasks.append(asyncio.create_task(self._monitor_git_fleet()))

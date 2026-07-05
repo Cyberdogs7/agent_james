@@ -15,7 +15,9 @@ class TestFleetFeatures(unittest.IsolatedAsyncioTestCase):
         mock_pm.current_project = "ProjectA" # Current is A
 
         mock_ada = MagicMock()
-        mock_ada.handle_jules_request = AsyncMock(return_value="Task Started")
+        mock_ada.on_display_content = MagicMock()
+        mock_ada.slack_agent = MagicMock()
+        mock_ada.slack_agent.send_message = AsyncMock()
 
         # Mock Task Manager Class
         # We need it to return different tasks based on the path
@@ -36,7 +38,7 @@ class TestFleetFeatures(unittest.IsolatedAsyncioTestCase):
                         "value": "owner/RepoA"
                     },
                     "action": {
-                        "type": "jules_task",
+                        "type": "notify",
                         "value": "Run Tests"
                     }
                 }]
@@ -63,18 +65,11 @@ class TestFleetFeatures(unittest.IsolatedAsyncioTestCase):
         await engine.trigger_event("git_commit", event_data)
 
         # Verification
-        # Expect handle_jules_request to be called
-        mock_ada.handle_jules_request.assert_called_once()
-
-        # Verify Context Injection
-        call_args = mock_ada.handle_jules_request.call_args
-        prompt = call_args[0][0]
-
-        print(f"Generated Prompt: {prompt}")
-
-        assert "Context: You are working on project 'ProjectB'" in prompt
-        assert "Trigger Context" in prompt
-        assert "owner/RepoA" in prompt
+        # Expect notify action to trigger UI notification
+        mock_ada.on_display_content.assert_called_once()
+        call_arg = mock_ada.on_display_content.call_args[0][0]
+        assert call_arg["content_type"] == "notification"
+        assert "Run Tests" in call_arg["data"]["text"]
 
         print("[TEST] Success: Cross-project task triggered with correct context.")
 
@@ -111,8 +106,6 @@ class TestFleetFeatures(unittest.IsolatedAsyncioTestCase):
 
         mock_ada = MagicMock()
         mock_ada.handle_external_event = AsyncMock()
-        mock_ada.jules_agent = MagicMock()
-        mock_ada.jules_agent.list_sessions = AsyncMock(return_value=[]) # No sessions
 
         engine = AutomationEngine(MagicMock(), mock_pm, mock_ada)
 

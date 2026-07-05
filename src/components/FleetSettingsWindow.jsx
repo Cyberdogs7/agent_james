@@ -190,7 +190,7 @@ const FleetSettingsWindow = ({ socket, onClose }) => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Jules API Key *</label>
+                                <label className="block text-xs text-gray-400 mb-1">API Key *</label>
                                 <div className="relative">
                                     <Key className="absolute left-3 top-2.5 text-gray-500" size={14} />
                                     <input
@@ -198,7 +198,7 @@ const FleetSettingsWindow = ({ socket, onClose }) => {
                                         name="api_key"
                                         value={formData.api_key}
                                         onChange={handleChange}
-                                        placeholder="x-goog-api-key"
+                                        placeholder="Enter API key"
                                         className="w-full bg-gray-900 border border-gray-700 focus:border-gold9/50 rounded pl-9 pr-3 py-2 text-white outline-none transition-colors font-mono text-sm"
                                     />
                                 </div>

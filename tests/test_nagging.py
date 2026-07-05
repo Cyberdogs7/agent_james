@@ -15,61 +15,11 @@ class TestNaggingSecretary(unittest.IsolatedAsyncioTestCase):
         self.task_manager = MagicMock()
         self.project_manager = MagicMock()
         self.ada = MagicMock()
-        self.ada.jules_agent = MagicMock()
 
         self.engine = AutomationEngine(self.task_manager, self.project_manager, self.ada)
 
         # Mock handle_external_event as async
         self.ada.handle_external_event = AsyncMock()
-        self.ada.jules_agent.list_sessions = AsyncMock()
-
-    async def test_stalled_session_trigger(self):
-        # Setup stale session
-        stale_time = (datetime.utcnow() - timedelta(hours=3)).isoformat() + 'Z'
-
-        self.ada.jules_agent.list_sessions.return_value = [
-            {
-                "name": "session/123",
-                "title": "Fix Bug",
-                "state": "RUNNING",
-                "updateTime": stale_time
-            }
-        ]
-
-        # Disable PR check for this test
-        self.project_manager.get_github_token.return_value = None
-
-        # Run
-        await self.engine._monitor_stalled_items()
-
-        # Assert
-        self.ada.handle_external_event.assert_called_once()
-        args, _ = self.ada.handle_external_event.call_args
-        event = args[0]
-        self.assertEqual(event['type'], 'notification')
-        self.assertIn("Fix Bug", event['message'])
-        self.assertIn("intervene", event['message'])
-
-    async def test_recent_session_no_trigger(self):
-        # Setup recent session
-        recent_time = (datetime.utcnow() - timedelta(minutes=30)).isoformat() + 'Z'
-
-        self.ada.jules_agent.list_sessions.return_value = [
-            {
-                "name": "session/456",
-                "title": "Active Task",
-                "state": "RUNNING",
-                "updateTime": recent_time
-            }
-        ]
-
-        self.project_manager.get_github_token.return_value = None
-
-        # Run
-        await self.engine._monitor_stalled_items()
-
-        # Assert
-        self.ada.handle_external_event.assert_not_called()
 
     @patch('automation_engine.GitHubClient')
     @patch.dict("sys.modules", {"backend.server": MagicMock()})
@@ -98,9 +48,6 @@ class TestNaggingSecretary(unittest.IsolatedAsyncioTestCase):
                 "updated_at": stale_time
             }
         ]
-
-        # No stale sessions
-        self.ada.jules_agent.list_sessions.return_value = []
 
         # Run
         await self.engine._monitor_stalled_items()

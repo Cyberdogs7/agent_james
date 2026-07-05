@@ -88,7 +88,7 @@ class TaskManager:
                 "value": trigger_value
             },
             "action": {
-                "type": action_type, # run_script, notify, jules_task
+                "type": action_type, # run_script, notify
                 "value": action_value
             },
             "status": "active", # active, paused, completed

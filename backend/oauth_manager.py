@@ -6,6 +6,9 @@ import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 
+# Browser credentials older than this are considered expired (30 days)
+BROWSER_CREDENTIAL_MAX_AGE_DAYS = 30
+
 try:
     from backend.db import (
         store_oauth_credential, get_oauth_credential, 
@@ -78,6 +81,18 @@ class OAuthManager:
             except (ValueError, TypeError):
                 pass
         
+        # For browser-based auth, check if credentials are too old
+        config = self._providers.get(provider, {})
+        if config.get("auth_type") == "browser" and not creds.get("token_expiry"):
+            last_verified = creds.get("last_verified")
+            if last_verified:
+                try:
+                    age_days = (time.time() - float(last_verified)) / 86400
+                    if age_days > BROWSER_CREDENTIAL_MAX_AGE_DAYS:
+                        return False
+                except (ValueError, TypeError):
+                    pass
+        
         return True
     
     def get_credentials(self, provider: str) -> Optional[Dict[str, Any]]:
@@ -139,6 +154,11 @@ class OAuthManager:
             credentials = await handler(config, sio)
             
             if credentials:
+                # Add timestamp for browser credential age tracking
+                config = self._providers.get(provider, {})
+                if config.get("auth_type") == "browser":
+                    credentials["last_verified"] = str(time.time())
+                
                 self.store_credentials(provider, credentials)
                 
                 # Create client if factory is provided

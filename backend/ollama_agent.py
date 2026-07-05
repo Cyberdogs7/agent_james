@@ -42,7 +42,7 @@ class OllamaAgent:
             return None
 
     async def list_activities(self, session_id):
-        """Returns the activity log for the session in Jules API format."""
+        """Returns the activity log for the session."""
         session = self.sessions.get(session_id)
         if not session:
             return []
@@ -117,7 +117,7 @@ class OllamaAgent:
         else:
             title = f"Ollama: {clean_prompt[:50]}..."
 
-        # Create Session Object matching Jules structure
+        # Create Session Object
         session_obj = {
             "name": session_id,
             "id": session_id,

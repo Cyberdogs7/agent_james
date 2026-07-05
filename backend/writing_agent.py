@@ -58,7 +58,7 @@ class WritingAgent:
         current_pythonpath = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = f"{autonovel_dir}:{current_pythonpath}" if current_pythonpath else autonovel_dir
 
-        # Explicitly forward keys that might be globally defined in jules root .env
+        # Explicitly forward keys that might be globally defined in root .env
         # (instead of relying on autonovel scripts to call load_dotenv() from their own directory)
         for key in ["ANTHROPIC_API_KEY", "FAL_KEY", "ELEVENLABS_API_KEY", "GEMINI_API_KEY"]:
             if key in os.environ:

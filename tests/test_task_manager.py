@@ -22,14 +22,14 @@ class TestTaskManager(unittest.TestCase):
 
         # Create a task
         # create_task(title, trigger_type, trigger_value, action_type, action_value)
-        task = self.task_manager.create_task("Test Task", "manual", None, "jules_task", {"prompt": "foo"})
+        task = self.task_manager.create_task("Test Task", "manual", None, "notify", {"message": "Task completed"})
 
         # Verify task structure
         self.assertIsNotNone(task.get("id"))
         self.assertEqual(task["title"], "Test Task")
         self.assertEqual(task["trigger"]["type"], "manual")
-        self.assertEqual(task["action"]["type"], "jules_task")
-        self.assertEqual(task["action"]["value"]["prompt"], "foo")
+        self.assertEqual(task["action"]["type"], "notify")
+        self.assertEqual(task["action"]["value"]["message"], "Task completed")
 
         # Verify retrieval
         tasks = self.task_manager.list_tasks()

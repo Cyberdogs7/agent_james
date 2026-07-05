@@ -9,7 +9,7 @@ This document outlines how to upgrade the current Fleet Manager and WarRoom arch
 
 ## Core Routa Principles to Adopt
 
-If we are to upgrade our current system (which uses a generic `FleetManager` and a catch-all `jules_agent.py`), we must adopt the following beliefs and mechanics from Routa:
+If we are to upgrade our current system (which uses a generic `FleetManager`), we must adopt the following beliefs and mechanics from Routa:
 
 ### 1. The Workspace is the Source of Truth
 - **Current State:** Agents often rely on their conversational memory or ephemeral prompts to understand context.
@@ -55,9 +55,9 @@ Refactor the existing `FleetManager` and `WarRoomDashboard` to implement Routa's
    - Modify `get_next_task()` to dispatch tasks not just by repository, but by required *role*.
    - When a task enters `todo_planning`, it requires a "Planner" agent. When it enters `dev_implementation`, it requires a "Crafter" agent.
 
-### Phase 2: Specialist Agents (`backend/jules_agent.py`)
+### Phase 2: Specialist Agents
 1. **Agent Profiles:**
-   - Instead of a monolithic Jules system prompt, dynamically inject strict sub-prompts based on the task's current lane.
+   - Instead of a monolithic system prompt, dynamically inject strict sub-prompts based on the task's current lane.
    - **Planner Prompt:** "You are the Todo Orchestrator. Read the prompt. Write an execution plan to `docs/exec-plans/{task_id}.md`. Do NOT write source code."
    - **Crafter Prompt:** "You are the Dev Crafter. Read the execution plan. Implement the code. Run tests. Update the task state with Dev Evidence."
    - **Reviewer Prompt:** "You are the Review Guard. Independently verify the acceptance criteria. If tests fail, transition the task status back to `dev_implementation` with a `Blocked Analysis`."

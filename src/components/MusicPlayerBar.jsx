@@ -31,37 +31,6 @@ const MusicPlayerBar = ({ socket }) => {
         socket.emit('control_music', { action });
     };
 
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            switch (e.code) {
-                case 'MediaPlayPause':
-                    e.preventDefault();
-                    handleControl(status.status === 'playing' ? 'pause' : 'resume');
-                    break;
-                case 'MediaStop':
-                    e.preventDefault();
-                    handleControl('stop');
-                    break;
-                case 'MediaTrackNext':
-                    e.preventDefault();
-                    handleControl('next');
-                    break;
-                case 'MediaTrackPrevious':
-                    e.preventDefault();
-                    handleControl('previous');
-                    break;
-                default:
-                    break;
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [status.status, socket]);
-
     const formatTime = (seconds) => {
         if (!seconds || isNaN(seconds)) return '0:00';
         const mins = Math.floor(seconds / 60);

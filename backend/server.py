@@ -10,8 +10,7 @@ import socketio
 import uvicorn
 from backend.fleet_manager import FleetManager
 from backend.openai_agent import LMStudioAgent, OpenRouterAgent
-from backend.db import init_db, get_all_accounts, add_account, update_account, delete_account
-from backend.jules_agent import JulesAgent
+from backend.db import init_db
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
@@ -171,7 +170,6 @@ async def handle_runtime_error(error_log):
             f"```\n{error_log}\n```\n"
             f"Please inform the user about this crash immediately. "
             f"Ask them: 'I detected a runtime error. Would you like me to attempt a fix?' "
-            f"If they say yes, use the 'run_jules_agent' tool with the error details."
         )
         try:
             # We must await the send operation
@@ -294,45 +292,8 @@ kasa_agent = KasaAgent(known_devices=SETTINGS.get("kasa_devices"))
 # tool_permissions is now SETTINGS["tool_permissions"]
 
 
-async def initial_fleet_sync():
-    print("[SERVER] Running initial fleet sync...")
-    try:
-
-        # Try to get API key from config
-        config = project_manager.get_project_config()
-        api_key = config.get("jules_api_key") or os.getenv("JULES_API_KEY")
-
-        if not api_key:
-            print("[SERVER] Cannot perform initial fleet sync: No Jules API Key found.")
-            return
-
-        agent = JulesAgent(api_key=api_key)
-        response = await agent.list_sources()
-
-        sources = []
-        if response and isinstance(response, dict) and "sources" in response:
-            sources = response["sources"]
-        elif isinstance(response, list):
-            sources = response
-
-        if sources:
-            # Use to_thread to prevent blocking if it does any heavy IO
-
-            results, status = await asyncio.to_thread(project_manager.sync_jules_repos, sources)
-            print(f"[SERVER] Initial fleet sync complete. Status: {status}")
-        else:
-            print("[SERVER] Initial fleet sync: No sources found or failed to fetch.")
-
-    except Exception as e:
-        print(f"[SERVER] Error during initial fleet sync: {e}")
-
-def sync_fleet_agent_pool():
-    accounts = get_all_accounts()
-    fleet_manager.sync_accounts(accounts)
-
 async def startup_event():
     init_db()
-    sync_fleet_agent_pool()
     global server_loop
     server_loop = asyncio.get_running_loop()
     global slack_agent, scraper_agent, log_monitor
@@ -387,9 +348,6 @@ async def startup_event():
     automation_engine = AutomationEngine(task_manager, project_manager)
     asyncio.create_task(automation_engine.start())
     print("[SERVER] Automation Engine started.")
-
-    print("[SERVER] Startup: Triggering initial fleet sync...")
-    asyncio.create_task(initial_fleet_sync())
 
 
 @app.get("/status")
@@ -679,14 +637,6 @@ async def start_audio(sid, data=None):
             await asyncio.sleep(3)
             await check_morning_briefing_trigger()
         asyncio.create_task(delayed_briefing_check())
-
-        # Trigger check_and_start_next_task for all active repos
-        # so that previously assigned agents start working
-        fleet_state = fleet_manager.get_state()
-        for repo in fleet_state.get('repos', []):
-            if repo.get('is_active'):
-                print(f"[SERVER] Resuming tasks for active repo: {repo.get('name')}")
-                asyncio.create_task(check_and_start_next_task(repo.get('name')))
 
         print("Emitting 'A.D.A Started'")
         await sio.emit('status', {'msg': 'A.D.A Started'})
@@ -2005,35 +1955,8 @@ async def run_task(sid, data):
             # Send notification
             msg = f"Task '{task['title']}' triggered notification: {act_value}"
             await sio.emit('status', {'msg': msg})
-            if audio_loop.slack_agent and SETTINGS.get("jules_slack_notifications"):
+            if audio_loop.slack_agent and SETTINGS.get("slack_notifications"):
                  asyncio.create_task(audio_loop.slack_agent.send_message(msg))
-
-        elif act_type == 'jules_task':
-            # Run Jules Agent
-            # Value might be JSON string or dict
-            prompt = ""
-            source = None
-
-            if isinstance(act_value, dict):
-                prompt = act_value.get('prompt')
-                source = act_value.get('source')
-            else:
-                # Legacy or string
-                prompt = str(act_value)
-                # Try to parse if it looks like JSON
-                try:
-                    parsed = json.loads(prompt)
-                    if isinstance(parsed, dict):
-                        prompt = parsed.get('prompt', prompt)
-                        source = parsed.get('source')
-                except:
-                    pass
-
-            await sio.emit('status', {'msg': f"Starting Jules Task: {task['title']}..."})
-            result = await audio_loop.handle_jules_request(prompt, source)
-            # handle_jules_request returns a string message about starting
-            # Note: It launches a background task for the actual session creation
-            await sio.emit('status', {'msg': f"Jules Agent: {result}"})
 
         elif act_type == 'run_script':
             script_path = act_value
@@ -2081,56 +2004,6 @@ async def run_task(sid, data):
     except Exception as e:
         print(f"Error executing task: {e}")
         await sio.emit('error', {'msg': f"Task Execution Failed: {str(e)}"})
-
-@sio.event
-async def dismiss_jules_session(sid, data):
-    session_id = data.get('id')
-    print(f"[SERVER] Dismiss Jules Session: {session_id}")
-    if audio_loop and audio_loop.project_manager:
-        success, msg = audio_loop.project_manager.dismiss_jules_session(session_id)
-        
-        # Also archive/delete the session in Jules API and stop polling
-        if getattr(audio_loop, 'jules_agent', None):
-            try:
-                audio_loop.jules_agent.stop_polling(session_id)
-                await audio_loop.jules_agent.delete_session(session_id)
-                msg += " Archived remote task."
-            except Exception as e:
-                print(f"[SERVER] Error deleting session in Jules API: {e}")
-                
-        await sio.emit('status', {'msg': msg})
-        # Force dashboard update
-        if dashboard_task:
-            data = await audio_loop.get_dashboard_data()
-            await sio.emit('dashboard_update', data)
-    else:
-        await sio.emit('error', {'msg': "System not ready"})
-
-@sio.event
-async def get_jules_activities(sid, data):
-    session_id = data.get('id')
-    if audio_loop:
-        response = await audio_loop.jules_agent.list_activities(session_id)
-        if response and isinstance(response, dict) and "activities" in response:
-            await sio.emit('jules_activities', {'id': session_id, 'activities': response["activities"]})
-        else:
-            await sio.emit('error', {'msg': str(response)})
-    else:
-        await sio.emit('error', {'msg': "System not ready"})
-
-@sio.event
-async def send_jules_message(sid, data):
-    session_id = data.get('id')
-    message = data.get('message')
-    if audio_loop:
-        result = await audio_loop.handle_jules_feedback(session_id, message)
-        await sio.emit('status', {'msg': result})
-        # Re-fetch activities to update UI
-        activities = await audio_loop.handle_list_jules_activities(session_id)
-        if isinstance(activities, list):
-            await sio.emit('jules_activities', {'id': session_id, 'activities': activities})
-    else:
-        await sio.emit('error', {'msg': "System not ready"})
 
 # --- OpenCode Socket.IO Events ---
 
@@ -2216,22 +2089,6 @@ async def list_projects(sid):
     projects = project_manager.list_projects()
     await sio.emit('project_list', projects)
 
-@sio.event
-async def get_jules_sources(sid):
-    """Fetches available Jules sources and emits them back to the client."""
-    print("[SERVER] Fetching Jules sources...")
-    if audio_loop:
-        response = await audio_loop.jules_agent.list_sources()
-        if response and isinstance(response, dict) and "sources" in response:
-             await sio.emit('jules_sources', response["sources"])
-        elif isinstance(response, list):
-             # Fallback if list returned directly (unlikely but safe)
-             await sio.emit('jules_sources', response)
-        else:
-            await sio.emit('error', {'msg': f"Failed to fetch sources: {response}"})
-    else:
-        await sio.emit('error', {'msg': "System not ready"})
-
 # Deprecated/Mapped for compatibility if frontend still uses specific events
 @sio.event
 async def get_tool_permissions(sid):
@@ -2284,40 +2141,6 @@ async def update_repo_config(sid, data):
         await get_fleet_status(sid)
 
 @sio.event
-async def sync_fleet(sid):
-    """Syncs local repositories with Jules Agent sources."""
-    print(f"[SERVER] Client {sid} requested fleet sync.")
-    if not audio_loop:
-        await sio.emit('error', {'msg': "System not ready"})
-        return
-
-    # 1. Fetch sources from Jules
-    response = await audio_loop.jules_agent.list_sources()
-    sources = []
-    if response and isinstance(response, dict) and "sources" in response:
-        sources = response["sources"]
-    elif isinstance(response, list):
-        sources = response
-    else:
-        await sio.emit('error', {'msg': f"Failed to fetch sources: {response}"})
-        return
-
-    await sio.emit('status', {'msg': f"Found {len(sources)} sources. Syncing..."})
-
-    # 2. Sync (Clone missing)
-    # Use executor to prevent blocking
-    results, status = await asyncio.to_thread(project_manager.sync_jules_repos, sources)
-
-    if status == "AUTH_REQUIRED":
-        await sio.emit('error', {'code': 'AUTH_REQUIRED', 'msg': "GitHub Authentication Failed. Please provide a token."})
-    else:
-        # Report results
-        summary = ", ".join(results) if results else "All up to date."
-        await sio.emit('status', {'msg': f"Sync Complete: {summary}"})
-        # Refresh fleet view
-        await get_fleet_status(sid)
-
-@sio.event
 async def get_swarms(sid):
     """Fetches all active swarms."""
     print(f"[SERVER] Client {sid} requested swarms.")
@@ -2329,416 +2152,12 @@ async def get_swarms(sid):
     else:
         await sio.emit('error', {'msg': "System not ready"})
 
-# --- Fleet Accounts Socket.IO Events ---
-
-@sio.event
-async def get_accounts(sid):
-    try:
-        accounts = get_all_accounts()
-        await sio.emit('accounts_update', accounts, to=sid)
-    except Exception as e:
-        await sio.emit('account_error', {'message': f"Failed to fetch accounts: {str(e)}"}, to=sid)
-
-@sio.on('add_account')
-async def add_account_event(sid, data):
-    try:
-        api_key = data.get('api_key')
-        name = data.get('name')
-        concurrent = data.get('concurrent_sessions_limit')
-        total = data.get('total_sessions_limit')
-
-        if not api_key:
-            await sio.emit('account_error', {'message': "API Key is required."}, to=sid)
-            return
-
-        account_id = add_account(api_key, name, concurrent, total)
-        if account_id is None:
-             await sio.emit('account_error', {'message': "API Key already exists."}, to=sid)
-        else:
-             sync_fleet_agent_pool()
-             accounts = get_all_accounts()
-             await sio.emit('accounts_update', accounts)
-             await sio.emit('fleet_state_update', fleet_manager.get_state())
-    except Exception as e:
-        await sio.emit('account_error', {'message': f"Failed to add account: {str(e)}"}, to=sid)
-
-@sio.on('update_account')
-async def update_account_event(sid, data):
-    try:
-        account_id = data.get('id')
-        api_key = data.get('api_key')
-        name = data.get('name')
-        concurrent = data.get('concurrent_sessions_limit')
-        total = data.get('total_sessions_limit')
-
-        if not account_id or not api_key:
-             await sio.emit('account_error', {'message': "Account ID and API Key are required."}, to=sid)
-             return
-
-        update_account(account_id, api_key, name, concurrent, total)
-        sync_fleet_agent_pool()
-        accounts = get_all_accounts()
-        await sio.emit('accounts_update', accounts)
-        await sio.emit('fleet_state_update', fleet_manager.get_state())
-    except Exception as e:
-        await sio.emit('account_error', {'message': f"Failed to update account: {str(e)}"}, to=sid)
-
-@sio.on('delete_account')
-async def delete_account_event(sid, data):
-    try:
-        account_id = data.get('id')
-        if not account_id:
-            await sio.emit('account_error', {'message': "Account ID is required."}, to=sid)
-            return
-
-        delete_account(account_id)
-        sync_fleet_agent_pool()
-        accounts = get_all_accounts()
-        await sio.emit('accounts_update', accounts)
-        await sio.emit('fleet_state_update', fleet_manager.get_state())
-    except Exception as e:
-        await sio.emit('account_error', {'message': f"Failed to delete account: {str(e)}"}, to=sid)
-
 # --- Fleet Manager Socket.IO Events ---
 
 @sio.event
 async def get_fleet_state(sid):
     state = fleet_manager.get_state()
     await sio.emit('fleet_state_update', state, to=sid)
-
-async def _watch_session_status(agent_inst, session_id, repo_name, task_id, agent_id):
-    """
-    Polls a specific Jules session via get_session() and syncs non-terminal state
-    changes (e.g. QUEUED -> IN_PROGRESS) to the fleet manager.
-
-    Necessary because start_monitoring() uses list_sessions() scoped to the default
-    API key and cannot see sessions created under a different fleet account key.
-    """
-    TERMINAL_STATES = {"COMPLETED", "FAILED", "ERROR"}
-    last_synced_state = None
-
-    for _ in range(60):  # Max ~15 minutes
-        await asyncio.sleep(15)
-        try:
-            session_obj = await agent_inst.get_session(session_id)
-            if not session_obj:
-                print(f"[SERVER] _watch_session_status: session {session_id} gone, stopping.")
-                break
-
-            state = session_obj.get("state", "")
-            if state and state != last_synced_state:
-                local_status = state.lower()
-                fleet_manager.update_task_status(repo_name, task_id, local_status, agent_id)
-                await sio.emit('fleet_state_update', fleet_manager.get_state())
-                print(f"[SERVER] _watch_session_status: {session_id} synced -> {local_status}")
-                last_synced_state = state
-
-            if state in TERMINAL_STATES:
-                break
-
-        except Exception as e:
-            print(f"[SERVER] _watch_session_status error for {session_id}: {e}")
-            break
-
-
-async def check_and_start_next_task(repo_name, agent_id=None):
-    """Helper to check if there are tasks and idle agents in a repo and start one."""
-    if not audio_loop:
-        return
-
-    while True:
-        task = fleet_manager.get_next_task(repo_name)
-        if not task:
-            break
-
-        current_agent_id = agent_id
-        if current_agent_id is None:
-            state = fleet_manager.get_state()
-            idle_agent = next((a for a in state["agents"] if a["current_repo"] == repo_name and a["status"] == "idle"), None)
-            if not idle_agent:
-                # If no assigned agents are idle, look for a temp worker from the unassigned pool
-                idle_agent = next((a for a in state["agents"] if a["current_repo"] is None and a["status"] == "idle"), None)
-                if not idle_agent:
-                    break
-            current_agent_id = idle_agent["id"]
-
-        # We only use the passed agent_id for the first iteration
-        agent_id = None
-
-        # Capture if this was an already active task (e.g. after restart)
-        original_status = task.get("status")
-        was_in_progress = (original_status in ["in_progress", "awaiting_user_feedback", "awaiting_plan_approval", "planning"])
-
-        fleet_manager.update_agent_session(current_agent_id, None, "working")
-        # Move to 'submitting' to show we are communicating with Jules
-        fleet_manager.update_task_status(repo_name, task["id"], "submitting", current_agent_id)
-        await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-        prompt = task['prompt']
-        attachments = task.get("attachments", [])
-        if attachments:
-            for att in attachments:
-                name = att.get("name", "Unknown")
-                mime_type = att.get("type", "")
-                content = att.get("content", "")
-                if mime_type.startswith("text/") or mime_type in ["application/json", "application/javascript", "application/xml"]:
-                    try:
-                        # Convert base64 data URL to text
-                        if "base64," in content:
-                            base64_data = content.split("base64,")[1]
-                            text_content = base64.b64decode(base64_data).decode('utf-8')
-                            prompt += f"\n\nAttachment {name}:\n{text_content}"
-                        else:
-                            prompt += f"\n\nAttachment {name}:\n{content}"
-                    except Exception as e:
-                        print(f"[SERVER] Failed to decode text attachment {name}: {e}")
-                        prompt += f"\n\nAttachment {name}:\n[Error decoding text file]"
-                else:
-                    # For non-text files (e.g. images), just append the base64 data URL directly
-                    prompt += f"\n\nAttachment {name}:\n{content}"
-
-        source = f"github.com/{repo_name}"
-        if audio_loop and audio_loop.project_manager:
-            fleet = audio_loop.project_manager.load_fleet()
-            for r in fleet:
-                if f"{r.get('owner')}/{r.get('name')}" == repo_name:
-                    source = r.get("source", source)
-                    branch = r.get("branch")
-                    if branch and "/branches/" not in source:
-                         source = f"{source}/branches/{branch}"
-                    break
-        await sio.emit('status', {'msg': f"Agent {current_agent_id} picking up task in {repo_name}..."})
-
-        # We need to capture variables for the closure, so we create a factory function
-        def create_spawn_task(current_task, current_agent_id, current_prompt, current_source, was_in_progress):
-            async def _on_jules_finished(message):
-                # Callback wrapper that looks for completion/failure signals
-                if "Jules has completed the session" in message or "Session Completed." in message or "Assuming task completed." in message or "Jules task appears completed" in message or "Generation Complete" in message:
-                    print(f"[SERVER] Agent session completed for task {current_task['id']}")
-                    fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
-                    fleet_manager.update_agent_session(current_agent_id, None, "idle")
-                    await sio.emit('fleet_state_update', fleet_manager.get_state())
-                    # Check for next task recursively now that an agent is free
-                    await check_and_start_next_task(repo_name, current_agent_id)
-                elif "Error polling" in message or "failed" in message.lower() and ("Task Execution Failed" in message or "Exception" in message or "Error" in message):
-                    print(f"[SERVER] Agent session failed for task {current_task['id']}")
-                    if audio_loop:
-                        audio_loop.notify_user(f"Task in {repo_name} failed.")
-                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error_message=message)
-                    fleet_manager.update_agent_session(current_agent_id, None, "idle")
-                    await sio.emit('fleet_state_update', fleet_manager.get_state())
-                    # Still check next task
-                    await check_and_start_next_task(repo_name, current_agent_id)
-
-            async def run_spawn():
-                try:
-                    # Retrieve the mapped API key directly from the assigned agent's state
-                    state = fleet_manager.get_state()
-                    agent_info = next((a for a in state["agents"] if a["id"] == current_agent_id), None)
-                    selected_api_key = agent_info.get("api_key") if agent_info else None
-                    account_name = agent_info.get("account_name") if agent_info else "Unnamed"
-
-                    # Route to different agent based on task capability/lane requirement
-                    task_status = current_task.get("status")
-                    
-                    if task_status == "todo_planning":
-                        if os.getenv("OPENROUTER_API_KEY"):
-                            print("[SERVER] Routing task to OpenRouterAgent for Planner role.")
-                            agent_instance = openrouter_agent
-                        else:
-                            print("[SERVER] Routing task to LMStudioAgent for Planner role.")
-                            agent_instance = lm_studio_agent
-                    else:
-                        if selected_api_key:
-                            print(f"[SERVER] Spawning task using mapped Fleet Account: {account_name}")
-                            agent_instance = JulesAgent(api_key=selected_api_key, project_manager=audio_loop.project_manager)
-                        else:
-                            print("[SERVER] Falling back to default environment API key for task.")
-                            agent_instance = audio_loop.jules_agent
-
-                    existing_session_id = current_task.get("session_id")
-                    session_to_resume = None
-                    is_resumption = was_in_progress or bool(existing_session_id)
-
-                    if existing_session_id:
-                        # Try all available API keys to find the session
-                        accounts = get_all_accounts()
-                        all_keys = [a.get("api_key") for a in accounts if a.get("api_key")]
-                        default_key = os.getenv("JULES_API_KEY")
-                        if default_key and default_key not in all_keys:
-                            all_keys.append(default_key)
-                        
-                        found_in_any = False
-                        for key in all_keys:
-                            try:
-                                test_agent = JulesAgent(api_key=key, project_manager=audio_loop.project_manager)
-                                session_obj = await test_agent.get_session(existing_session_id)
-                                if session_obj:
-                                    found_in_any = True
-                                    state = session_obj.get("state")
-                                    if state not in ["COMPLETED", "FAILED"]:
-                                        session_to_resume = existing_session_id
-                                        agent_instance = test_agent # Use the agent that found it
-                                        print(f"[SERVER] Found existing active session {existing_session_id} for task {current_task['id']}")
-                                        break
-                                    else:
-                                        # Session finished while we were away
-                                        print(f"[SERVER] Session {existing_session_id} found but already {state}. Updating task status.")
-                                        fleet_manager.update_task_status(repo_name, current_task["id"], "completed" if state == "COMPLETED" else "failed")
-                                        fleet_manager.update_agent_session(current_agent_id, None, "idle")
-                                        await sio.emit('fleet_state_update', fleet_manager.get_state())
-                                        await check_and_start_next_task(repo_name, current_agent_id)
-                                        return
-                            except Exception:
-                                continue
-                        
-                        if not found_in_any:
-                            print(f"[SERVER] Session {existing_session_id} not found in any Jules account.")
-                            # If it was in progress, we mark as complete per policy
-                            if is_resumption:
-                                print(f"[SERVER] Task was in-progress, marking as COMPLETED since session is missing.")
-                                fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
-                                fleet_manager.update_agent_session(current_agent_id, None, "idle")
-                                await sio.emit('fleet_state_update', fleet_manager.get_state())
-                                await check_and_start_next_task(repo_name, current_agent_id)
-                                return
-                            else:
-                                # If it was pending, we just clear the stale session ID and let it start a new one below
-                                print(f"[SERVER] Task was pending, clearing stale session ID.")
-                                current_task["session_id"] = None
-
-                    # Fallback to checking title match if no saved session or it's dead (ONLY for non-resumption tasks)
-                    if not session_to_resume and not is_resumption:
-                        clean_title_prompt = current_prompt.replace('\\n', ' ').replace('\\r', ' ').strip()[:40]
-                        try:
-                            existing_sessions = await agent_instance.list_sessions()
-                            if existing_sessions is not None:
-                                for s in existing_sessions:
-                                    s_title = s.get('title', '')
-                                    if not s_title: continue
-                                    if clean_title_prompt in s_title or s_title in clean_title_prompt:
-                                        if s.get("state") not in ["COMPLETED", "FAILED"]:
-                                            session_to_resume = s.get('name')
-                                            print(f"[SERVER] Found matching title active session {session_to_resume} for task {current_task['id']}")
-                                            # Save it to the task so we don't have to search next time
-                                            fleet_manager.update_task_session(repo_name, current_task["id"], session_to_resume)
-                                            break
-                        except Exception as e:
-                            print(f"[SERVER] Failed to list sessions for deduplication: {e}")
-
-                    if session_to_resume:
-                        agent_instance.start_polling(session_to_resume, callback=_on_jules_finished)
-                        fleet_manager.update_agent_session(current_agent_id, session_to_resume, "working")
-                        # Restore original status or move to in_progress so we aren't stuck in 'submitting'
-                        resumption_status = original_status if original_status not in ["submitting", "received"] else "in_progress"
-                        fleet_manager.update_task_status(repo_name, current_task["id"], resumption_status, current_agent_id)
-                        
-                        # Force the monitoring loop to re-process this session on next poll so it triggers the sync callback
-                        if hasattr(agent_instance, 'monitored_sessions'):
-                            agent_instance.monitored_sessions.pop(session_to_resume, None)
-                            
-                        await sio.emit('fleet_state_update', fleet_manager.get_state())
-                        return
-                    
-                    if is_resumption:
-                        # We reached here and it's a resumption but we couldn't find it
-                        # This shouldn't happen due to the logic above, but safety first
-                        print(f"[SERVER] Resumption failed for task {current_task['id']}. Marking as COMPLETED.")
-                        fleet_manager.update_task_status(repo_name, current_task["id"], "completed")
-                        fleet_manager.update_agent_session(current_agent_id, None, "idle")
-                        await sio.emit('fleet_state_update', fleet_manager.get_state())
-                        await check_and_start_next_task(repo_name, current_agent_id)
-                        return
-
-                    # Set specific role based on lane
-                    lane_role = "DEFAULT"
-                    if task_status == "todo_planning":
-                        lane_role = "Planner"
-                    elif task_status == "dev_implementation":
-                        lane_role = "Crafter"
-                    elif task_status == "review_verification":
-                        lane_role = "Reviewer"
-
-                    session = await agent_instance.spawn_agent(
-                        prompt=current_prompt,
-                        source=current_source,
-                        role=lane_role,
-                        callback=_on_jules_finished
-                    )
-                    
-                    if isinstance(agent_instance, OpenAIAgent) and session:
-                        # For OpenAIAgent, the generation starts immediately in the background and doesn't need polling.
-                        # We just attach a lightweight watcher to bridge to the callback when it completes.
-                        async def _watch_openai(sess_id):
-                            while True:
-                                await asyncio.sleep(2)
-                                state = agent_instance.sessions.get(sess_id, {}).get("state")
-                                if state == "COMPLETED":
-                                    await _on_jules_finished("Generation Complete")
-                                    break
-                                elif state == "FAILED":
-                                    await _on_jules_finished("Error: Agent Execution Failed")
-                                    break
-                        asyncio.create_task(_watch_openai(session.get("id")))
-                    if session:
-                        session_id = session.get('name')
-                        session_state = session.get('state', 'QUEUED')
-                        fleet_manager.update_task_session(repo_name, current_task["id"], session_id)
-
-                        fresh_task = fleet_manager.get_task(repo_name, current_task["id"])
-                        current_status = fresh_task.get("status") if fresh_task else "submitting"
-
-                        if current_status in ["submitting", "received", "pending", "queued"]:
-                            fleet_manager.update_task_status(repo_name, current_task["id"], session_state.lower(), current_agent_id)
-
-                        agent_status = "working"
-                        if session_state in ["AWAITING_PLAN_APPROVAL", "AWAITING_USER_FEEDBACK"]:
-                            agent_status = "needing_feedback"
-
-                        fleet_manager.update_agent_session(current_agent_id, session_id, agent_status)
-                        await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-                        # Start a per-session watcher using agent_instance.
-                        if isinstance(agent_instance, JulesAgent):
-                            asyncio.create_task(_watch_session_status(
-                                agent_instance, session_id, repo_name, current_task["id"], current_agent_id
-                            ))
-                        return
-
-                except Exception as e:
-                    print(f"[SERVER] Error during spawn_agent: {e}")
-
-                # If we get here, spawn_agent either returned None or raised an exception
-                state = fleet_manager.get_state()
-                agent_info = next((a for a in state["agents"] if a["id"] == current_agent_id), None)
-                current_api_key = agent_info.get("api_key") if agent_info else None
-
-                # Try to find an alternate idle agent with a different API key
-                alternate_agent = next((a for a in state["agents"] if a["status"] == "idle" and a.get("api_key") and a.get("api_key") != current_api_key), None)
-
-                if alternate_agent:
-                    print(f"[SERVER] Jules task failed to start for {current_agent_id}. Retrying with alternate agent {alternate_agent['id']} using a different key.")
-                    if audio_loop:
-                        audio_loop.notify_user(f"Jules task in {repo_name} failed to start. Retrying with a different key.")
-                    fleet_manager.update_agent_session(current_agent_id, None, "error")
-                    fleet_manager.retry_task(repo_name, current_task["id"])
-                    fleet_manager.unassign_agent(current_agent_id)
-                    fleet_manager.assign_agent(alternate_agent["id"], repo_name)
-                    await sio.emit('fleet_state_update', fleet_manager.get_state())
-                    await check_and_start_next_task(repo_name, alternate_agent["id"])
-                else:
-                    err_msg = "spawn_agent failed and no alternate keys available."
-                    if audio_loop:
-                        audio_loop.notify_user(f"Jules task in {repo_name} encountered an error: {err_msg}")
-                    fleet_manager.update_task_status(repo_name, current_task["id"], "failed", error_message=err_msg)
-                    fleet_manager.update_agent_session(current_agent_id, None, "error")
-                    await sio.emit('error', {'msg': f"Failed to start task for {current_agent_id}: {err_msg}"})
-                    await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-            return run_spawn
-
-        spawn_task = create_spawn_task(task, current_agent_id, prompt, source, was_in_progress)
-        asyncio.create_task(spawn_task())
 
 
 @sio.event
@@ -2762,7 +2181,6 @@ async def assign_agent_to_repo(sid, data):
     repo_name = data.get('repo_name')
     if fleet_manager.assign_agent(agent_id, repo_name):
         await sio.emit('fleet_state_update', fleet_manager.get_state())
-        await check_and_start_next_task(repo_name, agent_id)
 
 @sio.event
 async def unassign_agent(sid, data):
@@ -2778,8 +2196,6 @@ async def add_task_to_repo_queue(sid, data):
     attachments = data.get('attachments', [])
     fleet_manager.add_task_to_queue(repo_name, prompt, depends_on, attachments)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
-
-    await check_and_start_next_task(repo_name)
 
 @sio.event
 async def clear_completed_tasks(sid, data):
@@ -2800,7 +2216,7 @@ async def retry_task(sid, data):
     task_id = data.get('task_id')
     fleet_manager.retry_task(repo_name, task_id)
     await sio.emit('fleet_state_update', fleet_manager.get_state())
-    await check_and_start_next_task(repo_name)
+
 @sio.event
 async def update_task_status_lane(sid, data):
     repo_name = data.get("repo_name")
@@ -2809,10 +2225,6 @@ async def update_task_status_lane(sid, data):
     if repo_name and task_id and status:
         fleet_manager.update_task_status(repo_name, task_id, status)
         await sio.emit('fleet_state_update', fleet_manager.get_state())
-        
-        # If moving to dev or review, check if an agent can be assigned
-        if status in ["dev_implementation", "review_verification", "todo_planning"]:
-            await check_and_start_next_task(repo_name)
 
         # Handle OpenCode mode switch when task moves lanes
         if status in ["todo_planning", "dev_implementation"]:

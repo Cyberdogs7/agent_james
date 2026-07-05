@@ -1,6 +1,0 @@
-## 2025-04-19 - Removed 60FPS re-render from App.jsx by moving requestAnimationFrame
-**Learning:** Frequent state updates (like audio visualization arrays updated at 60 FPS via `requestAnimationFrame`) placed in the root `App.jsx` component cause the entire React tree to re-render constantly. This is a massive performance killer.
-**Action:** Move high-frequency data loops (`requestAnimationFrame` for canvas updates) into the leaf component (`TopAudioBar.jsx`) and pass raw references (like Web Audio `AnalyserNode`) instead of React state arrays to prevent unneeded re-renders.
-## 2024-05-18 - [Optimization of WarRoomDashboard organizeSessions]
-**Learning:** In the `WarRoomDashboard` component, the `organizeSessions` array mapping and filtering logic was directly iterating over potentially large `swarms` and `jules` arrays on every single render. This is a CPU bottleneck during standard UI re-renders, specific to how this complex dashboard was architected to re-render frequently on data updates.
-**Action:** Identified and implemented the `React.useMemo` pattern to wrap these expensive array operations (`map`, `filter`). This ensures `organizeSessions` only recalculates when its specific dependencies (`swarms`, `jules`) change, effectively reducing unnecessary CPU usage on every render.

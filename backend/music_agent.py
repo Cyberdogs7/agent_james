@@ -113,9 +113,9 @@ class MusicAgent:
         # Immediately replace the queue so new streams start fresh
         self.internal_queue = queue.Queue(maxsize=2000)
 
-    async def play(self, query):
-        """Searches for a query and streams it."""
-        self.logger.info(f"Searching for: {query}")
+    async def play(self, query, radio=False):
+        """Searches for a query and streams it. If radio=True, starts a radio mix from the result."""
+        self.logger.info(f"Searching for: {query} (radio={radio})")
 
         self._stop_event.set()
         await self._kill_ffmpeg()
@@ -212,9 +212,9 @@ class MusicAgent:
                 if not video_id:
                     return f"Could not find a playable video for {query}"
 
-                # 2. Get Watch Playlist
+                # 2. Get Watch Playlist (with radio mode if requested)
                 def get_playlist(vid):
-                    return self.yt.get_watch_playlist(videoId=vid)
+                    return self.yt.get_watch_playlist(videoId=vid, radio=radio)
 
                 watch_playlist = await asyncio.to_thread(get_playlist, video_id)
                 tracks = watch_playlist.get("tracks", [])
@@ -235,7 +235,8 @@ class MusicAgent:
             artists = "Unknown"
             if 'artists' in tracks[0] and tracks[0]['artists']:
                 artists = ", ".join([a['name'] for a in tracks[0]['artists']])
-            return f"Playing {title} by {artists}"
+            mode = "radio" if radio else "playlist"
+            return f"Playing {title} by {artists} ({mode})"
 
         except Exception as e:
             self.logger.error(f"Play failed: {e}")
@@ -748,7 +749,8 @@ class MusicAgent:
             return result
         except Exception as e:
             self.logger.error(f"Failed to get library playlists: {e}")
-            return f"Failed to get playlists: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."
 
     def get_library_songs(self):
         """Get user's liked songs. Requires authentication."""
@@ -766,7 +768,8 @@ class MusicAgent:
             return result
         except Exception as e:
             self.logger.error(f"Failed to get library songs: {e}")
-            return f"Failed to get liked songs: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."
 
     def get_history(self):
         """Get play history. Requires authentication."""
@@ -784,7 +787,8 @@ class MusicAgent:
             return result
         except Exception as e:
             self.logger.error(f"Failed to get history: {e}")
-            return f"Failed to get history: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."
 
     def rate_song(self, video_id, rating="LIKE"):
         """Rate a song (LIKE, INDIFFERENT, DISLIKE). Requires authentication."""
@@ -802,7 +806,8 @@ class MusicAgent:
             return f"Rated video {video_id} as {yt_rating}"
         except Exception as e:
             self.logger.error(f"Failed to rate song: {e}")
-            return f"Failed to rate song: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."
 
     def create_library_playlist(self, name, description="", privacy="PRIVATE"):
         """Create a new playlist. Requires authentication."""
@@ -817,7 +822,8 @@ class MusicAgent:
             return f"Created playlist '{name}' (ID: {playlist_id})"
         except Exception as e:
             self.logger.error(f"Failed to create playlist: {e}")
-            return f"Failed to create playlist: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."
 
     def add_to_playlist(self, playlist_id, video_ids):
         """Add videos to a playlist. Requires authentication."""
@@ -828,7 +834,8 @@ class MusicAgent:
             return f"Added {len(video_ids)} tracks to playlist"
         except Exception as e:
             self.logger.error(f"Failed to add to playlist: {e}")
-            return f"Failed to add to playlist: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."
 
     def get_account_info(self):
         """Get current account info. Requires authentication."""
@@ -839,4 +846,5 @@ class MusicAgent:
             return f"Signed in as: {info}"
         except Exception as e:
             self.logger.error(f"Failed to get account info: {e}")
-            return f"Failed to get account info: {e}"
+            self._authenticated = False
+            return f"Authentication expired. Please use 'google_login' to re-authenticate with YouTube Music."

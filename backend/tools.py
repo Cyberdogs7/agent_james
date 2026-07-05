@@ -383,18 +383,6 @@ switch_project_tool = {
     }
 }
 
-dismiss_jules_session_tool = {
-    "name": "dismiss_jules_session",
-    "description": "Dismisses (hides) or stops a running Jules session from the active dashboard.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "session_id": {"type": "STRING", "description": "The ID of the session to dismiss or stop."}
-        },
-        "required": ["session_id"]
-    }
-}
-
 merge_pull_request_tool = {
     "name": "merge_pull_request",
     "description": "Merges a specific Pull Request on a GitHub repository.",
@@ -838,44 +826,6 @@ get_morning_briefing_tool = {
     }
 }
 
-send_jules_feedback_tool = {
-    "name": "send_jules_feedback",
-    "description": "Sends feedback to a Jules session.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "session_id": {
-                "type": "STRING",
-                "description": "The ID of the session to send feedback to."
-            },
-            "feedback": {
-                "type": "STRING",
-                "description": "The feedback to send."
-            }
-        },
-        "required": ["session_id", "feedback"]
-    }
-}
-
-run_jules_agent_tool = {
-    "name": "run_jules_agent",
-    "description": "Creates a new Jules task. If the source is not provided, the user will be prompted to select one.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "prompt": {
-                "type": "STRING",
-                "description": "The prompt to send to the Jules agent."
-            },
-            "source": {
-                "type": "STRING",
-                "description": "Optional: The source to use for the Jules agent."
-            }
-        },
-        "required": ["prompt"]
-    }
-}
-
 run_openhands_agent_tool = {
     "name": "run_openhands_agent",
     "description": "Creates a new OpenHands coding task.",
@@ -1018,7 +968,7 @@ create_coding_task_tool = {
 
 spawn_swarm_agent_tool = {
     "name": "spawn_swarm_agent",
-    "description": "Spawns a new Swarm Agent (Jules) with a specific role and task. Use this to delegate work to specialized agents.",
+    "description": "Spawns a new Swarm Agent with a specific role and task. Use this to delegate work to specialized agents.",
     "parameters": {
         "type": "OBJECT",
         "properties": {
@@ -1059,30 +1009,6 @@ create_swarm_mission_tool = {
 }
 
 
-list_jules_sources_tool = {
-    "name": "list_jules_sources",
-    "description": "Lists all available Jules sources.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    }
-}
-
-toggle_jules_slack_notifications_tool = {
-    "name": "toggle_jules_slack_notifications",
-    "description": "Enables or disables Slack notifications for Jules agent status updates. Default is disabled.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "enabled": {
-                "type": "BOOLEAN",
-                "description": "True to enable notifications, False to disable."
-            }
-        },
-        "required": ["enabled"]
-    }
-}
-
 set_auto_merge_threshold_tool = {
     "name": "set_auto_merge_threshold",
     "description": "Sets the minimum age (in hours) for a Pull Request to be considered for automatic smart merging.",
@@ -1117,58 +1043,6 @@ add_architectural_memory_tool = {
             }
         },
         "required": ["content"]
-    }
-}
-
-list_jules_sessions_tool = {
-    "name": "list_jules_sessions",
-    "description": "Lists all Jules sessions saved in the current project's local memory.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    }
-}
-
-sync_jules_sessions_tool = {
-    "name": "sync_jules_sessions",
-    "description": "Synchronizes any Jules sessions created outside of A.D.A. back into the War Room (Fleet Manager) so they can be tracked.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {}
-    }
-}
-
-list_jules_activities_tool = {
-    "name": "list_jules_activities",
-    "description": "Lists all activities for a specific Jules session.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "session_id": {
-                "type": "STRING",
-                "description": "The ID of the session to list activities for."
-            }
-        },
-        "required": ["session_id"]
-    }
-}
-
-jules_get_diff_tool = {
-    "name": "jules_get_diff",
-    "description": "Retrieves the code diff (unified patch) for a Jules session or a specific activity. Use this to see what code changes the agent has made.",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "session_id": {
-                "type": "STRING",
-                "description": "The ID of the session."
-            },
-            "activity_id": {
-                "type": "STRING",
-                "description": "Optional: The ID of a specific activity to get the diff from."
-            }
-        },
-        "required": ["session_id"]
     }
 }
 
@@ -1840,7 +1714,6 @@ all_tools_list = [
     read_directory_tool,
     read_file_tool,
     create_coding_task_tool,
-    run_jules_agent_tool,
     run_openhands_agent_tool,
     run_opencode_agent_tool,
     send_opencode_feedback_tool,
@@ -1853,21 +1726,13 @@ all_tools_list = [
     run_openrouter_agent_tool,
     spawn_swarm_agent_tool,
     create_swarm_mission_tool,
-    send_jules_feedback_tool,
-    list_jules_sources_tool,
-    list_jules_sessions_tool,
-    sync_jules_sessions_tool,
-    list_jules_activities_tool,
-    jules_get_diff_tool,
     append_system_prompt_tool,
     delete_custom_system_prompt_tool,
     get_system_prompt_tool,
-    toggle_jules_slack_notifications_tool,
     set_auto_merge_threshold_tool,
     add_architectural_memory_tool,
     switch_video_source_tool,
     apply_task_fix_tool,
-    dismiss_jules_session_tool,
     merge_pull_request_tool,
     github_get_repo_details_tool,
     github_list_branches_tool,
@@ -2079,7 +1944,7 @@ all_tools_list = [
     },
     {
         "name": "sync_git_repos",
-        "description": "Syncs the local fleet with the sources available to Jules. Clones any missing repositories.",
+        "description": "Syncs the local fleet repositories. Clones any missing repositories.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
@@ -2174,6 +2039,10 @@ all_tools_list = [
                 "query": {
                     "type": "STRING",
                     "description": "The song, artist, or album to play."
+                },
+                "radio": {
+                    "type": "BOOLEAN",
+                    "description": "If true, starts a radio/mix based on the query instead of playing the exact match. Use when the user asks to 'start a radio', 'play a mix', or 'play something like' a song/artist."
                 }
             },
             "required": ["query"]
@@ -2292,7 +2161,7 @@ all_tools_list = [
     },
     {
         "name": "schedule_routine",
-        "description": "Schedules an unattended, automated routine to run at a specific time using a cron expression. The routine will trigger a Jules background task with the provided prompt.",
+        "description": "Schedules an unattended, automated routine to run at a specific time using a cron expression. The routine will trigger a background task with the provided prompt.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -2306,7 +2175,7 @@ all_tools_list = [
                 },
                 "prompt": {
                     "type": "STRING",
-                    "description": "The natural language prompt or instructions that the background Jules agent should execute when the routine triggers."
+                    "description": "The natural language prompt or instructions that should execute when the routine triggers."
                 }
             },
             "required": ["title", "cron_expression", "prompt"]
@@ -2372,7 +2241,7 @@ all_tools_list = [
     },
     {
         "name": "youtube_library_playlists",
-        "description": "Gets the user's saved YouTube Music playlists. Requires Google login.",
+        "description": "Lists the user's saved YouTube Music playlists with track counts. Use this when the user asks about their playlists, saved music, or library contents.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
@@ -2380,7 +2249,7 @@ all_tools_list = [
     },
     {
         "name": "youtube_library_songs",
-        "description": "Gets the user's liked/saved YouTube Music songs. Requires Google login.",
+        "description": "Lists the user's liked/saved YouTube Music songs. Use this when the user asks about their liked songs, favorites, or saved tracks.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
@@ -2388,7 +2257,7 @@ all_tools_list = [
     },
     {
         "name": "youtube_history",
-        "description": "Gets the user's YouTube Music play history. Requires Google login.",
+        "description": "Lists the user's recent YouTube Music play history. Use this when the user asks what they've been listening to recently.",
         "parameters": {
             "type": "OBJECT",
             "properties": {}
@@ -2396,7 +2265,7 @@ all_tools_list = [
     },
     {
         "name": "youtube_rate_song",
-        "description": "Rates a YouTube video/song (like, dislike, or remove rating). Requires Google login.",
+        "description": "Rates a YouTube video/song (like, dislike, or remove rating). Use this when the user wants to like, dislike, or clear a rating on the current or a specific song.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -2414,7 +2283,7 @@ all_tools_list = [
     },
     {
         "name": "youtube_create_playlist",
-        "description": "Creates a new YouTube Music playlist. Requires Google login.",
+        "description": "Creates a new YouTube Music playlist in the user's library. Use this when the user wants to save or create a new playlist.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -2436,7 +2305,7 @@ all_tools_list = [
     },
     {
         "name": "youtube_add_to_playlist",
-        "description": "Adds videos/songs to an existing YouTube Music playlist. Requires Google login.",
+        "description": "Adds videos/songs to an existing YouTube Music playlist. Use this when the user wants to add tracks to one of their playlists.",
         "parameters": {
             "type": "OBJECT",
             "properties": {

@@ -105,9 +105,11 @@ async def _capture_youtube_music_cookies(config: Dict, sio=None) -> Optional[Dic
             }
             
             # Add SAPISID-based auth if present
+            # ytmusicapi requires "SAPISIDHASH" in the authorization value to detect BROWSER auth type.
+            # It will overwrite this with a fresh hash on every request using the origin header.
             sapisid = auth_cookies.get("__Secure-3PAPISID") or auth_cookies.get("SAPISID")
             if sapisid:
-                headers["authorization"] = f"SAPISIDHASH {sapisid}"
+                headers["authorization"] = "SAPISIDHASH placeholder"
             
             # Build credentials dict
             credentials = {
@@ -222,10 +224,16 @@ def _create_ytmusic_client(credentials: Dict) -> "YTMusic":
     import json
     
     # Build the proper header format for ytmusicapi
-    # It expects specific header names
+    # It expects specific header names matching initialize_headers() from ytmusicapi.helpers
     ytmusic_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate",
         "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "Origin": "https://music.youtube.com",
+        "X-Origin": "https://music.youtube.com",
     }
     
     # Add cookie header

@@ -37,9 +37,9 @@ This document outlines the strategy to integrate "grows with you" capabilities i
 
 **Implementation Plan:**
 1.  **Cron Scheduler Integration [DONE]:** Added `croniter` to parse and evaluate cron expressions. Modified `TaskManager` to support `cron` mode validation.
-2.  **Natural Language Parsing [DONE]:** Created the `schedule_routine` tool in `backend/tools.py` that handles parsing a natural language request into a cron expression via the LLM and scheduling a `jules_task`.
+2.  **Natural Language Parsing [DONE]:** Created the `schedule_routine` tool in `backend/tools.py` that handles parsing a natural language request into a cron expression via the LLM and scheduling a task.
 3.  **Unattended Execution Context [DONE]:** Implemented the `cron` execution logic in `AutomationEngine._check_schedules()`, where tasks are checked every minute and fired if they match the cron expression. Duplicate runs are prevented by checking the `last_run` timestamp.
-4.  **Cross-Platform Delivery:** (Deferred/Handled naturally by `AutomationEngine._execute_task` when running `jules_task` with notifications).
+4.  **Cross-Platform Delivery:** (Deferred/Handled naturally by `AutomationEngine._execute_task` when running tasks with notifications).
 
 **Expected Benefits:**
 *   Proactive assistance without prompting.

@@ -14,7 +14,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 @pytest.fixture(autouse=True)
 def api_keys(monkeypatch):
     """Set dummy API keys for testing."""
-    monkeypatch.setenv("JULES_API_KEY", "test-jules-key")
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
     monkeypatch.setenv("TRELLO_API_KEY", "test-trello-key")
     monkeypatch.setenv("TRELLO_TOKEN", "test-trello-token")
@@ -93,37 +92,6 @@ class TestToolDefinitions:
         
         assert iterate_cad_tool['name'] == 'iterate_cad'
         print(f"iterate_cad tool: {iterate_cad_tool['name']}")
-
-    def test_run_jules_agent_tool_schema(self):
-        """Test run_jules_agent tool has correct schema."""
-        from tools import run_jules_agent_tool
-
-        assert run_jules_agent_tool['name'] == 'run_jules_agent'
-        assert 'description' in run_jules_agent_tool
-        assert 'parameters' in run_jules_agent_tool
-        assert 'prompt' in run_jules_agent_tool['parameters']['properties']
-        assert 'source' in run_jules_agent_tool['parameters']['properties']
-        assert "source" not in run_jules_agent_tool['parameters']['required']
-        print(f"run_jules_agent tool: {run_jules_agent_tool['name']}")
-
-
-    def test_list_jules_sources_tool_schema(self):
-        """Test list_jules_sources tool has correct schema."""
-        from tools import list_jules_sources_tool
-
-        assert list_jules_sources_tool['name'] == 'list_jules_sources'
-        assert 'description' in list_jules_sources_tool
-        print(f"list_jules_sources tool: {list_jules_sources_tool['name']}")
-
-    def test_list_jules_activities_tool_schema(self):
-        """Test list_jules_activities tool has correct schema."""
-        from tools import list_jules_activities_tool
-
-        assert list_jules_activities_tool['name'] == 'list_jules_activities'
-        assert 'description' in list_jules_activities_tool
-        assert 'parameters' in list_jules_activities_tool
-        assert 'session_id' in list_jules_activities_tool['parameters']['properties']
-        print(f"list_jules_activities tool: {list_jules_activities_tool['name']}")
 
 
 class TestAudioLoopClass:
@@ -232,12 +200,6 @@ class TestAgentImports:
         assert PrinterAgent is not None
         print("PrinterAgent imported")
 
-    def test_jules_agent_import(self):
-        """Test JulesAgent is imported."""
-        from ada import JulesAgent
-        assert JulesAgent is not None
-        print("JulesAgent imported")
-
     def test_music_agent_import(self):
         """Test MusicAgent is imported."""
         from ada import MusicAgent
@@ -255,43 +217,4 @@ class TestToolConfirmation:
         print("resolve_tool_confirmation method exists")
 
 
-class TestJulesNotifications:
-    """Test Jules notification handler."""
 
-    @pytest.mark.asyncio
-    async def test_handle_jules_status_change(self, monkeypatch):
-        """Test that the Jules status change handler sends correct notifications."""
-        from ada import AudioLoop
-
-        # Create an instance of AudioLoop
-        mock_pm = MagicMock()
-        from pathlib import Path
-        mock_pm.get_current_project_path.return_value = Path("/tmp")
-        audio_loop = AudioLoop(project_manager=mock_pm)
-
-        # Mock the dependencies of the handler method
-        audio_loop.on_display_content = MagicMock()
-        audio_loop.session = AsyncMock()
-        audio_loop.session.send = AsyncMock()
-
-        # Call the handler
-        session_id = "test-session"
-        title = "Fix Login Bug"
-        new_state = "IN_PROGRESS"
-        await audio_loop._handle_jules_status_change(session_id, title, new_state)
-
-        # 1. Verify UI Notification
-        audio_loop.on_display_content.assert_called_once()
-        call_args = audio_loop.on_display_content.call_args[0][0]
-        assert call_args["content_type"] == "notification"
-        assert "Jules task 'Fix Login Bug' has moved to IN_PROGRESS" in call_args["data"]["text"]
-        assert call_args["duration"] == 20000
-
-        # 2. Verify Voice Notification Batching behavior
-        # Because voice notifications are now batched, we need to wait for the batching task to finish.
-        if hasattr(audio_loop, '_notification_batch_task') and audio_loop._notification_batch_task:
-            await audio_loop._notification_batch_task
-
-        audio_loop.session.send.assert_called_once()
-        voice_args = audio_loop.session.send.call_args.kwargs
-        assert "System Notification: Jules task 'Fix Login Bug' has moved to IN_PROGRESS." in voice_args["input"]

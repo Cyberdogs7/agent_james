@@ -134,7 +134,7 @@ const TaskInputForm = ({ repo, onAddTask }) => {
     );
 };
 
-const FleetManagerUI = ({ fleetState, fleetStatus = [], julesSessions = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster, onReorderRepos }) => {
+const FleetManagerUI = ({ fleetState, fleetStatus = [], onAssign, onUnassign, onAddTask, onRemoveTask, onClearCompleted, onToggleRepoActive, onAgentClick, onTaskClick, autoMergeMaster = false, onToggleAutoMergeMaster, onReorderRepos }) => {
     const { agents = [], repos: stateRepos = [] } = fleetState || {};
 
     const allReposMap = new Map();

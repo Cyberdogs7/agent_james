@@ -256,8 +256,7 @@ const SettingsWindow = ({
                         'OPENROUTER_MODEL', 
                         'LM_STUDIO_BASE_URL', 
                         'LM_STUDIO_MODEL', 
-                        'JULES_API_KEY',
-                        ...Object.keys(apiKeys || {}).filter(k => k.startsWith('JULES_API_KEY_')),
+
                         'TRELLO_API_KEY', 
                         'GIPHY_API_KEY'
                     ].map(keyName => (

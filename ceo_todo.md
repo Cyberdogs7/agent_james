@@ -1,6 +1,6 @@
 # Fleet Commander (CEO Mode) & Orchestration Backlog
 
-This document outlines the detailed tasks required to upgrade A.D.A's orchestration capabilities. The core mission is for A.D.A to act as a "Tech Lead" or "Manager" over a massive fleet of 15-75 concurrent external `Jules` agents across multiple repositories, shifting the user into the role of "The Board" that only steps in for high-level approvals.
+This document outlines the detailed tasks required to upgrade A.D.A's orchestration capabilities. The core mission is for A.D.A to act as a "Tech Lead" or "Manager" over a fleet of concurrent external agents across multiple repositories, shifting the user into the role of "The Board" that only steps in for high-level approvals.
 
 ## 1. Data Model & Hierarchical State
 
@@ -33,7 +33,7 @@ This document outlines the detailed tasks required to upgrade A.D.A's orchestrat
   - Transition from continuous execution loops (which risk runaway token spend) to an event-driven or scheduled "Heartbeat" model.
   - Agents wake up on a heartbeat (or web-hook/event), assess their assigned tasks, take action, log status, and return to sleep.
 - [ ] **Adapter Integration**
-  - Wrap existing agents (`OpenHandsAgent`, `JulesAgent`, `GitAgent`) with a standardized "Adapter" interface so they can be treated as standard employees in the org chart.
+  - Wrap existing agents (`OpenHandsAgent`, `GitAgent`) with a standardized "Adapter" interface so they can be treated as standard employees in the org chart.
 
 ## 3. UI/UX & User Loop (The Board Experience)
 
@@ -46,11 +46,10 @@ This document outlines the detailed tasks required to upgrade A.D.A's orchestrat
   - Add a dynamic Org Chart UI component showing the current agent hierarchy, their status (active, idle, paused), and budget usage.
   - Create a "Company Dashboard" showing high-level goal progress and aggregated costs.
 - [ ] **Strict Governance & Approval Gates**
-  - [x] **Jules Interceptor & Triage:** A.D.A intercepts messages from Jules agents, auto-replying to simple context questions via Ollama, and explicitly queuing high-level blockers for Board approval.
   - Implement a centralized "Approval Queue" UI for escalated tasks.
   - Require explicit Board sign-off for critical actions:
-    - Approving major architectural changes proposed by Jules.
-    - Providing external API keys or secrets when Jules gets stuck.
+    - Approving major architectural changes proposed by agents.
+    - Providing external API keys or secrets when agents get stuck.
     - Approving final PR merges.
 - [ ] **Live Control Surface**
   - Allow the Board to pause/resume any agent or task at any time directly from the UI.
@@ -70,9 +69,9 @@ This document outlines the detailed tasks required to upgrade A.D.A's orchestrat
 **Goal:** Close the CI/CD loop so the fleet operates continuously without human intervention until the final step.
 
 - [ ] **Automated Code Review Agent**
-  - When a Jules agent commits code or opens a PR, A.D.A should automatically detect this via webhook or polling.
+  - When an agent commits code or opens a PR, A.D.A should automatically detect this via webhook or polling.
   - Spawn an internal Git/Review agent to assess the commit against project standards.
-  - Post the review comments back to the Jules session automatically.
+  - Post the review comments back to the agent session automatically.
 - [ ] **CI Failure Routing**
-  - Detect when automated tests fail on a Jules PR.
-  - Automatically fetch the logs and instruct Jules to fix the failure, without ever bothering the human user.
+  - Detect when automated tests fail on a PR.
+  - Automatically fetch the logs and instruct the agent to fix the failure, without ever bothering the human user.

@@ -230,7 +230,7 @@ class FleetManager:
             self.save_state()
 
     def update_task_session(self, repo_name, task_id, session_id):
-        """Saves a Jules session ID directly to a task."""
+        """Saves a session ID directly to a task."""
         if repo_name in self.repos:
             for task in self.repos[repo_name]["queue"]:
                 if task["id"] == task_id:

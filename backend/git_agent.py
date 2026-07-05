@@ -205,14 +205,7 @@ class GitAgent:
         return result_str
 
     async def sync_fleet(self, sources):
-        def _do_sync():
-            results, status = self.project_manager.sync_jules_repos(sources)
-            if status == "AUTH_REQUIRED":
-                return "GitHub Authentication Required."
-            summary = ", ".join(results) if results else "All up to date."
-            return f"Sync Complete: {summary}"
-
-        return await asyncio.to_thread(_do_sync)
+        return "Fleet sync is no longer available."
 
     async def merge_pull_request(self, owner, repo, pull_number, merge_method="merge"):
         token = self.project_manager.get_github_token()

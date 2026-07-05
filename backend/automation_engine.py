@@ -241,7 +241,7 @@ class AutomationEngine:
         self.running = False
 
     async def deliver_morning_briefing(self, force_refresh=False):
-        """Retrieves and formats the morning briefing for Jules."""
+        """Retrieves and formats the morning briefing."""
         report = None
         if not force_refresh and self.current_briefing_report:
             report = self.current_briefing_report
@@ -553,56 +553,12 @@ class AutomationEngine:
                 print(f"[AutomationEngine] Error checking CI pipelines for {repo.get('name')}: {e}")
 
     async def _monitor_stalled_items(self):
-        """Checks for stalled Jules sessions and PRs and notifies (nags) the user."""
+        """Checks for stalled PRs and notifies (nags) the user."""
         print("[AutomationEngine] Checking for stalled items...")
         now = time.time()
         now_dt = datetime.now()
 
-        # 1. Check Jules Sessions
-        if self.ada and self.ada.jules_agent:
-            sessions = await self.ada.jules_agent.list_sessions()
-            if sessions is not None:
-                for session in sessions:
-                    state = session.get('state')
-                    if state in ['COMPLETED', 'FAILED']:
-                        continue
-
-                    # Check updateTime
-                    update_time_str = session.get('updateTime') or session.get('createTime')
-                    if not update_time_str:
-                        continue
-
-                    try:
-                         # Handle Z suffix
-                        if update_time_str.endswith('Z'):
-                             update_time_str = update_time_str[:-1]
-
-                        # Simple parsing (assuming UTC for Z or local if no Z, but API usually returns UTC)
-                        last_update_dt = datetime.fromisoformat(update_time_str)
-
-                        # datetime.utcnow() returns naive UTC. If parsed date is naive and came from 'Z', it is UTC.
-                        time_diff = (datetime.utcnow() - last_update_dt).total_seconds()
-
-                        if time_diff > self.STALL_THRESHOLD:
-                            session_id = session.get('name')
-                            title = session.get('title', 'Untitled Task')
-
-                            # Check cooldown
-                            last_nag = self.last_nag_times.get(session_id, 0)
-                            if now - last_nag > self.NAG_COOLDOWN:
-                                msg = f"Sir, Jules session '{title}' has been stalling for over 2 hours. Shall I intervene?"
-                                print(f"[AutomationEngine] NAGGING: {msg}")
-                                if self.ada:
-                                    await self.ada.handle_external_event({
-                                        "type": "notification",
-                                        "message": msg
-                                    })
-                                self.last_nag_times[session_id] = now
-
-                    except Exception as e:
-                        print(f"[AutomationEngine] Error checking session {session.get('name')}: {e}")
-
-        # 2. Check Pull Requests
+        # Check Pull Requests
         token = self.project_manager.get_github_token()
         if token:
             client = GitHubClient(token)
@@ -944,30 +900,6 @@ INSTRUCTIONS:
                     if self.ada.slack_agent:
                         asyncio.create_task(self.ada.slack_agent.send_message(msg))
                 success = True
-
-            elif act_type == 'jules_task':
-                print(f"[AutomationEngine] ACTION: Jules Task")
-                if self.ada:
-                    prompt = ""
-                    source = None
-                    if isinstance(act_value, dict):
-                        prompt = act_value.get('prompt')
-                        source = act_value.get('source')
-                    else:
-                        prompt = str(act_value)
-
-                    if project_context and project_context != self.project_manager.current_project:
-                        prompt = f"Context: You are working on project '{project_context}'.\n\nTask: {prompt}"
-
-                    if context:
-                        # Append context to prompt
-                        prompt += f"\n\nTrigger Context:\n{json.dumps(context, indent=2)}"
-
-                    # Use ada's handler
-                    # This launches a background task
-                    msg = await self.ada.handle_jules_request(prompt, source)
-                    result_msg = msg
-                    success = True
 
             elif act_type == 'run_script':
                 script_path = act_value

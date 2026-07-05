@@ -144,52 +144,13 @@ class ProjectManager:
 
         return None
 
-    def sync_jules_repos(self, sources):
-        """
-        Syncs local fleet configuration with the list of sources from Jules.
-        Does NOT clone repositories. Updates fleet.json.
-        """
-        fleet = self.load_fleet()
-        # fleet is a list of dicts: {owner, name, source}
-        existing_repos = {f"{r['owner']}/{r['name']}" for r in fleet}
-
-        new_repos = []
-        for source_obj in sources:
-            source_name = source_obj.get("name") if isinstance(source_obj, dict) else source_obj
-
-            if not source_name or not source_name.startswith("sources/github/"):
-                continue
-
-            parts = source_name.split('/')
-            if len(parts) < 4:
-                continue
-
-            repo_owner = parts[2]
-            repo_name = parts[3]
-            full_name = f"{repo_owner}/{repo_name}"
-
-            if full_name not in existing_repos:
-                fleet.append({
-                    "owner": repo_owner,
-                    "name": repo_name,
-                    "source": source_name
-                })
-                new_repos.append(full_name)
-
-        if new_repos:
-            self.save_fleet(fleet)
-            return [f"Added to Fleet: {r}" for r in new_repos], "OK"
-
-        return ["Fleet up to date."], "OK"
-
     def _create_default_config(self, project_path):
         """Creates a default config.json file in the project directory."""
         config_path = project_path / "config.json"
         DEFAULT_CONFIG = {
             "system_prompt": DEFAULT_SYSTEM_PROMPT,
-            "jules_api_key": "",
             "voice_name": "Sadaltager",
-            "jules_slack_notifications": False,
+            "slack_notifications": False,
             "mode": "default"
         }
         with open(config_path, "w", encoding="utf-8") as f:
@@ -399,71 +360,6 @@ class ProjectManager:
         except Exception as e:
             print(f"[ProjectManager] [ERR] Failed to read chat history: {e}")
             return []
-
-    def _get_jules_ui_state_path(self):
-        return self.get_current_project_path() / "jules_ui_state.json"
-
-    def _load_jules_ui_state(self):
-        path = self._get_jules_ui_state_path()
-        if not path.exists():
-            return {}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[ProjectManager] [ERR] Failed to read jules UI state: {e}")
-            return {}
-
-    def _save_jules_ui_state(self, state):
-        path = self._get_jules_ui_state_path()
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(state, f, indent=4)
-        except Exception as e:
-            print(f"[ProjectManager] [ERR] Failed to save jules UI state: {e}")
-
-    def mark_jules_session_seen(self, session_id: str):
-        """Marks a Jules session as seen by the user."""
-        self.batch_mark_jules_sessions_seen([session_id])
-
-    def batch_mark_jules_sessions_seen(self, session_ids: list):
-        """Marks multiple Jules sessions as seen in one I/O operation."""
-        if not session_ids:
-            return
-
-        state = self._load_jules_ui_state()
-        changed = False
-        now = time.time()
-
-        for session_id in session_ids:
-            if session_id not in state:
-                state[session_id] = {}
-
-            if "seen_at" not in state[session_id]:
-                state[session_id]["seen_at"] = now
-                changed = True
-
-        if changed:
-            self._save_jules_ui_state(state)
-
-    def dismiss_jules_session(self, session_id: str):
-        """Marks a Jules session as dismissed (hidden)."""
-        state = self._load_jules_ui_state()
-        if session_id not in state:
-            state[session_id] = {}
-
-        state[session_id]["dismissed"] = True
-        self._save_jules_ui_state(state)
-        return True, "Session dismissed."
-
-    def get_jules_session_state(self, session_id: str):
-        """Returns the UI state (seen_at, dismissed) for a session."""
-        state = self._load_jules_ui_state()
-        return state.get(session_id, {})
-
-    def get_all_jules_session_states(self):
-        """Returns the entire UI state dictionary."""
-        return self._load_jules_ui_state()
 
     # --- Swarm Management ---
     def _get_swarms_path(self):

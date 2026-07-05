@@ -2,7 +2,6 @@
     "cyberdogs7_marketing_agent_pr_merge_policy": "merge_if_no_conflicts_prevent_if_conflicts_exist",
     "prefer_direct_ada_execution_for_marketing_agent_pr_merges": true,
     "prefer_verbal_confirmation_for_important_system_shifts": true,
-    "requires_correct_branch_for_jules_tasks": true,
     "update_format_preference": "brief",
     "music_preference": "90s euro techno",
     "acknowledgement_of_blocks_preference": "explicit_verbal",
@@ -15,10 +14,7 @@
     "verbal_communication_disallowed_when_music_playing": true,
     "communication_method_when_music_playing": "non_verbal",
     "default_repository_branch": "main",
-    "coding_task_agent_preference": "jules",
-    "prefer_jules_agent_for_coding_tasks": true,
-    "agent_usage_preference": "Prefer using Jules for coding and fixing tasks.",
-    "acknowledgment_style": "non_verbal_gif_for_music_actions",
+    "acknowledgment_style": "non_verbal",
     "music_search_fallback": "broaden_query_on_no_results",
     "preferred_music_genres": [
         "90s Euro Techno",
@@ -113,5 +109,25 @@
     "override_communication_mode_for_critical_events": "verbal",
     "override_communication_mode_for_direct_commands": "verbal",
     "merge_policy_on_conflicts": "prevent_merge_if_conflicts_exist",
-    "merge_strategy_for_NLevelSoftware/open-horizons-frontend_repo": "rebase"
+    "merge_strategy_for_NLevelSoftware/open-horizons-frontend_repo": "rebase",
+    "avoid_verbal_responses": true,
+    "prefer_non_verbal_acknowledgment_during_music": true,
+    "maintain_unobtrusive_operational_mode": true,
+    "respond_only_to_critical_events_or_direct_commands": true,
+    "acknowledgment_preference": "non_verbal",
+    "verbal_response_avoidance": true,
+    "default_operational_state": "unobtrusive_silent_observation",
+    "default_interaction_policy": "unobtrusive",
+    "response_triggers": [
+        "critical_events",
+        "direct_commands"
+    ],
+    "communication_style_during_music_playback": "non-verbal",
+    "avoid_verbal_responses_during_music_playback": true,
+    "default_idle_operating_mode": "silent_observation_unobtrusive",
+    "idle_response_policy": "only_to_critical_events_or_direct_commands",
+    "minimal_verbal_response_preference": true,
+    "whatever_you_can_find_preference": true,
+    "directness_preference": true,
+    "explicit_acknowledgment_preference": true
 }

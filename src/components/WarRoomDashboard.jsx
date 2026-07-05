@@ -11,7 +11,6 @@ import {
     Shield,
     AlertCircle,
     Plus,
-    Trash2,
     Play,
     Terminal,
     MessageSquare,
@@ -41,7 +40,6 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
     const [fleetStatus, setFleetStatus] = useState([]);
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [selectedRepo, setSelectedRepo] = useState(null);
-    const [swarms, setSwarms] = useState([]);
     const [selectedFleetAgent, setSelectedFleetAgent] = useState(null);
     const [selectedTask, setSelectedTask] = useState(null);
         const [fleetState, setFleetState] = useState({ agents: [], repos: [] });
@@ -92,13 +90,9 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
             socket.emit('start_dashboard_stream');
             // Initial fleet status fetch
             socket.emit('get_fleet_status');
-            socket.emit('get_swarms');
 
             const handleFleetStatus = (data) => {
                 setFleetStatus(data);
-            };
-            const handleSwarms = (data) => {
-                setSwarms(data);
             };
             const handleError = (err) => {
                 if (err.code === 'AUTH_REQUIRED') {
@@ -107,11 +101,9 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
             };
 
             socket.on('fleet_status_update', handleFleetStatus);
-            socket.on('swarms_update', handleSwarms);
             socket.on('error', handleError);
             return () => {
                 socket.off('fleet_status_update', handleFleetStatus);
-                socket.off('swarms_update', handleSwarms);
                 socket.off('error', handleError);
                 socket.emit('stop_dashboard_stream');
             };
@@ -123,7 +115,6 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
         project = "UNKNOWN",
         trello = [],
         tasks = [],
-        jules = [],
         devices = [],
         printers = [],
         // git = { branch: 'unknown', branches: [], status: '' }, // Deprecated single-repo view
@@ -162,10 +153,6 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
         if (socket) socket.emit('apply_task_fix', { id });
     };
 
-    const handleDismissJules = (id) => {
-        if (socket) socket.emit('dismiss_jules_session', { id });
-    };
-
     const openSessionDetails = (session) => {
         setSelectedSession(session);
         if (socket) {
@@ -191,82 +178,6 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
         }
     };
 
-    const getRoleFromTitle = (title) => {
-        const match = title.match(/^\[(.*?)\]\s*(.*)/);
-        if (match) {
-            return { role: match[1], cleanTitle: match[2] };
-        }
-        return { role: null, cleanTitle: title };
-    };
-
-    const roleColors = {
-        'FRONTEND': 'text-blue-400 border-blue-500/50 bg-blue-500/20',
-        'BACKEND': 'text-green-400 border-green-500/50 bg-green-500/20',
-        'QA': 'text-yellow-400 border-yellow-500/50 bg-yellow-500/20',
-        'SECURITY': 'text-red-400 border-red-500/50 bg-red-500/20',
-        'DEVOPS': 'text-purple-400 border-purple-500/50 bg-purple-500/20',
-        'DEFAULT': 'text-gold9 border-gold9/50 bg-gold9/20'
-    };
-
-    // Helper to organize sessions into swarms and solo
-    // ⚡ Bolt: Memoized expensive array mapping and filtering to prevent recalculation on every render
-    const { swarmGroups, soloSessions } = React.useMemo(() => {
-        const swarmGroups = swarms.map(swarm => {
-            const swarmSessions = jules.filter(s => swarm.sessions.includes(s.id));
-            return {
-                ...swarm,
-                activeSessions: swarmSessions
-            };
-        }).filter(g => g.activeSessions.length > 0 || (Date.now() / 1000 - g.created_at < 3600)); // Show active or recent swarms
-
-        const swarmSessionIds = new Set(swarms.flatMap(s => s.sessions));
-        const soloSessions = jules.filter(s => !swarmSessionIds.has(s.id));
-
-        return { swarmGroups, soloSessions };
-    }, [swarms, jules]);
-
-    const renderSessionItem = (session, i) => {
-        const { role, cleanTitle } = getRoleFromTitle(session.title || session.id);
-        const roleStyle = role ? (roleColors[role.toUpperCase()] || roleColors['DEFAULT']) : '';
-
-        return (
-            <div
-                key={session.id}
-                onClick={() => openSessionDetails(session)}
-                className="flex items-center gap-3 bg-gold9/5 border border-gold9/10 p-3 rounded cursor-pointer hover:bg-gold9/20 transition-all hover:-translate-y-0.5 hover:shadow-[0_4px_15px_rgba(255,215,0,0.1)] group/item mb-2 last:mb-0"
-            >
-                <div className={`w-2 h-2 rounded-full ${
-                    session.state === 'RUNNING' || session.state === 'IN_PROGRESS' ? 'bg-green-500 animate-pulse' : 
-                    (session.state === 'PLANNING' ? 'bg-blue-500 animate-pulse' :
-                    (session.state === 'AWAITING_USER_FEEDBACK' || session.state === 'AWAITING_PLAN_APPROVAL' || session.state === 'needing_feedback' || session.state === 'awaiting_plan_approval' || session.state === 'awaiting_user_feedback' ? 'bg-yellow-500 animate-pulse' : 
-                    (session.state === 'COMPLETED' ? 'bg-blue-500' : 
-                    'bg-gray-500')))
-                }`}></div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        {role && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border ${roleStyle}`}>
-                                {role.toUpperCase()}
-                            </span>
-                        )}
-                        <div className="text-sm font-bold text-gold9 truncate">{cleanTitle}</div>
-                    </div>
-                    <div className="text-xs text-gold9/60">STATE: {session.state || 'UNKNOWN'}</div>
-                    {session.latest_thought && (
-                        <div className="text-xs text-gold9/40 italic truncate mt-1">
-                            "{session.latest_thought}"
-                        </div>
-                    )}
-                </div>
-                <div className="text-xs font-mono text-gold9/40 mr-2">
-                    ID: {session.id.substring(0, 6)}
-                </div>
-                <button onClick={(e) => { e.stopPropagation(); handleDismissJules(session.id); }} className="text-gold9/20 hover:text-red-500 transition-colors opacity-0 group-hover/item:opacity-100">
-                    <Trash2 size={14} />
-                </button>
-            </div>
-        );
-    };
 
 
     // Extract stats from system_stats provided by the backend
@@ -357,7 +268,6 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                         <FleetManagerUI
                             fleetState={fleetState}
                             fleetStatus={fleetStatus}
-                            julesSessions={jules}
                             onAssign={(agentId, repoName) => socket.emit('assign_agent_to_repo', { agent_id: agentId, repo_name: repoName })}
                             onUnassign={(agentId) => socket.emit('unassign_agent', { agent_id: agentId })}
                             onAddTask={(repoName, prompt, dependsOn, attachments) => socket.emit('add_task_to_repo_queue', { repo_name: repoName, prompt, depends_on: dependsOn, attachments })}
@@ -715,18 +625,7 @@ const SessionDetailModal = ({ session, onClose, socket, onViewArtifact }) => {
 
     useEffect(() => {
         if (socket) {
-            socket.emit('get_jules_activities', { id: session.id });
-            setLoading(true);
-
-            const handleData = (data) => {
-                if (data.id === session.id) {
-                    setActivities(data.activities);
-                    setLoading(false);
-                }
-            };
-
-            socket.on('jules_activities', handleData);
-            return () => socket.off('jules_activities', handleData);
+            setLoading(false);
         }
     }, [socket, session.id]);
 
@@ -735,7 +634,6 @@ const SessionDetailModal = ({ session, onClose, socket, onViewArtifact }) => {
         if (!message.trim()) return;
 
         if (socket) {
-            socket.emit('send_jules_message', { id: session.id, message });
             // Optimistic update
             const newMsg = {
                 userMessage: { content: message },
@@ -747,9 +645,6 @@ const SessionDetailModal = ({ session, onClose, socket, onViewArtifact }) => {
     };
 
     const handleApprove = () => {
-        if (socket) {
-            socket.emit('send_jules_message', { id: session.id, message: "Plan approved. Proceed." });
-        }
     };
 
     return (
@@ -817,7 +712,7 @@ const ActivityItem = ({ activity, onViewArtifact }) => {
                 <div className="max-w-[80%] p-4 rounded-xl border border-gold9/30 bg-gold9/5 text-gold9  shadow-[0_0_15px_rgba(255,215,0,0.05)]">
                     <div className="flex items-center gap-2 mb-2 border-b border-gold9/10 pb-1">
                         <Cpu size={12} />
-                        <span className="text-[10px] font-bold tracking-widest opacity-70">JULES AGENT</span>
+                        <span className="text-[10px] font-bold tracking-widest opacity-70">AGENT</span>
                         <span className="text-[10px] opacity-40 ml-auto">{new Date(activity.createTime || Date.now()).toLocaleTimeString()}</span>
                     </div>
                     <div className="whitespace-pre-wrap text-sm leading-relaxed font-mono opacity-90">
@@ -996,10 +891,8 @@ const CommandModal = ({ onClose, socket }) => {
     const [title, setTitle] = useState('');
     const [triggerType, setTriggerType] = useState('manual');
     const [triggerValue, setTriggerValue] = useState('');
-    const [actionType, setActionType] = useState('jules_task');
+    const [actionType, setActionType] = useState('run_script');
     const [actionValue, setActionValue] = useState('');
-    const [selectedSource, setSelectedSource] = useState('');
-    const [availableSources, setAvailableSources] = useState([]);
 
     // Schedule Editor State
     const [scheduleMode, setScheduleMode] = useState('daily'); // 'daily' or 'interval'
@@ -1017,34 +910,10 @@ const CommandModal = ({ onClose, socket }) => {
         }
     };
 
-    // Fetch sources on mount
-    useEffect(() => {
-        if (socket) {
-            socket.emit('get_jules_sources');
-
-            const handleSources = (sources) => {
-                // sources can be a list of strings or objects. normalize.
-                // handle_list_jules_sources usually returns dicts like {name: '...', displayName: '...'}
-                const normalized = sources.map(s => typeof s === 'string' ? s : (s.name || s.id));
-                setAvailableSources(normalized);
-                if (normalized.length > 0) setSelectedSource(normalized[0]);
-            };
-
-            socket.on('jules_sources', handleSources);
-            return () => socket.off('jules_sources', handleSources);
-        }
-    }, [socket]);
-
     const handleSubmit = (e) => {
         e.preventDefault();
 
         let finalActionValue = actionValue;
-        if (actionType === 'jules_task') {
-            finalActionValue = {
-                prompt: actionValue,
-                source: selectedSource
-            };
-        }
 
         let finalTriggerValue = triggerValue;
         if (triggerType === 'schedule') {
@@ -1118,7 +987,6 @@ const CommandModal = ({ onClose, socket }) => {
                                 onChange={(e) => setActionType(e.target.value)}
                                 className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 outline-none"
                             >
-                                <option value="jules_task">JULES TASK</option>
                                 <option value="notify">NOTIFY</option>
                                 <option value="run_script">RUN SCRIPT</option>
                             </select>
@@ -1211,34 +1079,6 @@ const CommandModal = ({ onClose, socket }) => {
                                 placeholder={triggerType === 'git' ? 'owner/repo' : 'List Name'}
                             />
                         </div>
-                    )}
-
-                    {actionType === 'jules_task' && (
-                        <>
-                            <div>
-                                <label className="block text-xs text-gold9/60 mb-1">SOURCE / REPO</label>
-                                <select
-                                    value={selectedSource}
-                                    onChange={(e) => setSelectedSource(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 outline-none"
-                                >
-                                    <option value="">-- Select Source --</option>
-                                    {availableSources.map((s, i) => (
-                                        <option key={i} value={s}>{s}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs text-gold9/60 mb-1">TASK PROMPT</label>
-                                <textarea
-                                    required
-                                    value={actionValue}
-                                    onChange={(e) => setActionValue(e.target.value)}
-                                    className="w-full bg-gray-900 border border-gold9/30 rounded p-2 text-sm text-gold9 focus:border-gold9 outline-none"
-                                    placeholder="Describe the task for Jules..."
-                                />
-                            </div>
-                        </>
                     )}
 
                     {(actionType === 'run_script' || actionType === 'notify') && (

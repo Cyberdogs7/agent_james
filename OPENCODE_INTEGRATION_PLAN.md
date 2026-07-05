@@ -3,7 +3,7 @@
 ## Status: Implemented
 
 ## Overview
-OpenCode has been integrated into ADA as a local coding agent, following the same patterns as the existing Jules agent. ADA can now send coding tasks to OpenCode, poll for progress, and receive updates via voice and UI.
+OpenCode has been integrated into ADA as a local coding agent. ADA can now send coding tasks to OpenCode, poll for progress, and receive updates via voice and UI.
 
 ## Architecture
 

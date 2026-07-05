@@ -17,7 +17,7 @@ sys.modules['httpx'] = MagicMock()
 
 # Mock Agents
 for module in ['cad_agent', 'web_agent', 'kasa_agent', 'printer_agent', 'trello_agent',
-               'jules_agent', 'timer_agent', 'update_agent', 'search_agent',
+               'timer_agent', 'update_agent', 'search_agent',
                'scraper_agent', 'proactive_agent', 'git_ops', 'os_agent',
                'task_manager', 'project_manager', 'giphy_client',
                'giphy_client.apis.default_api', 'giphy_client.api_client',

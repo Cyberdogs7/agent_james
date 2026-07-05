@@ -22,20 +22,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
     const [selectedTaskId, setSelectedTaskId] = useState(null);
     const [draftTask, setDraftTask] = useState(null);
     const [selectedNode, setSelectedNode] = useState(null); // 'trigger' | 'action'
-    const [availableSources, setAvailableSources] = useState([]);
-
     // --- INITIALIZATION ---
-    useEffect(() => {
-        if (socket) {
-            socket.emit('get_jules_sources');
-            const handleSources = (sources) => {
-                const normalized = sources.map(s => typeof s === 'string' ? s : (s.name || s.id));
-                setAvailableSources(normalized);
-            };
-            socket.on('jules_sources', handleSources);
-            return () => socket.off('jules_sources', handleSources);
-        }
-    }, [socket]);
 
     // Load task into draft when selected
     useEffect(() => {
@@ -49,7 +36,7 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
             setDraftTask({
                 title: "New Automation",
                 trigger: { type: "manual", value: null },
-                action: { type: "jules_task", value: "" },
+                action: { type: "notify", value: "" },
                 status: "active"
             });
         }
@@ -296,42 +283,10 @@ const AutomationEditor = ({ tasks, socket, onClose }) => {
                                         onChange={(e) => updateDraft('action.type', e.target.value)}
                                         className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
                                     >
-                                        <option value="jules_task">JULES AGENT</option>
                                         <option value="notify">NOTIFICATION</option>
                                         <option value="run_script">RUN SCRIPT</option>
                                     </select>
                                 </div>
-
-                                {draftTask.action.type === 'jules_task' && (
-                                    <>
-                                        <div>
-                                            <label className="text-xs text-gold9/60 block mb-2">TARGET SOURCE</label>
-                                            <select
-                                                value={typeof draftTask.action.value === 'object' ? draftTask.action.value.source : ''}
-                                                onChange={(e) => {
-                                                    const current = typeof draftTask.action.value === 'object' ? draftTask.action.value : { prompt: draftTask.action.value };
-                                                    updateDraft('action.value', { ...current, source: e.target.value });
-                                                }}
-                                                className="w-full bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none"
-                                            >
-                                                <option value="">-- No Specific Source --</option>
-                                                {availableSources.map((s,i) => <option key={i} value={s}>{s}</option>)}
-                                            </select>
-                                        </div>
-                                        <div>
-                                            <label className="text-xs text-gold9/60 block mb-2">PROMPT</label>
-                                            <textarea
-                                                value={typeof draftTask.action.value === 'object' ? draftTask.action.value.prompt : draftTask.action.value}
-                                                onChange={(e) => {
-                                                    const current = typeof draftTask.action.value === 'object' ? draftTask.action.value : { source: null };
-                                                    updateDraft('action.value', { ...current, prompt: e.target.value });
-                                                }}
-                                                className="w-full h-32 bg-black/80 border border-gold9/30 rounded p-3 text-sm text-gold9 focus:border-gold9 outline-none resize-none"
-                                                placeholder="Describe what Jules should do..."
-                                            />
-                                        </div>
-                                    </>
-                                )}
 
                                 {(draftTask.action.type === 'notify' || draftTask.action.type === 'run_script') && (
                                     <div>
@@ -417,10 +372,7 @@ const NodeCanvas = ({ task, selectedNode, onSelectNode }) => {
                     <Play size={24} className="mx-auto mb-2 text-blue-400" />
                     <div className="text-sm font-bold text-blue-200">{task.action.type.toUpperCase()}</div>
                     <div className="text-[10px] text-blue-400/50 truncate max-w-[150px] mx-auto">
-                         {task.action.type === 'jules_task'
-                            ? (typeof task.action.value === 'object' ? task.action.value.prompt : task.action.value)
-                            : task.action.value
-                         }
+                         {task.action.value}
                     </div>
                 </div>
                  {/* Input Port */}
