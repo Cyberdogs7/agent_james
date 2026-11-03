@@ -53,3 +53,6 @@ test_workspace_aio_large/
 
 # Milkdrop presets (raw .milk files, converted JSON is committed)
 src/presets/cream-of-the-crop-raw/
+
+# Playwright MCP snapshots/logs (local debugging artifacts)
+.playwright-mcp/
