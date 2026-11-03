@@ -271,7 +271,7 @@ gen_audiobook_script_tool = {
 
 gen_audiobook_tool = {
     "name": "gen_audiobook",
-    "description": "Generate multi-voice audio via ElevenLabs. This tool returns an instruction prompt directing you to perform this task.",
+    "description": "Generate multi-voice audio (legacy batch path: backend/autonovel/gen_audiobook.py). This tool returns an instruction prompt directing you to perform this task.",
     "parameters": {
         "type": "OBJECT",
         "properties": {

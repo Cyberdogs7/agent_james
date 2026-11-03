@@ -7,8 +7,11 @@ so the backend boots in text-only mode without extra installs.
 
 Recommended local defaults (RTX 4060 Ti 16GB, see docs/ARCHITECTURE.md):
 - STT: faster-whisper (distil-large-v3 / large-v3-turbo) + silero-vad gate
-- TTS: Kokoro-82M (native 24kHz), fallback Piper (CPU) / ElevenLabs API hybrid
-- LLM: backend.llm_client.LLMClient (OpenRouter → LM Studio fallback)
+- TTS: Qwen3-TTS clone (custom voices) → Kokoro-82M (native 24kHz) → Piper (CPU)
+- LLM: backend.llm_client.LLMClient raw httpx (OpenRouter → LM Studio fallback)
+
+ElevenLabs is NOT in this chain. The only ElevenLabs code left in the repo is
+the legacy batch audiobook (backend/autonovel/gen_audiobook.py, opt-in).
 """
 
 import os
@@ -63,17 +66,21 @@ class STTProvider:
 
 
 class TTSProvider:
-    """Text-to-speech. Priority: ElevenLabs API (if key) → Kokoro local → Piper → none."""
+    """Text-to-speech. Priority: Qwen3-TTS clone → Kokoro local → Piper → none."""
 
     def __init__(self):
-        self.backend = os.getenv("JAMES_TTS_BACKEND", "auto").lower()  # auto|elevenlabs|kokoro|piper|none
+        self.backend = os.getenv("JAMES_TTS_BACKEND", "auto").lower()  # auto|qwen|kokoro|piper|none
         self.voice = os.getenv("JAMES_TTS_VOICE", "af_heart")
 
     def selected_backend(self):
         if self.backend != "auto":
             return self.backend
-        if os.getenv("ELEVENLABS_API_KEY"):
-            return "elevenlabs"
+        try:
+            from backend.qwen_tts import QwenTTS
+            if QwenTTS().is_available():
+                return "qwen"
+        except Exception:
+            pass
         try:
             __import__("kokoro")
             return "kokoro"
@@ -92,29 +99,17 @@ class TTSProvider:
     async def synthesize(self, text):
         """Text → 24kHz mono PCM16 bytes. Returns b"" if no backend."""
         backend = self.selected_backend()
-        if backend == "elevenlabs":
-            return await self._elevenlabs(text)
+        if backend == "qwen":
+            return await self._qwen(text)
         if backend == "kokoro":
             return await self._kokoro(text)
         if backend == "piper":
             return await self._piper(text)
         return b""
 
-    async def _elevenlabs(self, text):
-        from elevenlabs.client import ElevenLabs
-        import asyncio
-        api_key = os.getenv("ELEVENLABS_API_KEY", "")
-        voice_id = os.getenv("ELEVENLABS_VOICE_ID", "")
-        if not api_key or not voice_id:
-            return b""
-        def _run():
-            client = ElevenLabs(api_key=api_key)
-            audio = client.text_to_speech.convert(text=text, voice_id=voice_id)
-            out = b""
-            for chunk in audio:
-                out += chunk if isinstance(chunk, bytes) else bytes(chunk)
-            return out
-        return await asyncio.to_thread(_run)
+    async def _qwen(self, text):
+        from backend.qwen_tts import QwenTTS
+        return await QwenTTS().synthesize(text)
 
     async def _kokoro(self, text):
         import asyncio

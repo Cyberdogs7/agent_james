@@ -46,7 +46,8 @@ Voice-first Electron + React + Python assistant.
 - `backend/llm_client.py`: raw `POST {base}/chat/completions` via httpx (sync+async, SSE streaming); `response_format` never sent (local servers 400) — prompt-enforced JSON + `_extract_json` retries; `max_tokens` omitted by default (`JAMES_MAX_OUTPUT_TOKENS`); OpenAI-shaped `_Resp` shim keeps callers unchanged; chain `JAMES_LLM_*` override → OpenRouter → LM Studio → Ollama `/v1`
 - `backend/local_web_agent.py`, `cli_harness.py`, `backend/embeddings.py`: ex-`AsyncOpenAI` call sites → raw `LLMClient`/httpx
 - `backend/agent_james.py`: no top-level genai import/client; Gemini Live disabled; text chat via `handle_text_chat()` (LLMClient + tools + optional TTS); `_session_runner` runs background LLM tasks in text mode
-- `backend/voice_pipeline.py` (new): STT (`faster-whisper` opt-in, default none/frontend text) + TTS (auto: ElevenLabs → Kokoro → Piper → none, native 24kHz) + `get_llm()` (LLMClient)
+- `backend/voice_pipeline.py`: STT (`faster-whisper` opt-in, default none/frontend text) + TTS (auto: Qwen3-TTS clone → Kokoro → Piper → none) + `get_llm()` (LLMClient)
+- `backend/qwen_tts.py` (new): Qwen3-TTS clone voices (ported anime `studio/tts_runner.py` protocol). Ref WAV + transcript → `.pt` prompt cache; resident `--serve` worker (one 1.7B model resident, idle-timeout releases VRAM); output normalized to 24kHz PCM16 (stdlib only). Voice file: `JAMES_VOICE_FILE` (`voices/james.json`). ElevenLabs gone from this path (legacy batch audiobook only).
 - `backend/embeddings.py` (new): local hashed embeddings (no network); optional OpenAI-compatible `api_embed`
 - `backend/memory_manager.py`: local embeddings, keyword fallback preserved
 - `backend/automation_engine.py`: self-heal via LLMClient `chat_completion`
@@ -54,7 +55,7 @@ Voice-first Electron + React + Python assistant.
 - `backend/cad_agent.py`: codegen via LLMClient (`JAMES_CAD_MODEL` / `OPENROUTER_MODEL`)
 - `backend/web_agent.py`: deprecated stub (raises → use `LocalWebAgent`); Gemini `computer_use` gone
 - `backend/mcp_client.py` / `local_web_agent.py` / `cli_harness.py`: schema converters renamed (`convert_to_tool_schema`, `convert_tools_to_openai`, aliases kept)
-- `.env.example`: `GEMINI_API_KEY` → `OPENROUTER_API_KEY/MODEL`, `LM_STUDIO_*`, `OLLAMA_*`, `JAMES_STT_*`, `JAMES_TTS_*`, `ELEVENLABS_*`
+- `.env.example`: `OPENROUTER_API_KEY/MODEL`, `LM_STUDIO_*`, `OLLAMA_*`, `JAMES_STT_*`, `JAMES_TTS_*` (+ `JAMES_VOICE_FILE`, Qwen venv/model/sox). No `ELEVENLABS_*` (legacy audiobook only).
 - `SettingsWindow.jsx`: API keys list updated (no GEMINI)
 - Tests: google mocks removed; CAD skips check `OPENROUTER_API_KEY`/`LM_STUDIO_BASE_URL`; web_agent tests assert deprecation; proactive tests mock `llm_client.chat_completion`
 

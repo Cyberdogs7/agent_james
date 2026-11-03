@@ -16,7 +16,7 @@ Agent James is a sophisticated AI assistant designed for multimodal interaction.
 
 | Feature | Description | Technology |
 |---------|-------------|------------|
-| **🗣️ Hybrid Voice** | Text chat + optional STT/TTS (Kokoro / ElevenLabs) | STT→LLM→TTS pipeline |
+| **🗣️ Hybrid Voice** | Text chat + optional STT/TTS (Qwen3-TTS clone / Kokoro) | STT→LLM→TTS pipeline |
 | **🧊 Parametric CAD** | Editable 3D model generation from voice prompts | `build123d` → STL |
 | **🖨️ 3D Printing** | Slicing and wireless print job submission | OrcaSlicer + Moonraker/OctoPrint |
 | **🖐️ Minority Report UI** | Gesture-controlled window manipulation | MediaPipe Hand Tracking |
@@ -257,7 +257,7 @@ Agent James uses OpenRouter (cloud) or LM Studio / Ollama (local) for intelligen
 1. Copy `.env.example` to `.env` in the `agent_james` folder (same level as `README.md`).
 2. Cloud (recommended): set `OPENROUTER_API_KEY` (+ optional `OPENROUTER_MODEL`). Get a key at https://openrouter.ai/keys.
 3. Local fallback: run LM Studio (`http://localhost:1234/v1`) or Ollama (`http://localhost:11434`) — no key needed.
-4. Voice (optional): leave `JAMES_STT_BACKEND=none` for text chat, or set `faster-whisper` for local STT; set `JAMES_TTS_BACKEND=auto` (ElevenLabs → Kokoro → Piper → none).
+4. Voice (optional): leave `JAMES_STT_BACKEND=none` for text chat, or set `faster-whisper` for local STT; set `JAMES_TTS_BACKEND=auto` (Qwen3-TTS clone → Kokoro → Piper → none). For a custom James voice, record ~10-30s + transcript and set `JAMES_VOICE_FILE` (see `.env.example`).
 
 > **Note**: Keep keys private! Never commit your `.env` file to Git.
 
@@ -355,7 +355,7 @@ npm run dev
 **Symptoms**: Notice "Voice realtime (Gemini Live) is disabled".
 
 **Solution**:
-Gemini Live was removed with `google-genai`. Text chat works via hybrid LLM. For voice, configure `JAMES_STT_BACKEND` (faster-whisper) and `JAMES_TTS_BACKEND` (auto → ElevenLabs/Kokoro/Piper) — see `.env.example` and `backend/voice_pipeline.py`.
+Gemini Live was removed with `google-genai`. Text chat works via hybrid LLM. For voice, configure `JAMES_STT_BACKEND` (faster-whisper) and `JAMES_TTS_BACKEND` (auto → Qwen3-TTS clone/Kokoro/Piper) — see `.env.example`, `backend/voice_pipeline.py`, and `backend/qwen_tts.py`.
 
 ---
 
@@ -445,7 +445,8 @@ Contributions are welcome! Here's how:
 
 ## 🙏 Acknowledgments
 
-- **[Kokoro](https://github.com/hexgrad/kokoro)** / **[ElevenLabs](https://elevenlabs.io/)** — Local/hybrid TTS for voice output
+- **[Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)** — Voice cloning for custom voices (clone ref + transcript)
+- **[Kokoro](https://github.com/hexgrad/kokoro)** — Local TTS fallback for voice output
 - **[faster-whisper](https://github.com/SYSTRAN/faster-whisper)** — Local STT option
 - **[build123d](https://github.com/gumyr/build123d)** — Modern parametric CAD library
 - **[MediaPipe](https://developers.google.com/mediapipe)** — Hand tracking, gesture recognition, and face authentication

@@ -256,10 +256,9 @@ const SettingsWindow = ({
                         'LM_STUDIO_BASE_URL',
                         'LM_STUDIO_MODEL',
                         'OLLAMA_BASE_URL',
-                        'ELEVENLABS_API_KEY',
-                        'ELEVENLABS_VOICE_ID',
                         'JAMES_STT_BACKEND',
                         'JAMES_TTS_BACKEND',
+                        'JAMES_VOICE_FILE',
 
                         'TRELLO_API_KEY',
                         'GIPHY_API_KEY'
