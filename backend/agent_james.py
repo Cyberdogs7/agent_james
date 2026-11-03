@@ -1991,11 +1991,22 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
             _tts, _tts_on = None, False
         _consumer = asyncio.create_task(_tts_consumer()) if _tts_on else None
 
+        _defer_spoken = False
+
         def _feed_streamed(full_text):
             """Queue newly completed speakable sentences from streamed text."""
-            nonlocal _spoken_chars
+            nonlocal _spoken_chars, _defer_spoken
             if "<tool_call>" in full_text or "<function" in full_text:
                 return  # tool-call text is never spoken; parsed later
+            if "<DEFER>" in full_text:
+                # Voice the ack once, in full (acks are a single sentence).
+                if not _defer_spoken and _consumer is not None:
+                    import re as _re3
+                    _m = _re3.search(r"<DEFER>(.*?)</DEFER>", full_text, flags=_re3.DOTALL)
+                    if _m and _m.group(1).strip():
+                        _defer_spoken = True
+                        speak_queue.put_nowait(_m.group(1).strip())
+                return
             _sents = _split(full_text)
             if not _sents:
                 return
@@ -2007,82 +2018,131 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 if _new and _consumer is not None:
                     speak_queue.put_nowait(_new)
 
-        reply = ""
-        for _turn in range(5):
-            _t0 = _time.time()
-            _stream_ok = False
-            try:
-                _spoken_chars = 0
-                resp = await llm.achat_stream_full(
-                    messages=messages, tools=openai_tools, temperature=0.2,
-                    on_progress=lambda _n, _t: _feed_streamed(_t),
-                )
-                _stream_ok = True
-            except Exception as e:
+        async def _run_loop(_msgs, _tls, _temp, _speak, _tag):
+            """One tool-calling loop (max 5 turns). Returns final reply text."""
+            nonlocal _spoken_chars
+            _reply = ""
+            for _turn in range(5):
+                _t0 = _time.time()
+                _stream_ok = False
+                try:
+                    if _speak:
+                        _spoken_chars = 0
+                    resp = await llm.achat_stream_full(
+                        messages=_msgs, tools=_tls, temperature=_temp,
+                        on_progress=(
+                            lambda _n, _t: _feed_streamed(_t) if _speak else None
+                        ),
+                    )
+                    _stream_ok = True
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[JAMES DEBUG] [LLM] {_tag} stream failed, falling back: {e}")
+                    try:
+                        resp = await llm.chat_completion(messages=_msgs, tools=_tls, temperature=_temp)
+                    except Exception as e2:
+                        _reply = f"LLM error: {e2}"
+                        break
+                msg = resp.choices[0].message
                 if INCLUDE_RAW_LOGS:
-                    print(f"[JAMES DEBUG] [LLM] stream failed, falling back: {e}")
-                try:
-                    resp = await llm.chat_completion(messages=messages, tools=openai_tools, temperature=0.2)
-                except Exception as e2:
-                    reply = f"LLM error: {e2}"
-                    break
-            msg = resp.choices[0].message
-            if INCLUDE_RAW_LOGS:
-                print(f"[JAMES DEBUG] [LLM] turn {_turn + 1} took {_time.time() - _t0:.1f}s "
-                      f"(stream={_stream_ok}), "
-                      f"native_calls={len(getattr(msg, 'tool_calls', None) or [])}")
-            messages.append(msg.to_dict() if hasattr(msg, "to_dict") else msg)
-            pending = []
-            if getattr(msg, "tool_calls", None):
-                import json as _json
-                for call in msg.tool_calls:
+                    print(f"[JAMES DEBUG] [LLM] {_tag} turn {_turn + 1} took "
+                          f"{_time.time() - _t0:.1f}s (stream={_stream_ok}), "
+                          f"native_calls={len(getattr(msg, 'tool_calls', None) or [])}")
+                _msgs.append(msg.to_dict() if hasattr(msg, "to_dict") else msg)
+                pending = []
+                if getattr(msg, "tool_calls", None):
+                    import json as _json
+                    for call in msg.tool_calls:
+                        try:
+                            args = _json.loads(call.function.arguments)
+                        except Exception:
+                            args = {}
+                        pending.append((call.id, call.function.name, args))
+                else:
+                    # Fallback: some models emit pseudo-XML <tool_call> blocks as text.
                     try:
-                        args = _json.loads(call.function.arguments)
-                    except Exception:
-                        args = {}
-                    pending.append((call.id, call.function.name, args))
-            else:
-                # Fallback: some models emit pseudo-XML <tool_call> blocks as text.
-                try:
-                    from backend.llm_client import extract_xml_tool_calls as _xt
-                except ImportError:
-                    try:
-                        from llm_client import extract_xml_tool_calls as _xt
+                        from backend.llm_client import extract_xml_tool_calls as _xt
                     except ImportError:
-                        _xt = None
-                if _xt is not None:
-                    for _n, _a in _xt(msg.content or ""):
-                        pending.append((f"xml-{_turn}-{_n}", _n, _a))
-                    if pending and INCLUDE_RAW_LOGS:
-                        print(f"[JAMES DEBUG] [LLM] parsed {len(pending)} XML tool call(s) from text")
-            if pending:
-                import json as _json2
-                for _cid, _name, _args in pending:
-                    try:
-                        if self.tool_registry.is_confirmation_required(_name):
-                            result = f"Tool '{_name}' requires confirmation in voice mode; skipping."
-                        else:
-                            result = await self.tool_registry.dispatch(_name, _args)
-                    except Exception as e:
-                        result = f"Error: {e}"
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": _cid,
-                        "name": _name,
-                        "content": str(result),
-                    })
-                continue
-            reply = msg.content or ""
-            # Speak the trailing sentence the streamer held back.
-            if _consumer is not None and reply:
-                _tail = reply[_spoken_chars:].strip()
-                if _tail and "<tool_call>" not in _tail and "<function" not in _tail:
-                    speak_queue.put_nowait(_tail)
-            break
-        # Never display/speak unparsed pseudo-XML tool blocks.
-        if reply and "<tool_call>" in reply:
-            import re as _re
-            reply = _re.sub(r"<tool_call>.*?</tool_call>", "", reply, flags=_re.DOTALL).strip()
+                        try:
+                            from llm_client import extract_xml_tool_calls as _xt
+                        except ImportError:
+                            _xt = None
+                    if _xt is not None:
+                        for _n, _a in _xt(msg.content or ""):
+                            pending.append((f"xml-{_turn}-{_n}", _n, _a))
+                        if pending and INCLUDE_RAW_LOGS:
+                            print(f"[JAMES DEBUG] [LLM] parsed {len(pending)} XML tool call(s) from text")
+                if pending:
+                    import json as _json2
+                    for _cid, _name, _args in pending:
+                        try:
+                            if self.tool_registry.is_confirmation_required(_name):
+                                result = f"Tool '{_name}' requires confirmation in voice mode; skipping."
+                            else:
+                                result = await self.tool_registry.dispatch(_name, _args)
+                        except Exception as e:
+                            result = f"Error: {e}"
+                        _msgs.append({
+                            "role": "tool",
+                            "tool_call_id": _cid,
+                            "name": _name,
+                            "content": str(result),
+                        })
+                    continue
+                _reply = msg.content or ""
+                # Speak the trailing sentence the streamer held back.
+                if _speak and _consumer is not None and _reply:
+                    _tail = _reply[_spoken_chars:].strip()
+                    if _tail and all(_t not in _tail for _t in ("<tool_call>", "<function", "<DEFER")):
+                        speak_queue.put_nowait(_tail)
+                break
+            # Never display/speak unparsed pseudo-XML tool blocks.
+            if _reply and "<tool_call>" in _reply:
+                import re as _re
+                _reply = _re.sub(r"<tool_call>.*?</tool_call>", "", _reply, flags=_re.DOTALL).strip()
+            return _reply
+
+        # --- Dual processing: fast talker up front, deep thinker behind. ---
+        # Talker (slim prompt, no tools) answers chitchat directly or defers
+        # with <DEFER>ack</DEFER>; thinker runs concurrently and the talker
+        # presents its result. First audio lands in ~2s either way.
+        _TALKER_SYSTEM = (
+            "You are James, a witty British voice assistant speaking aloud. "
+            "Keep replies to 1-2 SHORT sentences (they are spoken). "
+            "If the request needs tools, data lookup, or multi-step work, do NOT "
+            "answer — reply ONLY: <DEFER>one brief ack like 'On it — checking now.'</DEFER>"
+        )
+        _talk_msgs = [
+            {"role": "system", "content": _TALKER_SYSTEM},
+            {"role": "user", "content": text},
+        ]
+        _thinker_task = asyncio.create_task(
+            _run_loop(messages, openai_tools, 0.2, False, "think")
+        )
+        _talk_raw = await _run_loop(_talk_msgs, None, 0.7, True, "talk")
+        import re as _re2
+        _deferred = "<DEFER>" in _talk_raw
+        _talk_clean = _re2.sub(r"<DEFER>.*?</DEFER>", "", _talk_raw, flags=_re2.DOTALL).strip()
+        if _deferred:
+            try:
+                reply = await _thinker_task
+            except Exception as e:
+                reply = (_talk_clean or "On it.") + f" (background task failed: {e})"
+            if reply and not reply.startswith("LLM error"):
+                # Presenter: talker voice delivers the thinker's result briefly.
+                _present_msgs = [
+                    {"role": "system", "content": _TALKER_SYSTEM},
+                    {"role": "user", "content":
+                     f"Original request: {text}\nResult: {reply}\n"
+                     f"Present this result aloud in 2 short sentences."},
+                ]
+                await _run_loop(_present_msgs, None, 0.7, True, "present")
+        else:
+            try:
+                _thinker_task.cancel()
+            except Exception:
+                pass
+            reply = _talk_clean or _talk_raw
         if self.project_manager and reply:
             try:
                 self.project_manager.log_chat("James", reply)
