@@ -52,7 +52,7 @@ def _effective_output_cap(caller: int | None) -> int | None:
 
 def _extract_json(text: str) -> Dict[str, Any]:
     """Best-effort JSON extraction (direct parse, code fences, balanced object)."""
-    text = (text or "").strip()
+    text = _clean_content(text or "").strip()
     try:
         obj = json.loads(text)
         if isinstance(obj, dict):
@@ -84,6 +84,30 @@ def _extract_json(text: str) -> Dict[str, Any]:
                         pass
                     break
     raise RawLLMError(f"No valid JSON in model output: {text[:200]!r}")
+
+
+def _clean_content(text: str) -> str:
+    """Strip reasoning/format control tokens local models leak into output.
+
+    - Harmony (gpt-oss style): ``<|channel|>commentary ... <|channel|>final``
+      — keep only the final channel, drop analysis/commentary + preamble.
+    - All other ``<|...|>`` control tokens (``message``, ``end``, ``return``,
+      ``start``, ``call``, ``constrain``) are removed.
+    - ``<think>...</think>`` reasoning blocks are dropped (never spoken).
+    """
+    if not text:
+        return ""
+    final = text.rfind("<|channel|>final")
+    if final != -1:
+        text = text[final + len("<|channel|>final"):]
+        for ender in ("<|end|>", "<|return|>", "<|eot|>"):
+            cut = text.find(ender)
+            if cut != -1:
+                text = text[:cut]
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # Well-formed <|channel|>/<|message|>/... + malformed single-bracket <channel|>
+    text = re.sub(r"<\|?[A-Za-z][A-Za-z0-9_]*\|>", "", text)
+    return text.strip()
 
 
 def _to_dict_message(m: Any) -> Dict[str, Any]:
@@ -205,7 +229,7 @@ class RawLLMClient:
             msg = (data.get("choices") or [{}])[0].get("message") or {}
         except Exception:
             msg = {}
-        content = msg.get("content") or ""
+        content = _clean_content(msg.get("content") or "")
         calls: List[_ToolCall] = []
         for tc in msg.get("tool_calls") or []:
             fn = tc.get("function") or {}
