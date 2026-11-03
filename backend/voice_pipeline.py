@@ -66,15 +66,25 @@ class STTProvider:
 
 
 class TTSProvider:
-    """Text-to-speech. Priority: Qwen3-TTS clone → Kokoro local → Piper → none."""
+    """Text-to-speech. Priority: Chatterbox clone → Qwen → Kokoro → Piper → none.
+
+    Chatterbox is the realtime backend (~1.5s/chunk, James's cloned voice);
+    Qwen is the slower quality path (2.4s/chunk, designed/cloned voice).
+    """
 
     def __init__(self):
-        self.backend = os.getenv("JAMES_TTS_BACKEND", "auto").lower()  # auto|qwen|kokoro|piper|none
+        self.backend = os.getenv("JAMES_TTS_BACKEND", "auto").lower()  # auto|chatterbox|qwen|kokoro|piper|none
         self.voice = os.getenv("JAMES_TTS_VOICE", "af_heart")
 
     def selected_backend(self):
         if self.backend != "auto":
             return self.backend
+        try:
+            from backend.chatterbox_tts import is_available as _cb
+            if _cb():
+                return "chatterbox"
+        except Exception:
+            pass
         try:
             from backend.qwen_tts import QwenTTS
             if QwenTTS().is_available():
@@ -99,6 +109,8 @@ class TTSProvider:
     async def synthesize(self, text):
         """Text → 24kHz mono PCM16 bytes. Returns b"" if no backend."""
         backend = self.selected_backend()
+        if backend == "chatterbox":
+            return await self._chatterbox(text)
         if backend == "qwen":
             return await self._qwen(text)
         if backend == "kokoro":
@@ -106,6 +118,10 @@ class TTSProvider:
         if backend == "piper":
             return await self._piper(text)
         return b""
+
+    async def _chatterbox(self, text):
+        from backend.chatterbox_tts import synthesize as _synth
+        return await _synth(text)
 
     async def _qwen(self, text):
         from backend.qwen_tts import QwenTTS

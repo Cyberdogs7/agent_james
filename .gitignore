@@ -8,6 +8,8 @@ venv/
 env/
 
 # Agent James Specific Local Data
+voices/*.wav
+voices/*.pt
 backend/reference.jpg
 backend/settings.json
 backend/last_cad_generation.json

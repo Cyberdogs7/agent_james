@@ -3,7 +3,10 @@ uvicorn
 python-socketio[asyncio_client]
 python-multipart
 # LLM via raw httpx (OpenAI-compatible: OpenRouter / LM Studio / Ollama) — no SDK
-# local/hybrid voice: faster-whisper + Kokoro/Piper opt-in (see .env.example)
+# Voice: Chatterbox realtime clone (MIT) + Qwen3-TTS design/clone (external venv, see .env.example)
+# NOTE: torch needs the CUDA index: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+chatterbox-tts
+onnxruntime
 # Computer Vision & Audio
 opencv-python-headless
 pillow

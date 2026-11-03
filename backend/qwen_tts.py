@@ -347,3 +347,62 @@ class QwenTTS:
 
     async def synthesize(self, text: str) -> bytes:
         return await asyncio.to_thread(self.synthesize_sync, text)
+
+
+#: One-time reference script (~30s spoken): James persona + phonetic coverage
+#: (pangram, sibilants, plosives, varied vowels) so the realtime cloner gets a
+#: complete picture of the designed voice from a single file.
+REFERENCE_SCRIPT = [
+    "Hello. I am James, your personal assistant.",
+    "I can manage your schedule, control your smart home, and help with everyday tasks.",
+    "The quick brown fox jumps over the lazy dog near the quiet harbor.",
+    "Clear skies and smooth seas make for pleasant sailing on Sunday afternoons.",
+    "Should you need anything, simply ask, and I will take care of the rest without delay.",
+]
+
+
+def build_reference_voice(out_dir: str | Path | None = None) -> dict:
+    """Render REFERENCE_SCRIPT with the designed voice → ref wav + transcript.
+
+    One-time GPU job (~10-15 min: model load + ~6 design calls). Output:
+    ``voices/james_ref.wav`` (24kHz mono16) + ``voices/james_ref.txt``.
+    Returns {"wav": str, "txt": str, "seconds": float}.
+    """
+    root = _repo_root()
+    vdir = Path(out_dir) if out_dir else (root / "voices")
+    vdir.mkdir(parents=True, exist_ok=True)
+    tts = QwenTTS()
+    chunks: list[bytes] = []
+    for i, sentence in enumerate(REFERENCE_SCRIPT, 1):
+        print(f"[ref] {i}/{len(REFERENCE_SCRIPT)}: {sentence[:50]}...", flush=True)
+        chunks.append(tts.synthesize_sync(sentence))
+    pcm = b"".join(chunks)
+    wav_path = vdir / "james_ref.wav"
+    with wave.open(str(wav_path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(TARGET_SR)
+        w.writeframes(pcm)
+    txt_path = vdir / "james_ref.txt"
+    txt_path.write_text(" ".join(REFERENCE_SCRIPT), encoding="utf-8")
+    tts.stop()
+    seconds = len(pcm) / 2 / TARGET_SR
+    print(f"[ref] wrote {wav_path} ({seconds:.1f}s) + {txt_path}", flush=True)
+    return {"wav": str(wav_path), "txt": str(txt_path), "seconds": seconds}
+
+
+if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(description="Qwen3-TTS utilities for Agent James")
+    ap.add_argument("--build-ref", action="store_true",
+                    help="Render the 30s designed James reference (one-time GPU job)")
+    ap.add_argument("--say", default="",
+                    help="Synthesize one line with the active voice (debug)")
+    args = ap.parse_args()
+    if args.build_ref:
+        print(build_reference_voice())
+    elif args.say:
+        data = asyncio.run(QwenTTS().synthesize(args.say))
+        print(f"PCM bytes: {len(data)} ({len(data) / 2 / TARGET_SR:.1f}s @ 24kHz)")
+    else:
+        ap.print_help()
