@@ -2673,16 +2673,6 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 tasks.append(asyncio.create_task(self._context_nudging_task()))
                 tasks.append(asyncio.create_task(self.proactive_agent.run()))
 
-                notice = (
-                    "Voice realtime (Gemini Live) is disabled — google-genai removed. "
-                    "Text chat is active via hybrid LLM (OpenRouter/LM Studio). "
-                    "Realtime STT→LLM→TTS streams in Phase 2 (see backend/voice_pipeline.py)."
-                )
-                if self.on_transcription:
-                    try:
-                        self.on_transcription({"sender": "James", "text": notice})
-                    except Exception:
-                        pass
                 if start_message:
                     await self.handle_text_chat(start_message)
 

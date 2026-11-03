@@ -187,5 +187,6 @@
     "gif_tone_preference": "witty",
     "default_music_playback_mode": "radio",
     "verbal_interaction_level": "minimal_unobtrusive",
-    "avoid_verbal_interruptions_during_playback_and_idle": true
+    "avoid_verbal_interruptions_during_playback_and_idle": true,
+    "sea_description_length": "exactly five short sentences"
 }
