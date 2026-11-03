@@ -1989,6 +1989,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         _spoken_sents = 0
 
         async def _tts_consumer():
+            try:
+                from backend.voice_pipeline import normalize_for_speech as _norm
+            except ImportError:
+                try:
+                    from voice_pipeline import normalize_for_speech as _norm
+                except ImportError:
+                    _norm = lambda s: s
             _n = 0
             while True:
                 _sentence = await speak_queue.get()
@@ -1997,7 +2004,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 _n += 1
                 _c0 = _time.time()
                 try:
-                    _pcm = await _tts.synthesize(_sentence)
+                    _pcm = await _tts.synthesize(_norm(_sentence))
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
                         print(f"[JAMES DEBUG] [ERR] TTS chunk {_n} failed: {e}")

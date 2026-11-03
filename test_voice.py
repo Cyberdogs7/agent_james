@@ -40,7 +40,7 @@ def play_wav(path: str = OUT_WAV):
 
 
 async def say(text: str, play: bool = True):
-    from backend.voice_pipeline import TTSProvider, split_speech_chunks
+    from backend.voice_pipeline import TTSProvider, split_speech_chunks, normalize_for_speech
     tts = TTSProvider()
     print(f"[test] TTS backend: {tts.selected_backend()}")
     if not tts.is_available():
@@ -48,8 +48,9 @@ async def say(text: str, play: bool = True):
         return
     full = b""
     for i, chunk in enumerate(split_speech_chunks(text), 1):
-        print(f"[test] synth chunk {i}: {chunk[:60]}...")
-        pcm = await tts.synthesize(chunk)
+        spoken = normalize_for_speech(chunk)
+        print(f"[test] synth chunk {i}: {spoken[:70]}...")
+        pcm = await tts.synthesize(spoken)
         full += pcm
     if not full:
         print("[test] Got no audio back.")
@@ -95,6 +96,7 @@ async def chat():
         print(f"\nJames: {reply}")
         full = b""
         for chunk in split_speech_chunks(reply):
+            chunk = normalize_for_speech(chunk)
             try:
                 full += await tts.synthesize(chunk)
             except Exception as e:

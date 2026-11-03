@@ -10,13 +10,12 @@ import asyncio
 import random
 import threading
 
+# Kept small on purpose: the warm pass runs at power-on and each clip costs
+# a full TTS render (slow while the GPU is shared). 3 clips ≈ ready in ~10s.
 ACK_PHRASES = [
     "On it.",
     "Checking now.",
-    "One moment.",
     "Right away, Sir.",
-    "Looking into that.",
-    "Give me a moment.",
 ]
 
 _cache: list[bytes] = []
