@@ -349,6 +349,30 @@ class QwenTTS:
         return await asyncio.to_thread(self.synthesize_sync, text)
 
 
+_MANAGER: "QwenTTS | None" = None
+_MANAGER_LOCK = threading.Lock()
+
+
+def _manager() -> "QwenTTS":
+    """Process-wide singleton: one resident worker, no reload per chunk."""
+    global _MANAGER
+    with _MANAGER_LOCK:
+        if _MANAGER is None:
+            _MANAGER = QwenTTS()
+        return _MANAGER
+
+
+def is_available() -> bool:
+    try:
+        return _manager().is_available()
+    except Exception:
+        return False
+
+
+async def synthesize(text: str) -> bytes:
+    return await _manager().synthesize(text)
+
+
 #: One-time reference script (~30s spoken): James persona + phonetic coverage
 #: (pangram, sibilants, plosives, varied vowels) so the realtime cloner gets a
 #: complete picture of the designed voice from a single file.

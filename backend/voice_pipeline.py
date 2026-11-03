@@ -108,19 +108,25 @@ class STTProvider:
 
 
 class TTSProvider:
-    """Text-to-speech. Priority: Chatterbox clone → Qwen → Kokoro → Piper → none.
+    """Text-to-speech. Priority: OmniVoice → Chatterbox → Qwen → Kokoro → Piper → none.
 
-    Chatterbox is the realtime backend (~1.5s/chunk, James's cloned voice);
-    Qwen is the slower quality path (2.4s/chunk, designed/cloned voice).
+    OmniVoice is primary (trial winner: stable clone, ~1.3s/chunk, lowest GPU
+    VRAM, frozen prompt cache). Chatterbox stays as realtime fallback.
     """
 
     def __init__(self):
-        self.backend = os.getenv("JAMES_TTS_BACKEND", "auto").lower()  # auto|chatterbox|qwen|kokoro|piper|none
+        self.backend = os.getenv("JAMES_TTS_BACKEND", "auto").lower()  # auto|omni|chatterbox|qwen|kokoro|piper|none
         self.voice = os.getenv("JAMES_TTS_VOICE", "af_heart")
 
     def selected_backend(self):
         if self.backend != "auto":
             return self.backend
+        try:
+            from backend.omni_tts import is_available as _om
+            if _om():
+                return "omni"
+        except Exception:
+            pass
         try:
             from backend.chatterbox_tts import is_available as _cb
             if _cb():
@@ -151,6 +157,8 @@ class TTSProvider:
     async def synthesize(self, text):
         """Text → 24kHz mono PCM16 bytes. Returns b"" if no backend."""
         backend = self.selected_backend()
+        if backend == "omni":
+            return await self._omni(text)
         if backend == "chatterbox":
             return await self._chatterbox(text)
         if backend == "qwen":
@@ -161,13 +169,17 @@ class TTSProvider:
             return await self._piper(text)
         return b""
 
+    async def _omni(self, text):
+        from backend.omni_tts import synthesize as _synth
+        return await _synth(text)
+
     async def _chatterbox(self, text):
         from backend.chatterbox_tts import synthesize as _synth
         return await _synth(text)
 
     async def _qwen(self, text):
-        from backend.qwen_tts import QwenTTS
-        return await QwenTTS().synthesize(text)
+        from backend.qwen_tts import synthesize as _synth
+        return await _synth(text)
 
     async def _kokoro(self, text):
         import asyncio
