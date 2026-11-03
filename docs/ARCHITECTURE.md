@@ -2,11 +2,11 @@
 
 > Canonical working knowledge for agents. Read this + `docs/issues/` before starting tasks. Do not rely on chat history.
 > Renamed from A.D.A (Advanced Design Assistant) to **Agent James** — persona: James (British, witty, professional).
-> google-genai/Gemini removed. Raw httpx LLM (OpenRouter/LM Studio/Ollama, no SDK) + local/hybrid voice (STT→LLM→TTS).
+> google-genai/Gemini removed. Raw httpx LLM (opencode-go default, no SDK) + local voice (STT→LLM→TTS).
 
 ## 1. Overview
 Voice-first Electron + React + Python assistant.
-`Raw httpx LLM (LLMClient) + voice_pipeline (STT→LLM→TTS)` → `backend/agent_james.py:AgentJames` → `backend/server.py:FastAPI + Socket.IO :8180` → ~35 specialist agents + React UI.
+`Raw opencode-go LLM (LLMClient) + voice_pipeline (STT→LLM→TTS)` → `backend/agent_james.py:AgentJames` → `backend/server.py:FastAPI + Socket.IO :8180` → ~35 specialist agents + React UI.
 
 - Backend entry: `backend/agent_james.py` (`AgentJames`, alias `AudioLoop` for backward compat)
 - Server: `backend/server.py` (Socket.IOano events, `/status`, `/mobile`, static `/projects`)
@@ -43,7 +43,7 @@ Voice-first Electron + React + Python assistant.
 **google-genai removed; `openai` SDK also removed. Raw httpx only (anime pattern).**
 
 - `requirements.txt` / `requirements_safe.txt`: `google-genai` gone, `openai` gone — `httpx` only
-- `backend/llm_client.py`: raw `POST {base}/chat/completions` via httpx (sync+async, SSE streaming); `response_format` never sent (local servers 400) — prompt-enforced JSON + `_extract_json` retries; `max_tokens` omitted by default (`JAMES_MAX_OUTPUT_TOKENS`); OpenAI-shaped `_Resp` shim keeps callers unchanged; chain `JAMES_LLM_*` override → OpenRouter → LM Studio → Ollama `/v1`
+- `backend/llm_client.py`: raw `POST {base}/chat/completions` via httpx (sync+async, SSE streaming); `response_format` never sent (local servers 400) — prompt-enforced JSON + `_extract_json` retries; `max_tokens` omitted by default (`JAMES_MAX_OUTPUT_TOKENS`); OpenAI-shaped `_Resp` shim keeps callers unchanged; Harmony/reasoning control tokens stripped (`_clean_content`); chain `JAMES_LLM_*` override → **opencode-go** (`https://opencode.ai/zen/go/v1`, key from `OPENCODE_GO_KEY` or opencode `auth.json` login, `x-opencode-session` routing header like the Go binary, default `mimo-v2.6-flash`) → OpenRouter → LM Studio → Ollama `/v1`. Pin via `JAMES_LLM_PROVIDER`. Verified: chat + tool_calls live.
 - `backend/local_web_agent.py`, `cli_harness.py`, `backend/embeddings.py`: ex-`AsyncOpenAI` call sites → raw `LLMClient`/httpx
 - `backend/agent_james.py`: no top-level genai import/client; Gemini Live disabled; text chat via `handle_text_chat()` (LLMClient + tools + optional TTS); `_session_runner` runs background LLM tasks in text mode
 - `backend/voice_pipeline.py`: STT (`faster-whisper` opt-in, default none/frontend text) + TTS (auto: Qwen3-TTS clone → Kokoro → Piper → none) + `get_llm()` (LLMClient)

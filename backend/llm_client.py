@@ -10,9 +10,12 @@ Mirrors the pattern used in the anime project
 - SSE streaming supported with ``data:`` parsing and ``[DONE]`` terminator
 - retries with backoff; tool-call passthrough for OpenAI-style ``tools``
 
-Provider chain: explicit ``JAMES_LLM_*`` override → OpenRouter (cloud) →
-LM Studio (local) → Ollama OpenAI-compat ``/v1`` (local).
-Ollama note: point ``LM_STUDIO_BASE_URL=http://localhost:11434/v1`` with
+Provider chain: explicit ``JAMES_LLM_*`` override → opencode-go raw
+(``https://opencode.ai/zen/go/v1``, key from ``OPENCODE_GO_KEY`` or the
+opencode ``auth.json`` login — same endpoint/auth the Go binary uses, plus
+its ``x-opencode-session`` routing header) → OpenRouter → LM Studio →
+Ollama OpenAI-compat ``/v1`` (local).
+Ollama note: point ``LM_STUDIO_BASE_URL=http://localhost:1234/v1`` with
 ``LM_STUDIO_MODEL=llama3`` (or set ``OLLAMA_BASE_URL``/``OLLAMA_MODEL``).
 """
 from __future__ import annotations
@@ -191,6 +194,12 @@ class RawLLMClient:
         self.api_key = api_key or ""
         self.model = model or ""
         self.timeout = float(timeout or 120.0)
+        # opencode-go gateway routes on this (same header the Go binary sends;
+        # value is a routing affinity id, auth stays the Bearer key).
+        self.session_id = ""
+        if "opencode.ai/zen" in self.base_url:
+            import uuid
+            self.session_id = "ses_" + uuid.uuid4().hex[:24]
 
     def _headers(self) -> Dict[str, str]:
         h: Dict[str, str] = {"Content-Type": "application/json"}
@@ -203,6 +212,9 @@ class RawLLMClient:
                 h["HTTP-Referer"] = referer
             if title:
                 h["X-Title"] = title
+        if "opencode.ai/zen" in self.base_url and self.session_id:
+            h["x-opencode-session"] = self.session_id
+            h["x-opencode-client"] = "agent-james"
         return h
 
     def _post(self, body: Dict[str, Any]) -> Dict[str, Any]:
@@ -356,6 +368,23 @@ class RawLLMClient:
             return False
 
 
+def _read_opencode_key() -> str:
+    """opencode-go API key: explicit env first, else the opencode login (auth.json).
+
+    Never logged. Local-only, same credential the Go binary uses.
+    """
+    explicit = os.getenv("OPENCODE_GO_KEY", "")
+    if explicit:
+        return explicit
+    try:
+        auth_path = os.path.join(os.path.expanduser("~"), ".local", "share",
+                                 "opencode", "auth.json")
+        with open(auth_path, encoding="utf-8") as f:
+            return str(json.load(f).get("opencode-go", {}).get("key", "") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
 def _resolve_target(prefer_openrouter: bool = True) -> tuple[str, str, str, str]:
     """Return (base_url, api_key, model, provider)."""
     override_base = os.getenv("JAMES_LLM_BASE_URL", "")
@@ -365,28 +394,55 @@ def _resolve_target(prefer_openrouter: bool = True) -> tuple[str, str, str, str]
                 os.getenv("JAMES_LLM_MODEL", "local-model"),
                 os.getenv("JAMES_LLM_PROVIDER", "custom"))
 
-    openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
-    if prefer_openrouter and openrouter_key:
-        return ("https://openrouter.ai/api/v1", openrouter_key,
+    # Explicit provider pin: opencode-go|openrouter|lm_studio|ollama
+    want = os.getenv("JAMES_LLM_PROVIDER", "").strip().lower()
+
+    def _go():
+        base = os.getenv("OPENCODE_GO_BASE_URL", "https://opencode.ai/zen/go/v1").rstrip("/")
+        model = os.getenv("JAMES_MODEL", os.getenv("OPENCODE_GO_MODEL", "mimo-v2.6-flash"))
+        return (base, _read_opencode_key(), model, "opencode-go")
+
+    def _openrouter():
+        return ("https://openrouter.ai/api/v1", os.getenv("OPENROUTER_API_KEY", ""),
                 os.getenv("JAMES_MODEL", os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")),
                 "openrouter")
 
-    lm_base = os.getenv("LM_STUDIO_BASE_URL", "")
-    lm_model = os.getenv("LM_STUDIO_MODEL", "")
-    ollama_base = os.getenv("OLLAMA_BASE_URL", "")
-    if ollama_base and not lm_base:
+    def _lm_studio():
+        lm_base = os.getenv("LM_STUDIO_BASE_URL", "")
+        lm_model = os.getenv("LM_STUDIO_MODEL", "")
+        return ((lm_base or "http://localhost:1234/v1").rstrip("/"),
+                os.getenv("JAMES_LLM_KEY", "lm-studio"),
+                os.getenv("JAMES_MODEL", lm_model or "local-model"),
+                "lm_studio")
+
+    def _ollama():
+        ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         base = ollama_base.rstrip("/") + ("" if ollama_base.rstrip("/").endswith("/v1") else "/v1")
         return (base, os.getenv("OLLAMA_API_KEY", ""),
                 os.getenv("JAMES_MODEL", os.getenv("OLLAMA_MODEL", "llama3")),
                 "ollama")
-    return ((lm_base or "http://localhost:1234/v1").rstrip("/"),
-            os.getenv("JAMES_LLM_KEY", "lm-studio"),
-            os.getenv("JAMES_MODEL", lm_model or "local-model"),
-            "lm_studio")
+
+    if want == "opencode-go":
+        return _go()
+    if want == "openrouter":
+        return _openrouter()
+    if want == "lm_studio":
+        return _lm_studio()
+    if want == "ollama":
+        return _ollama()
+
+    # Default chain: raw opencode-go API → OpenRouter → LM Studio → Ollama.
+    if _read_opencode_key():
+        return _go()
+    if prefer_openrouter and os.getenv("OPENROUTER_API_KEY", ""):
+        return _openrouter()
+    if os.getenv("OLLAMA_BASE_URL", "") and not os.getenv("LM_STUDIO_BASE_URL", ""):
+        return _ollama()
+    return _lm_studio()
 
 
 class LLMClient:
-    """Shared raw LLM client (OpenRouter → LM Studio → Ollama /v1)."""
+    """Shared raw LLM client (opencode-go → OpenRouter → LM Studio → Ollama /v1)."""
 
     def __init__(self, prefer_openrouter: bool = True):
         self.prefer_openrouter = prefer_openrouter
