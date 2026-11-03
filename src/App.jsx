@@ -42,6 +42,7 @@ import ProjectWindow from "./components/ProjectWindow";
 import WinampVisualizer from "./components/WinampVisualizer";
 import AppLiveClock from "./components/AppLiveClock";
 import MusicPlayerBar from "./components/MusicPlayerBar";
+import VoicePlayback from "./components/VoicePlayback";
 
 const port = import.meta.env.SERVER_PORT || 8180;
 const socket = io(`http://localhost:${port}`);
@@ -1937,6 +1938,12 @@ function App() {
               currentProject={currentProject}
               facePositionRef={facePositionRef}
               reaction={reaction}
+            />
+            {/* Remote voice output: server PCM → browser speakers */}
+            <VoicePlayback
+              socket={socket}
+              speakerId={selectedSpeakerId}
+              muted={isMuted}
             />
           </div>
           {isModularMode && (
