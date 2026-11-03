@@ -4,8 +4,6 @@ import base64
 import aiofiles
 import aiofiles.ospath
 from datetime import datetime
-from google import genai
-from google.genai import types
 from dotenv import load_dotenv
 from typing import Optional
 
@@ -13,9 +11,14 @@ load_dotenv()
 
 class CadAgent:
     def __init__(self, on_thought=None, on_status=None):
-        self.client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
-        # Using Gemini 2.5 Pro for thinking/streaming support
-        self.model = "gemini-3-pro-preview"
+        # Local/hybrid LLM (OpenRouter / LM Studio) — google-genai removed.
+        self.client = None
+        try:
+            from backend.llm_client import get_llm_client
+            self.client = get_llm_client(prefer_openrouter=True)
+        except Exception:
+            self.client = None
+        self.model = os.getenv("JAMES_CAD_MODEL", os.getenv("OPENROUTER_MODEL", "local-model"))
         self.on_thought = on_thought  # Callback for streaming thoughts 
         self.on_status = on_status  # Callback for retry status info
         self.include_raw = os.environ.get("INCLUDE_RAW_LOGS", "False") == "True"
@@ -68,7 +71,7 @@ export_stl(result_part, 'output.stl')
 
     async def generate_prototype(self, prompt: str, output_dir: Optional[str] = None):
         """
-        Generates 3D geometry by asking Gemini for a script, then running it LOCALLY.
+        Generates 3D geometry by asking the configured LLM for a script, then running it LOCALLY.
         Args:
             prompt: User's description of the model to generate.
             output_dir: Directory to save the script and STL. If None, uses temp dir.
@@ -166,26 +169,18 @@ Ensure you still export to 'output.stl'.
                     }
                     self.on_status(status_info)
                 
+                if self.client is None:
+                    self._log("[CadAgent DEBUG] [ERR] No LLM client available (OpenRouter/LM Studio unconfigured).")
+                    return None
                 raw_content = ""
-                stream = await self.client.aio.models.generate_content_stream(
-                    model=self.model,
-                    contents=current_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=self.system_instruction,
-                        temperature=1.0,
-                        thinking_config=types.ThinkingConfig(include_thoughts=True)
-                    )
+                response = await self.client.chat_completion(
+                    messages=[
+                        {"role": "system", "content": self.system_instruction},
+                        {"role": "user", "content": current_prompt},
+                    ],
+                    temperature=1.0,
                 )
-                async for chunk in stream:
-                    if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
-                        for part in chunk.candidates[0].content.parts:
-                            if not part.text:
-                                continue
-                            elif part.thought:
-                                if self.on_thought:
-                                    self.on_thought(part.text)
-                            else:
-                                raw_content += part.text
+                raw_content = (response.choices[0].message.content or "") if response else ""
                 
                 if not raw_content:
                     self._log("[CadAgent DEBUG] [ERR] Empty response from model.")

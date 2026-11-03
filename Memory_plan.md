@@ -8,7 +8,7 @@ This document outlines the strategy to integrate "grows with you" capabilities i
 
 **Implementation Plan:**
 1.  **User Profile Schema [DONE]:** Extended `ProjectManager` to include `get_user_profile` and `update_user_profile` to store and load `user_profile.json` in the root workspace.
-2.  **Implicit Learning Engine [DONE]:** Added `_implicit_learning_task` in `AgentJames` that runs every 5 minutes, reading `chat_history.jsonl` since the last check and summarizing new insights into `ProjectManager.update_user_profile` using `gemini-2.5-flash`.
+2.  **Implicit Learning Engine [DONE]:** Added `_implicit_learning_task` in `AgentJames` that runs every 5 minutes, reading `chat_history.jsonl` since the last check and summarizing new insights into `ProjectManager.update_user_profile` using hybrid LLM (OpenRouter/LM Studio via LLMClient; Gemini removed).
 3.  **Dialectic User Modeling [DONE]:** Implemented an `update_user_preferences` tool, allowing the agent to actively reconcile and explicitly persist stated preferences to the user profile via user instruction.
 4.  **Integration with Agent Context [DONE]:** Modified `_get_live_connect_config` in `agent_james.py` to dynamically load the `user_profile.json` and append the user's constraints and preferences directly into the system prompt.
 

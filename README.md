@@ -3,12 +3,12 @@
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue?logo=python)
 ![React](https://img.shields.io/badge/React-18.2-61DAFB?logo=react)
 ![Electron](https://img.shields.io/badge/Electron-28-47848F?logo=electron)
-![Gemini](https://img.shields.io/badge/Google%20Gemini-Native%20Audio-4285F4?logo=google)
+![LLM](https://img.shields.io/badge/LLM-OpenRouter%20%7C%20LM%20Studio%20%7C%20Ollama-green)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 > **Agent James**
 
-Agent James is a sophisticated AI assistant designed for multimodal interaction. It combines Google's Gemini 2.5 Native Audio with computer vision, gesture control, and 3D CAD generation in a Electron desktop application.
+Agent James is a sophisticated AI assistant designed for multimodal interaction. It combines hybrid LLMs (OpenRouter / LM Studio / Ollama) with local/hybrid voice (STT→LLM→TTS), computer vision, gesture control, and 3D CAD generation in an Electron desktop application.
 
 ---
 
@@ -16,7 +16,7 @@ Agent James is a sophisticated AI assistant designed for multimodal interaction.
 
 | Feature | Description | Technology |
 |---------|-------------|------------|
-| **🗣️ Low-Latency Voice** | Real-time conversation with interrupt handling | Gemini 2.5 Native Audio |
+| **🗣️ Hybrid Voice** | Text chat + optional STT/TTS (Kokoro / ElevenLabs) | STT→LLM→TTS pipeline |
 | **🧊 Parametric CAD** | Editable 3D model generation from voice prompts | `build123d` → STL |
 | **🖨️ 3D Printing** | Slicing and wireless print job submission | OrcaSlicer + Moonraker/OctoPrint |
 | **🖐️ Minority Report UI** | Gesture-controlled window manipulation | MediaPipe Hand Tracking |
@@ -52,7 +52,7 @@ graph TB
     
     subgraph Backend ["Backend (Python 3.11 + FastAPI)"]
         SERVER[server.py<br/>Socket.IO Server]
-        JAMES[agent_james.py<br/>Gemini Live API]
+        JAMES[agent_james.py<br/>Hybrid LLM + voice pipeline]
         WEB[web_agent.py<br/>Playwright Browser]
         CAD[cad_agent.py<br/>CAD + build123d]
         PRINTER[printer_agent.py<br/>3D Printing + OrcaSlicer]
@@ -108,8 +108,8 @@ playwright install chromium
 # 3. Setup frontend
 npm install
 
-# 4. Create .env file
-echo "GEMINI_API_KEY=your_key_here" > .env
+# 4. Create .env file (see .env.example for hybrid LLM + voice options)
+echo "OPENROUTER_API_KEY=your_key_here" > .env
 
 # 5. Run!
 conda activate agent_james && npm run dev
@@ -251,20 +251,15 @@ Agent James uses **OrcaSlicer** (recommended) or PrusaSlicer to generate G-code.
 
 ---
 
-### 6. 🔑 Gemini API Key Setup
-Agent James uses Google's Gemini API for voice and intelligence. You need a free API key.
+### 6. 🔑 Hybrid LLM + Voice Setup (Gemini removed)
+Agent James uses OpenRouter (cloud) or LM Studio / Ollama (local) for intelligence, plus local/hybrid STT→LLM→TTS for voice.
 
-1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Sign in with your Google account.
-3. Click **"Create API Key"** and copy the generated key.
-4. Create a file named `.env` in the `agent_james` folder (same level as `README.md`).
-5. Add this line to the file:
-   ```
-   GEMINI_API_KEY=your_api_key_here
-   ```
-6. Replace `your_api_key_here` with the key you copied.
+1. Copy `.env.example` to `.env` in the `agent_james` folder (same level as `README.md`).
+2. Cloud (recommended): set `OPENROUTER_API_KEY` (+ optional `OPENROUTER_MODEL`). Get a key at https://openrouter.ai/keys.
+3. Local fallback: run LM Studio (`http://localhost:1234/v1`) or Ollama (`http://localhost:11434`) — no key needed.
+4. Voice (optional): leave `JAMES_STT_BACKEND=none` for text chat, or set `faster-whisper` for local STT; set `JAMES_TTS_BACKEND=auto` (ElevenLabs → Kokoro → Piper → none).
 
-> **Note**: Keep this key private! Never commit your `.env` file to Git.
+> **Note**: Keep keys private! Never commit your `.env` file to Git.
 
 ---
 
@@ -346,21 +341,21 @@ npm run dev
 
 ---
 
-### `GEMINI_API_KEY` not found / Authentication Error
-**Symptoms**: Backend crashes on startup with "API key not found".
+### `OPENROUTER_API_KEY` / LLM not configured
+**Symptoms**: Chat replies "LLM unavailable" or background healing stays silent.
 
 **Solution**:
 1. Make sure your `.env` file is in the root `agent_james` folder (not inside `backend/`).
-2. Verify the format is exactly: `GEMINI_API_KEY=your_key` (no quotes, no spaces).
+2. Set `OPENROUTER_API_KEY` (cloud) or run LM Studio / Ollama locally. Format: `OPENROUTER_API_KEY=your_key` (no quotes, no spaces).
 3. Restart the backend after editing the file.
 
 ---
 
-### WebSocket connection errors (1011)
-**Symptoms**: `websockets.exceptions.ConnectionClosedError: 1011 (internal error)`.
+### Voice realtime disabled
+**Symptoms**: Notice "Voice realtime (Gemini Live) is disabled".
 
 **Solution**:
-This is a server-side issue from the Gemini API. Simply reconnect by clicking the connect button or saying "Hello James" again. If it persists, check your internet connection or try again later.
+Gemini Live was removed with `google-genai`. Text chat works via hybrid LLM. For voice, configure `JAMES_STT_BACKEND` (faster-whisper) and `JAMES_TTS_BACKEND` (auto → ElevenLabs/Kokoro/Piper) — see `.env.example` and `backend/voice_pipeline.py`.
 
 ---
 
@@ -375,7 +370,7 @@ This is a server-side issue from the Gemini API. Simply reconnect by clicking th
 ```
 agent_james/
 ├── backend/                    # Python server & AI logic
-│   ├── agent_james.py          # Gemini Live API integration (AgentJames class)
+│   ├── agent_james.py          # Hybrid LLM + voice pipeline (AgentJames class)
 │   ├── server.py               # FastAPI + Socket.IO server
 │   ├── fleet_manager.py        # Fleet/orchestration + OpenCode tracking
 │   ├── automation_engine.py    # Cron/schedules + monitors + self-heal
@@ -386,7 +381,7 @@ agent_james/
 │   ├── kasa_agent.py           # TP-Link smart home control
 │   ├── authenticator.py        # MediaPipe face auth logic
 │   ├── project_manager.py      # Project context management
-│   ├── tools.py                # Tool definitions for Gemini
+│   ├── tools.py                # Tool definitions (OpenAI-compatible)
 │   └── reference.jpg           # Your face photo (add this!)
 ├── src/                        # React frontend
 │   ├── App.jsx                 # Main application component (~2248 lines)
@@ -409,8 +404,9 @@ agent_james/
 |------------|---------|
 | **macOS & Windows** | Tested on macOS 14+ and Windows 10/11. Linux is untested. |
 | **Camera Required** | Face auth and gesture control need a working webcam. |
-| **Gemini API Quota** | Free tier has rate limits; heavy CAD iteration may hit limits. |
-| **Network Dependency** | Requires internet for Gemini API (no offline mode). |
+| **LLM Quota** | Cloud LLM rate limits apply; heavy CAD iteration may hit limits — use local LM Studio/Ollama to avoid. |
+| **Network Dependency** | Cloud LLMs need internet; fully offline mode needs local LLM + local STT/TTS. |
+| **Voice Realtime** | Gemini Live removed; realtime STT→LLM→TTS streams in Phase 2 (text chat works now). |
 | **Single User** | Face auth recognizes one person (the `reference.jpg`). |
 
 ---
@@ -449,7 +445,8 @@ Contributions are welcome! Here's how:
 
 ## 🙏 Acknowledgments
 
-- **[Google Gemini](https://deepmind.google/technologies/gemini/)** — Native Audio API for real-time voice
+- **[Kokoro](https://github.com/hexgrad/kokoro)** / **[ElevenLabs](https://elevenlabs.io/)** — Local/hybrid TTS for voice output
+- **[faster-whisper](https://github.com/SYSTRAN/faster-whisper)** — Local STT option
 - **[build123d](https://github.com/gumyr/build123d)** — Modern parametric CAD library
 - **[MediaPipe](https://developers.google.com/mediapipe)** — Hand tracking, gesture recognition, and face authentication
 - **[Playwright](https://playwright.dev/)** — Reliable browser automation

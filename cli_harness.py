@@ -11,39 +11,16 @@ from backend.agent_james import AgentJames
 from backend.tools import tools_list
 from backend.project_manager import ProjectManager
 
-def convert_gemini_to_openai(gemini_tools):
-    openai_tools = []
-    
-    def lower_types(schema):
-        if not isinstance(schema, dict):
-            return schema
-        new_schema = {}
-        for k, v in schema.items():
-            if k == "type" and isinstance(v, str):
-                new_schema[k] = v.lower()
-            elif isinstance(v, dict):
-                new_schema[k] = lower_types(v)
-            elif isinstance(v, list):
-                new_schema[k] = [lower_types(i) for i in v]
-            else:
-                new_schema[k] = v
-        return new_schema
-
+def convert_gemini_to_openai(gemini_tools, _alias=True):
+    # Backward compat alias — use backend.local_web_agent.convert_tools_to_openai
+    from backend.local_web_agent import convert_tools_to_openai
+    flat = []
     for group in gemini_tools:
         decls = group.get("function_declarations", []) if isinstance(group, dict) else group
-        if not isinstance(decls, list): decls = [decls]
-        for decl in decls:
-            decl.pop("behavior", None)
-            params = decl.get("parameters", {})
-            openai_tools.append({
-                "type": "function",
-                "function": {
-                    "name": decl["name"],
-                    "description": decl.get("description", ""),
-                    "parameters": lower_types(params)
-                }
-            })
-    return openai_tools
+        if not isinstance(decls, list):
+            decls = [decls]
+        flat.extend(decls)
+    return convert_tools_to_openai(flat)
 
 async def run_harness():
     print("Initializing Agent James Test Harness (OpenAI/OpenRouter/Local Mode)...")

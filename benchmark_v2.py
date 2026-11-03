@@ -5,8 +5,8 @@ import shutil
 import tempfile
 from unittest.mock import AsyncMock, patch, MagicMock
 
-# Mock out genai so we don't need real API keys
-os.environ["GEMINI_API_KEY"] = "dummy"
+# Hybrid LLM (no API key needed for benchmark mocks)
+os.environ["OPENROUTER_API_KEY"] = "dummy"
 
 from backend.cad_agent import CadAgent
 

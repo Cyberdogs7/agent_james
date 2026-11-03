@@ -13,8 +13,8 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 @pytest.fixture(autouse=True)
 def api_keys(monkeypatch):
-    """Set dummy API keys for testing."""
-    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    """Set dummy API keys for testing (google-genai removed)."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
     monkeypatch.setenv("TRELLO_API_KEY", "test-trello-key")
     monkeypatch.setenv("TRELLO_TOKEN", "test-trello-token")
 
@@ -146,31 +146,20 @@ class TestAgentIntegration:
 
 
 class TestLiveConnectConfig:
-    """Test Gemini Live Connect configuration."""
+    """Test hybrid LLM config generation (Gemini Live removed)."""
 
     def test_config_generation(self):
-        """Test that the LiveConnectConfig is generated correctly."""
+        """Test that the provider-agnostic config is generated correctly."""
         from backend.agent_james import AgentJames
-        from google.genai import types
 
         # Instantiate AgentJames to access the config generation method
         audio_loop = AgentJames()
         config = audio_loop._get_live_connect_config()
 
         assert config is not None, "Config object should not be None"
-        # Since google.genai is mocked in conftest.py, we can't check types.
-        # We assume if it returns something, it's what the mock returned.
-        # We can check attributes if the mock was configured to store them,
-        # but MagicMock usually returns new mocks for attributes unless set.
-        # However, _get_live_connect_config instantiates it with arguments.
-        # So checking if the result is not None is the baseline.
-        # If response_modalities is accessible (MagicMock default), we can check logic.
-        # But wait, MagicMock.response_modalities will be another MagicMock.
-        # 'AUDIO' in MagicMock() evaluates to False (iterating mock).
-        # So the assertion below will likely fail if it's a raw mock.
-        # Unless the code in agent_james.py sets it.
-        # agent_james.py: return types.LiveConnectConfig(response_modalities=["AUDIO"], ...)
-        # The mock constructor returns a mock. It doesn't automatically set attributes from kwargs unless side_effect does.
+        assert isinstance(config, dict)
+        assert "system_instruction" in config
+        assert config.get("gemini_live_disabled") is True
 
         # So verifying properties on a MagicMock returned by a constructor call is tricky without configuring the mock return_value.
         # For now, asserting not None is sufficient to prove the method ran without error.

@@ -7,35 +7,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-try:
-    from google import genai
-    HAS_GENAI = True
-except ImportError:
-    HAS_GENAI = False
-
 class MemoryManager:
     def __init__(self, project_path):
         self.project_path = Path(project_path)
         self.memory_file = self.project_path / "memory.jsonl"
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        self.client = None
-
-        if HAS_GENAI and self.api_key:
-            try:
-                self.client = genai.Client(api_key=self.api_key)
-            except Exception as e:
-                print(f"[MemoryManager] Failed to initialize Gemini client: {e}")
+        self.client = None  # embeddings are local-first (see backend/embeddings.py)
 
     def _get_embedding(self, text):
-        if not self.client:
-            return None
         try:
-            # Using text-embedding-004
-            result = self.client.models.embed_content(
-                model="text-embedding-004",
-                contents=text
-            )
-            return result.embeddings[0].values
+            from backend.embeddings import embed_sync
+        except ImportError:
+            try:
+                from embeddings import embed_sync
+            except ImportError:
+                return None
+        try:
+            return embed_sync(text)
         except Exception as e:
             print(f"[MemoryManager] Embedding failed: {e}")
             return None

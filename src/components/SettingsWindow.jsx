@@ -251,13 +251,17 @@ const SettingsWindow = ({
                 <h3 className="text-gold9 font-bold mb-3 text-xs uppercase tracking-wider opacity-80">API Configuration</h3>
                 <div className="space-y-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                     {[
-                        'GEMINI_API_KEY', 
-                        'OPENROUTER_API_KEY', 
-                        'OPENROUTER_MODEL', 
-                        'LM_STUDIO_BASE_URL', 
-                        'LM_STUDIO_MODEL', 
+                        'OPENROUTER_API_KEY',
+                        'OPENROUTER_MODEL',
+                        'LM_STUDIO_BASE_URL',
+                        'LM_STUDIO_MODEL',
+                        'OLLAMA_BASE_URL',
+                        'ELEVENLABS_API_KEY',
+                        'ELEVENLABS_VOICE_ID',
+                        'JAMES_STT_BACKEND',
+                        'JAMES_TTS_BACKEND',
 
-                        'TRELLO_API_KEY', 
+                        'TRELLO_API_KEY',
                         'GIPHY_API_KEY'
                     ].map(keyName => (
                         <div key={keyName} className="flex flex-col gap-1">

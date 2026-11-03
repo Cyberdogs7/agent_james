@@ -14,11 +14,6 @@ try:
 except ImportError:
     from github_client import GitHubClient
 
-try:
-    from google import genai
-except ImportError:
-    genai = None
-
 load_dotenv()
 
 class AutomationEngine:
@@ -48,14 +43,13 @@ class AutomationEngine:
         self._last_ci_check = 0
         self.last_ci_status = {}     # {repo_name_pr_num: status}
 
-        # Gemini Client for Healing
-        self.api_key = os.getenv("GEMINI_API_KEY")
+        # LLM client for self-healing (OpenRouter / LM Studio / Ollama via LLMClient)
         self.client = None
-        if self.api_key and genai:
-             try:
-                 self.client = genai.Client(api_key=self.api_key)
-             except Exception as e:
-                 print(f"[AutomationEngine] Failed to init Gemini client: {e}")
+        try:
+            from backend.llm_client import get_llm_client
+            self.client = get_llm_client(prefer_openrouter=True)
+        except Exception as e:
+            print(f"[AutomationEngine] LLM client unavailable for self-healing: {e}")
 
     async def start(self):
         """Starts the automation loop."""
@@ -758,9 +752,9 @@ class AutomationEngine:
 
 
     async def _generate_fix(self, script_path, error_log):
-        """Uses Gemini to generate a fix for a failed script."""
+        """Uses LLM (OpenRouter/LM Studio) to generate a fix for a failed script."""
         if not self.client:
-            print("[AutomationEngine] Gemini Client not available for self-healing.")
+            print("[AutomationEngine] LLM client not available for self-healing.")
             return None
 
         try:
@@ -790,15 +784,15 @@ INSTRUCTIONS:
 2. Do not include explanations outside the code block.
 3. Fix the specific error mentioned.
 """
-            response = await asyncio.to_thread(
-                self.client.models.generate_content,
-                model="gemini-2.0-flash", # Use a fast/capable model
-                contents=prompt
+            response = await self.client.chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
             )
+            text = (response.choices[0].message.content or "") if response else ""
 
-            if response.text:
+            if text:
                 # Extract code block
-                content = response.text
+                content = text
                 if "```python" in content:
                     content = content.split("```python")[1].split("```")[0].strip()
                 elif "```" in content:

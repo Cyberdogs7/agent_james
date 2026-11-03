@@ -20,9 +20,6 @@ mock_modules = [
     'mss',
     'PIL',
     'PIL.Image',
-    'google',
-    'google.genai',
-    'google.genai.types',
     'tzlocal',
     'httpx',
     'psutil',
@@ -55,8 +52,9 @@ for module in mock_modules:
 
 @pytest.fixture(autouse=True)
 def mock_api_keys(monkeypatch):
-    """Mocks API keys for tests."""
-    monkeypatch.setenv("GEMINI_API_KEY", "mock-api-key")
+    """Mocks API keys for tests (google-genai removed; hybrid LLM)."""
+    monkeypatch.setenv("OPENROUTER_API_KEY", "mock-openrouter-key")
+    monkeypatch.setenv("OPENROUTER_MODEL", "mock-model")
 
 @pytest.fixture(scope="session")
 def event_loop():

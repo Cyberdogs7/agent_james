@@ -14,9 +14,9 @@ from backend.tools import (
     browser_wait_tool
 )
 
-def convert_gemini_to_openai(gemini_tools):
+def convert_tools_to_openai(tool_decls):
     openai_tools = []
-    
+
     def lower_types(schema):
         if not isinstance(schema, dict):
             return schema
@@ -32,7 +32,7 @@ def convert_gemini_to_openai(gemini_tools):
                 new_schema[k] = v
         return new_schema
 
-    for decl in gemini_tools:
+    for decl in tool_decls:
         decl = dict(decl) # shallow copy
         decl.pop("behavior", None)
         params = decl.get("parameters", {})
@@ -45,6 +45,12 @@ def convert_gemini_to_openai(gemini_tools):
             }
         })
     return openai_tools
+
+
+# Backward compat alias (google-genai removed)
+def convert_gemini_to_openai(tools):
+    return convert_tools_to_openai(tools)
+
 
 class LocalWebAgent:
     def __init__(self, browser_agent, tool_registry):
@@ -75,7 +81,7 @@ class LocalWebAgent:
             browser_scroll_tool,
             browser_wait_tool
         ]
-        self.openai_tools = convert_gemini_to_openai(raw_tools)
+        self.openai_tools = convert_tools_to_openai(raw_tools)
         self._is_interrupted = False
 
     def interrupt(self):

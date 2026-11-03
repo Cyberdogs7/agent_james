@@ -863,7 +863,14 @@ async def user_input(sid, data):
         return
 
     if not audio_loop.session:
-        print("[SERVER DEBUG] [Error] Session is None. Cannot send text.")
+        # Hybrid mode (Gemini Live removed): route text via LLMClient + tools.
+        print("[SERVER DEBUG] No live session — routing text via hybrid LLM.")
+        try:
+            if hasattr(audio_loop, "handle_text_chat"):
+                await audio_loop.handle_text_chat(text or "")
+                return
+        except Exception as e:
+            print(f"[SERVER DEBUG] Hybrid text chat failed: {e}")
         await sio.emit('error', {'msg': 'System not ready (No active session)'})
         return
 
@@ -891,9 +898,9 @@ async def user_input(sid, data):
                 await sio.emit('error', {'msg': 'Please wait for the current action to finish.'})
                 return
 
-        # Use the same 'send' method that worked for audio, as 'send_realtime_input' and 'send_client_content' seem unstable in this env
+        # Hybrid mode: session is None (Gemini removed), so skip live-session send.
         # INJECT VIDEO FRAME IF AVAILABLE (VAD-style logic for Text Input)
-        if audio_loop and audio_loop._latest_image_payload:
+        if audio_loop and audio_loop.session and audio_loop._latest_image_payload:
             print(f"[SERVER DEBUG] Piggybacking video frame with text input.")
             try:
                 # Send frame first
@@ -906,6 +913,16 @@ async def user_input(sid, data):
         audio_loop.clear_audio_queue()
         audio_loop.set_last_input_source('ui')
 
+        if not audio_loop.session:
+            # Should not happen (handled above), but guard anyway.
+            try:
+                if hasattr(audio_loop, "handle_text_chat"):
+                    await audio_loop.handle_text_chat(text or "")
+                    return
+            except Exception as e:
+                print(f"[SERVER DEBUG] Hybrid text chat failed: {e}")
+            await sio.emit('error', {'msg': 'System not ready (No active session)'})
+            return
         try:
             await audio_loop.session.send(input=text, end_of_turn=True)
             print(f"[SERVER DEBUG] Message sent to model successfully.")
@@ -915,7 +932,7 @@ async def user_input(sid, data):
 
 @sio.event
 async def mobile_audio(sid, data):
-    """Receive audio chunks from mobile client and forward to Gemini session."""
+    """Receive audio chunks from mobile client (Gemini Live removed; requires live session)."""
     if not audio_loop or not audio_loop.session:
         await sio.emit('error', {'msg': 'System not ready (Audio Loop inactive)'})
         return

@@ -60,7 +60,7 @@ class WritingAgent:
 
         # Explicitly forward keys that might be globally defined in root .env
         # (instead of relying on autonovel scripts to call load_dotenv() from their own directory)
-        for key in ["ANTHROPIC_API_KEY", "FAL_KEY", "ELEVENLABS_API_KEY", "GEMINI_API_KEY"]:
+        for key in ["ANTHROPIC_API_KEY", "FAL_KEY", "ELEVENLABS_API_KEY", "OPENROUTER_API_KEY"]:
             if key in os.environ:
                 env[key] = os.environ[key]
 

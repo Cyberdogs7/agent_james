@@ -9,12 +9,19 @@ import json
 sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
-# Mock dependencies
-sys.modules['google'] = MagicMock()
-sys.modules['google.genai'] = MagicMock()
-sys.modules['google.genai.types'] = MagicMock()
-
 from backend.proactive_agent import ProactiveAgent
+
+
+def _llm_vision_mock(payload):
+    mock_llm = MagicMock()
+    mock_msg = MagicMock()
+    mock_msg.content = json.dumps(payload)
+    mock_choice = MagicMock()
+    mock_choice.message = mock_msg
+    mock_resp = MagicMock()
+    mock_resp.choices = [mock_choice]
+    mock_llm.chat_completion = AsyncMock(return_value=mock_resp)
+    return mock_llm
 
 @pytest.mark.asyncio
 async def test_analyze_screen():
@@ -23,18 +30,12 @@ async def test_analyze_screen():
     mock_pm = MagicMock()
     mock_pm.current_project = "ProjectA"
 
-    mock_client = MagicMock()
-    mock_client.aio.models.generate_content = AsyncMock()
-
-    # Mock Response
-    mock_response = MagicMock()
-    mock_response.text = json.dumps({
+    mock_llm = _llm_vision_mock({
         "app": "vscode",
         "project": "ProjectB",
         "file": "main.py",
         "repo": "owner/repo"
     })
-    mock_client.aio.models.generate_content.return_value = mock_response
 
     mock_vision = MagicMock()
     mock_vision.return_value = {"mime_type": "image/jpeg", "data": "base64data"}
@@ -44,7 +45,7 @@ async def test_analyze_screen():
         session=mock_session,
         project_manager=mock_pm,
         vision_provider=mock_vision,
-        genai_client=mock_client
+        llm_client=mock_llm
     )
 
     # Run Analysis
@@ -53,7 +54,7 @@ async def test_analyze_screen():
     # Verify
     assert result is not None
     assert result["project"] == "ProjectB"
-    assert mock_client.aio.models.generate_content.called
+    assert mock_llm.chat_completion.called
 
 @pytest.mark.asyncio
 async def test_check_context_switch_triggers():
@@ -62,18 +63,12 @@ async def test_check_context_switch_triggers():
     mock_pm = MagicMock()
     mock_pm.current_project = "ProjectA"
 
-    mock_client = MagicMock()
-    mock_client.aio.models.generate_content = AsyncMock()
-
-    # Mock Response (Different Project)
-    mock_response = MagicMock()
-    mock_response.text = json.dumps({
+    mock_llm = _llm_vision_mock({
         "app": "vscode",
         "project": "ProjectB",
         "file": "main.py",
         "repo": "owner/repo"
     })
-    mock_client.aio.models.generate_content.return_value = mock_response
 
     mock_vision = MagicMock()
     mock_vision.return_value = {"mime_type": "image/jpeg", "data": "base64data"}
@@ -82,7 +77,7 @@ async def test_check_context_switch_triggers():
         session=mock_session,
         project_manager=mock_pm,
         vision_provider=mock_vision,
-        genai_client=mock_client
+        llm_client=mock_llm
     )
 
     # Run Check
@@ -100,18 +95,12 @@ async def test_check_context_switch_no_trigger_same_project():
     mock_pm = MagicMock()
     mock_pm.current_project = "ProjectA"
 
-    mock_client = MagicMock()
-    mock_client.aio.models.generate_content = AsyncMock()
-
-    # Mock Response (Same Project)
-    mock_response = MagicMock()
-    mock_response.text = json.dumps({
+    mock_llm = _llm_vision_mock({
         "app": "vscode",
         "project": "ProjectA",
         "file": "main.py",
         "repo": "owner/repo"
     })
-    mock_client.aio.models.generate_content.return_value = mock_response
 
     mock_vision = MagicMock()
     mock_vision.return_value = {"mime_type": "image/jpeg", "data": "base64data"}
@@ -120,7 +109,7 @@ async def test_check_context_switch_no_trigger_same_project():
         session=mock_session,
         project_manager=mock_pm,
         vision_provider=mock_vision,
-        genai_client=mock_client
+        llm_client=mock_llm
     )
 
     # Run Check

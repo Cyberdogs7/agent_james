@@ -44,8 +44,8 @@ class TestCadGeneration:
     
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.getenv("GEMINI_API_KEY"),
-        reason="GEMINI_API_KEY not set"
+        not (os.getenv("OPENROUTER_API_KEY") or os.getenv("LM_STUDIO_BASE_URL")),
+        reason="No LLM configured (OPENROUTER_API_KEY or LM_STUDIO_BASE_URL)"
     )
     async def test_generate_simple_cube(self, agent):
         """Test generating a simple cube."""
@@ -69,8 +69,8 @@ class TestCadGeneration:
     
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.getenv("GEMINI_API_KEY"),
-        reason="GEMINI_API_KEY not set"
+        not (os.getenv("OPENROUTER_API_KEY") or os.getenv("LM_STUDIO_BASE_URL")),
+        reason="No LLM configured (OPENROUTER_API_KEY or LM_STUDIO_BASE_URL)"
     )
     async def test_generate_sphere(self, agent):
         """Test generating a sphere."""
@@ -86,8 +86,8 @@ class TestCadIteration:
     
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.getenv("GEMINI_API_KEY"),
-        reason="GEMINI_API_KEY not set"
+        not (os.getenv("OPENROUTER_API_KEY") or os.getenv("LM_STUDIO_BASE_URL")),
+        reason="No LLM configured (OPENROUTER_API_KEY or LM_STUDIO_BASE_URL)"
     )
     async def test_iterate_prototype(self):
         """Test iterating on an existing design."""
@@ -116,8 +116,8 @@ class TestCadSystemPrompt:
     def test_system_prompt_exists(self):
         """Test that system prompt is defined."""
         agent = CadAgent()
-        # The agent should have a system prompt for Gemini
-        assert hasattr(agent, 'system_prompt') or hasattr(agent, 'client')
+        # The agent should have a system prompt for the configured LLM
+        assert hasattr(agent, 'system_instruction') or hasattr(agent, 'client')
 
 
 class TestBuild123dImport:

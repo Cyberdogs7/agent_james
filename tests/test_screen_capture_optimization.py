@@ -8,10 +8,7 @@ import asyncio
 sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
-# Mock dependencies
-sys.modules['google'] = MagicMock()
-sys.modules['google.genai'] = MagicMock()
-sys.modules['google.genai.types'] = MagicMock()
+# Mock dependencies (google-genai removed)
 sys.modules['pyaudio'] = MagicMock()
 sys.modules['httpx'] = MagicMock()
 

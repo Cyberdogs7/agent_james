@@ -9,52 +9,47 @@ from web_agent import WebAgent
 
 
 class TestWebAgentInit:
-    """Test WebAgent initialization."""
-    
+    """Test WebAgent deprecation (Gemini computer_use removed)."""
+
     def test_agent_creation(self):
-        """Test WebAgent can be created."""
-        agent = WebAgent()
-        assert agent is not None
-        assert hasattr(agent, 'client')
-        print("WebAgent initialized successfully")
-    
+        """Test WebAgent raises with LocalWebAgent pointer."""
+        with pytest.raises(RuntimeError, match="LocalWebAgent"):
+            WebAgent()
+        print("WebAgent correctly deprecated → LocalWebAgent")
+
     def test_agent_has_browser_attrs(self):
-        """Test WebAgent has browser-related attributes."""
-        agent = WebAgent()
-        assert hasattr(agent, 'browser')
-        assert hasattr(agent, 'page')
-        assert hasattr(agent, 'context')
+        """Test LocalWebAgent (replacement) has browser attributes."""
+        from local_web_agent import LocalWebAgent
+        from unittest.mock import MagicMock
+        agent = LocalWebAgent(MagicMock(), MagicMock())
+        assert hasattr(agent, 'browser_agent')
+        assert hasattr(agent, 'openai_tools')
 
 
 class TestCoordinateDenormalization:
-    """Test coordinate conversion functions."""
-    
-    def test_denormalize_x(self):
-        """Test X coordinate denormalization."""
-        agent = WebAgent()
-        
-        # Test at different normalized values
-        result = agent.denormalize_x(500, 1000)  # 50% of 1000
-        print(f"denormalize_x(500, 1000) = {result}")
-        assert isinstance(result, (int, float))
-    
-    def test_denormalize_y(self):
-        """Test Y coordinate denormalization."""
-        agent = WebAgent()
-        
-        result = agent.denormalize_y(500, 1000)  # 50% of 1000
-        print(f"denormalize_y(500, 1000) = {result}")
-        assert isinstance(result, (int, float))
+    """Test LocalWebAgent tool conversion (replaces coordinate tests)."""
+
+    def test_tool_conversion(self):
+        """Test tool schema conversion works."""
+        from local_web_agent import convert_tools_to_openai
+        from tools import browser_navigate_tool
+        out = convert_tools_to_openai([browser_navigate_tool])
+        assert out and out[0]["type"] == "function"
+        assert out[0]["function"]["name"] == browser_navigate_tool["name"]
+
+    def test_web_agent_stub(self):
+        """Deprecated WebAgent raises on run_task."""
+        import asyncio
+        agent_cls = WebAgent
+        with pytest.raises(RuntimeError):
+            agent_cls()
+        print("WebAgent stub verified")
 
 
 class TestWebBrowserLaunch:
     """Test browser launching capabilities."""
     
     @pytest.mark.asyncio
-    @pytest.mark.skipif(
-        not os.getenv("GEMINI_API_KEY"),
-        reason="GEMINI_API_KEY not set"
-    )
     async def test_browser_launch_headless(self):
         """Test launching browser in headless mode."""
         try:
@@ -129,30 +124,11 @@ class TestWebAgentTask:
     """Test full web agent task execution."""
     
     @pytest.mark.asyncio
-    @pytest.mark.skipif(
-        not os.getenv("GEMINI_API_KEY"),
-        reason="GEMINI_API_KEY not set"
-    )
     async def test_simple_web_task(self):
-        """Test running a simple web task."""
-        agent = WebAgent()
-        
-        updates = []
-        
-        async def update_callback(screenshot_b64, log_text):
-            updates.append({"log": log_text})
-            print(f"Update: {log_text[:100]}...")
-        
-        try:
-            result = await agent.run_task(
-                prompt="Navigate to example.com and tell me the page title",
-                update_callback=update_callback
-            )
-            
-            print(f"Task result: {result}")
-            print(f"Updates received: {len(updates)}")
-        except Exception as e:
-            print(f"Task failed: {e}")
+        """Test deprecated web task raises."""
+        with pytest.raises(RuntimeError):
+            agent = WebAgent()
+        print("Deprecated WebAgent raises as expected; use LocalWebAgent")
 
 
 class TestPlaywrightInstallation:

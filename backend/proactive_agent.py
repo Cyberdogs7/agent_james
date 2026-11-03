@@ -4,20 +4,20 @@ import time
 import json
 from datetime import datetime
 
-try:
-    from google import genai
-    from google.genai import types
-except ImportError:
-    genai = None
-    types = None
-
 class ProactiveAgent:
-    def __init__(self, session, project_manager, suggestion_interval=300, vision_provider=None, genai_client=None):
+    def __init__(self, session, project_manager, suggestion_interval=300, vision_provider=None, genai_client=None, llm_client=None):
         self.session = session
         self.project_manager = project_manager
         self.suggestion_interval = suggestion_interval  # Time in seconds
         self.vision_provider = vision_provider
         self.genai_client = genai_client
+        self.llm_client = llm_client
+        if self.llm_client is None:
+            try:
+                from backend.llm_client import get_llm_client
+                self.llm_client = get_llm_client(prefer_openrouter=True)
+            except Exception:
+                self.llm_client = None
         self.last_suggestion_time = 0
         self.last_vision_check_time = 0
 
@@ -49,8 +49,8 @@ class ProactiveAgent:
                 self._log(f"[PROACTIVE_AGENT] [ERR] Failed to make suggestion: {e}")
 
     async def _analyze_screen(self):
-        """Analyzes the screen content using Vision."""
-        if not self.vision_provider or not self.genai_client:
+        """Analyzes the screen content using Vision (OpenAI-compatible vision if available)."""
+        if not self.vision_provider:
             return None
 
         try:
@@ -58,38 +58,43 @@ class ProactiveAgent:
             if not image_payload:
                 return None
 
-            # Create prompt
             prompt = "Analyze this image. Identify the active application. If it is a code editor, identify the project name or file name. If it is a browser, identify the website or repository. Return a JSON object with keys: 'app', 'project', 'file', 'repo'."
 
-            # Prepare contents
-            response = await self.genai_client.aio.models.generate_content(
-                model="gemini-1.5-flash",
-                contents=[
-                    types.Content(
-                        parts=[
-                            types.Part(text=prompt),
-                            types.Part(inline_data=types.Blob(
-                                mime_type=image_payload["mime_type"],
-                                data=image_payload["data"]
-                            ))
-                        ]
+            # Preferred: OpenAI-compatible vision via LLMClient
+            if self.llm_client is not None:
+                data = image_payload.get("data", b"")
+                import base64
+                if isinstance(data, (bytes, bytearray)):
+                    b64 = base64.b64encode(bytes(data)).decode("utf-8")
+                else:
+                    b64 = str(data)
+                mime = image_payload.get("mime_type", "image/png")
+                try:
+                    res = await self.llm_client.chat_completion(
+                        messages=[{
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                            ],
+                        }],
+                        temperature=0.2,
                     )
-                ],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
-            )
+                    text = (res.choices[0].message.content or "").strip()
+                    if text.startswith("```json"):
+                        text = text[7:]
+                    if text.startswith("```"):
+                        text = text[3:]
+                    if text.endswith("```"):
+                        text = text[:-3]
+                    return json.loads(text.strip())
+                except Exception as e:
+                    self._log(f"[PROACTIVE_AGENT] [ERR] LLM vision analysis failed: {e}")
+                    return None
 
-            if response.text:
-                text = response.text.strip()
-                # Robust JSON extraction
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.startswith("```"):
-                    text = text[3:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                return json.loads(text.strip())
+            # Legacy Gemini path removed (google-genai deprecated). No vision client configured.
+            self._log("[PROACTIVE_AGENT] Vision unavailable (no LLM vision client).")
+            return None
         except Exception as e:
             self._log(f"[PROACTIVE_AGENT] [ERR] Vision analysis failed: {e}")
             return None

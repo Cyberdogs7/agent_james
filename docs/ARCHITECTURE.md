@@ -2,10 +2,11 @@
 
 > Canonical working knowledge for agents. Read this + `docs/issues/` before starting tasks. Do not rely on chat history.
 > Renamed from A.D.A (Advanced Design Assistant) to **Agent James** — persona: James (British, witty, professional).
+> google-genai/Gemini removed. Hybrid LLM (OpenRouter/LM Studio/Ollama) + local/hybrid voice (STT→LLM→TTS).
 
 ## 1. Overview
 Voice-first Electron + React + Python assistant.
-`Gemini 2.5 Native Audio Live` → `backend/agent_james.py:AgentJames` → `backend/server.py:FastAPI + Socket.IO :8180` → ~35 specialist agents + React UI.
+`Hybrid LLM (LLMClient) + voice_pipeline (STT→LLM→TTS)` → `backend/agent_james.py:AgentJames` → `backend/server.py:FastAPI + Socket.IO :8180` → ~35 specialist agents + React UI.
 
 - Backend entry: `backend/agent_james.py` (`AgentJames`, alias `AudioLoop` for backward compat)
 - Server: `backend/server.py` (Socket.IOano events, `/status`, `/mobile`, static `/projects`)
@@ -38,24 +39,25 @@ Voice-first Electron + React + Python assistant.
 - Package `ada-v2` → `agent-james`; conda `ada_v2` → `agent_james`; repo `nazirlouis/ada_v2` → `Cyberdogs7/agent_james`
 - Intentional transitional refs kept: backward-compat aliases + comments mentioning old import paths.
 
-## 6. Dependencies — deprecation audit (2026-11-03)
-**Decision: audit only, no deletion (per user).**
+## 6. Dependencies — google-genai removal (done)
+**google-genai removed from requirements. Hybrid LLM + local/hybrid voice is default.**
 
-### Google API (`google-genai`, `GEMINI_API_KEY`, `gemini-*`)
-Core, not removable without rewrite. Used in:
-- `backend/agent_james.py`: `genai.Client`, `MODEL=models/gemini-2.5-flash-native-audio-preview-12-2025`, `gemini-2.5-flash` fallback
-- `backend/web_agent.py`: `MODEL_ID=gemini-2.5-flash`, `GEMINI_API_KEY` required
-- `backend/cad_agent.py`: `gemini-3-pro-preview` (disabled stubs, still imports)
-- `backend/proactive_agent.py`: `gemini-1.5-flash`
-- `backend/automation_engine.py`: `GEMINI_API_KEY`, `gemini-2.0-flash` self-heal
-- `backend/memory_manager.py`: `GEMINI_API_KEY`, `text-embedding-004`
-- `backend/mcp_client.py`/`local_web_agent.py`: Gemini schema converters (`convert_to_gemini_schema`, `convert_gemini_to_openai`)
-- `requirements.txt`/`requirements_safe.txt`: `google-genai`
-- `tests/conftest.py` mocks `google.genai`; `SettingsWindow.jsx` manages `GEMINI_API_KEY`
-Recommendation: keep. If deprecating later, need ASR+LLM+TTS replacement (see `OPENSOURCE_OPTIONS.md` chained: Whisper-Turbo + Llama-3.1-8B + Kokoro, ~8-11GB VRAM) + migrate embeddings + tool schemas. Do not delete now — breaks voice core.
+- `requirements.txt` / `requirements_safe.txt`: `google-genai` → `openai` (OpenAI-compatible)
+- `backend/agent_james.py`: no top-level genai import/client; Gemini Live disabled; text chat via `handle_text_chat()` (LLMClient + tools + optional TTS); `_session_runner` runs background LLM tasks in text mode
+- `backend/voice_pipeline.py` (new): STT (`faster-whisper` opt-in, default none/frontend text) + TTS (auto: ElevenLabs → Kokoro → Piper → none, native 24kHz) + `get_llm()` (LLMClient)
+- `backend/embeddings.py` (new): local hashed embeddings (no network); optional OpenAI-compatible `api_embed`
+- `backend/memory_manager.py`: local embeddings, keyword fallback preserved
+- `backend/automation_engine.py`: self-heal via LLMClient `chat_completion`
+- `backend/proactive_agent.py`: vision via LLMClient OpenAI-compatible vision; `genai_client` kept as legacy kwarg
+- `backend/cad_agent.py`: codegen via LLMClient (`JAMES_CAD_MODEL` / `OPENROUTER_MODEL`)
+- `backend/web_agent.py`: deprecated stub (raises → use `LocalWebAgent`); Gemini `computer_use` gone
+- `backend/mcp_client.py` / `local_web_agent.py` / `cli_harness.py`: schema converters renamed (`convert_to_tool_schema`, `convert_tools_to_openai`, aliases kept)
+- `.env.example`: `GEMINI_API_KEY` → `OPENROUTER_API_KEY/MODEL`, `LM_STUDIO_*`, `OLLAMA_*`, `JAMES_STT_*`, `JAMES_TTS_*`, `ELEVENLABS_*`
+- `SettingsWindow.jsx`: API keys list updated (no GEMINI)
+- Tests: google mocks removed; CAD skips check `OPENROUTER_API_KEY`/`LM_STUDIO_BASE_URL`; web_agent tests assert deprecation; proactive tests mock `llm_client.chat_completion`
 
 ### Google Jules
-**Not found.** `rg -i jules` across repo (excl. node_modules/.venv/.git): zero matches. No package, import, env, or doc reference. No action needed. If Jules was expected via OpenCode/OpenHands integration, it was never wired — use `opencode_agent`/`openhands_agent` instead.
+**Confirmed removed / never present.** Only mention is this doc's prior audit line. No package, import, env, or code reference. No action needed — use `opencode_agent`/`openhands_agent` for coding sessions, `LLMClient` for general LLM (opencode serve is unsuitable as realtime brain: async poll, no tools/JSON, coding prompt).
 
 ## 7. Open issues
 - `docs/issues/youtube_music_playlist_access.md` — **open**. Proposes SHA1 `SAPISIDHASH`, `_authenticated=False` reset, cookie expiry. Current code uses `SAPISIDHASH placeholder` (relies on `ytmusicapi` overwrite). Decide hack vs proper fix before closing.

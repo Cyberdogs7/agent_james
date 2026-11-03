@@ -364,9 +364,9 @@ class MCPClientManager:
                 
                 has_new_tool = False
                 for tool in tools.tools:
-                    # Normalize tool names to fit Gemini's requirements
+                    # Normalize tool names to fit tool registry requirements
                     tool_name = f"{name}_{tool.name.replace('-', '_').replace(':', '_')}"
-                    gemini_schema = self.convert_to_gemini_schema(tool_name, tool)
+                    gemini_schema = self.convert_to_tool_schema(tool_name, tool)
                     
                     # Closure to bind tool execution parameters
                     async def make_handler(t_name, orig_name, sess):
@@ -419,8 +419,8 @@ class MCPClientManager:
                 while True:
                     await asyncio.sleep(3600)
 
-    def convert_to_gemini_schema(self, name, tool):
-        """Converts inputSchema into GenAI JSON schema structure."""
+    def convert_to_tool_schema(self, name, tool):
+        """Converts inputSchema into tool registry JSON schema structure (ex-Gemini)."""
         params = {
             "type": "OBJECT",
             "properties": {},
@@ -446,6 +446,10 @@ class MCPClientManager:
             "description": tool.description,
             "parameters": params
         }
+
+    # Backward compat (google-genai removed; schema format unchanged)
+    def convert_to_gemini_schema(self, name, tool):
+        return self.convert_to_tool_schema(name, tool)
 
     async def stop(self):
         """Stops all active MCP client tasks."""

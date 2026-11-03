@@ -22,8 +22,17 @@ from datetime import datetime
 from backend.time_utils import format_datetime, get_local_time
 from backend.weather_agent import WeatherAgent
 from backend.giphy_agent import GiphyAgent
-from google import genai
-from google.genai import types
+
+# google-genai removed. Hybrid local/API LLM via backend/llm_client + voice via backend/voice_pipeline.
+# Gemini Live native audio is disabled. See _session_runner + handle_text_chat.
+try:
+    from google import genai  # type: ignore
+    from google.genai import types  # type: ignore
+    HAS_GENAI = True
+except ImportError:
+    genai = None
+    types = None
+    HAS_GENAI = False
 
 if sys.version_info < (3, 11, 0):
     import taskgroup, exceptiongroup
@@ -44,12 +53,18 @@ SEND_SAMPLE_RATE = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE = 1024
 
-MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
+MODEL = "disabled-gemini-live-removed"
 DEFAULT_MODE = "camera"
 load_dotenv()
 INCLUDE_RAW_LOGS = os.getenv("INCLUDE_RAW_LOGS", "True").lower() == "true"
 os.environ["INCLUDE_RAW_LOGS"] = str(INCLUDE_RAW_LOGS)
-client = genai.Client(http_options={"api_version": "v1beta"}, api_key=os.getenv("GEMINI_API_KEY"))
+# Legacy Gemini client removed. Use backend/llm_client.get_llm_client() instead.
+client = None
+
+
+def get_llm():
+    from backend.llm_client import get_llm_client
+    return get_llm_client(prefer_openrouter=True)
 
 tools = tools_list
 
@@ -188,11 +203,17 @@ class AgentJames:
         
         self.task_manager = TaskManager(self.project_manager.get_current_project_path())
         self.search_agent = SearchAgent(self.trello_agent, self.project_manager, self.scraper_agent)
+        try:
+            from backend.llm_client import get_llm_client
+            _llm = get_llm_client(prefer_openrouter=True)
+        except Exception:
+            _llm = None
         self.proactive_agent = ProactiveAgent(
             session=None,
             project_manager=self.project_manager,
             vision_provider=lambda: self._latest_image_payload,
-            genai_client=client
+            genai_client=None,
+            llm_client=_llm,
         )
         self.os_agent = OSAgent()
         self.music_agent = MusicAgent(sio=self.sio)
@@ -288,7 +309,7 @@ class AgentJames:
 
             if self.session:
                 try:
-                    await self.session.send(input=msg, end_of_turn=False)
+                    await self._notify_model(input=msg, end_of_turn=False)
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
                         print(f"[JAMES DEBUG] [ERR] Failed to send briefing offer: {e}")
@@ -392,7 +413,7 @@ class AgentJames:
             msg = await self.out_queue.get()
             if getattr(self, '_is_tool_call_pending', False):
                 continue
-            await self.session.send(input=msg, end_of_turn=False)
+            await self._notify_model(input=msg, end_of_turn=False)
 
     async def listen_audio(self):
         if not pya:
@@ -916,7 +937,7 @@ class AgentJames:
             })
 
         try:
-            await self.session.send(input=msg, end_of_turn=True)
+            await self._notify_model(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send routing prompt: {e}")
@@ -936,7 +957,7 @@ class AgentJames:
             msg = "System Notification: Failed to start OpenHands agent."
 
         try:
-            await self.session.send(input=msg, end_of_turn=True)
+            await self._notify_model(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send OpenHands notification: {e}")
@@ -968,7 +989,7 @@ class AgentJames:
         if not server_ok:
             msg = "System Notification: Failed to start OpenCode server. Please ensure 'opencode' is installed."
             try:
-                await self.session.send(input=msg, end_of_turn=True)
+                await self._notify_model(input=msg, end_of_turn=True)
             except Exception:
                 pass
             return "OpenCode server unavailable."
@@ -1016,7 +1037,7 @@ class AgentJames:
                     if s_title and (clean_title in s_title or s_title in clean_title):
                         msg = f"System Notification: A similar OpenCode task '{s_title}' already exists."
                         try:
-                            await self.session.send(input=msg, end_of_turn=True)
+                            await self._notify_model(input=msg, end_of_turn=True)
                         except Exception:
                             pass
                         return "Duplicate task detected."
@@ -1029,7 +1050,7 @@ class AgentJames:
         if not session:
             msg = "System Notification: Failed to create OpenCode session."
             try:
-                await self.session.send(input=msg, end_of_turn=True)
+                await self._notify_model(input=msg, end_of_turn=True)
             except Exception:
                 pass
             return "Failed to create session."
@@ -1095,7 +1116,7 @@ class AgentJames:
         # Notify user
         try:
             title = session.get("title", session_id)
-            await self.session.send(input=f"System Notification: OpenCode session created: '{title}'", end_of_turn=True)
+            await self._notify_model(input=f"System Notification: OpenCode session created: '{title}'", end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send OpenCode notification: {e}")
@@ -1125,7 +1146,7 @@ class AgentJames:
 
         if result:
             try:
-                await self.session.send(
+                await self._notify_model(
                     input=f"System Notification: OpenCode session switched to {'PLAN' if kanban_status == 'todo_planning' else 'EXECUTE'} mode.",
                     end_of_turn=False
                 )
@@ -1219,7 +1240,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 if self.session:
                     try:
                         message = f"System Notification: OpenCode session '{session_id}' escalated: {escalation_reason}. Please use 'send_opencode_feedback' to respond."
-                        asyncio.create_task(self.session.send(input=message, end_of_turn=False))
+                        asyncio.create_task(self._notify_model(input=message, end_of_turn=False))
                     except Exception as e:
                         if INCLUDE_RAW_LOGS:
                             print(f"[JAMES DEBUG] [ERR] Failed to notify James: {e}")
@@ -1318,7 +1339,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 self.project_manager.switch_project(new_project_name)
                 # Notify User (Optional, or rely on update)
                 try:
-                    await self.session.send(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
+                    await self._notify_model(input=f"System Notification: Automatic Project Creation. Switched to new project '{new_project_name}'.", end_of_turn=False)
                     if self.on_project_update:
                          self.on_project_update(new_project_name)
                 except Exception as e:
@@ -1354,7 +1375,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             # Notify the model that the task is done - this triggers speech about completion
             completion_msg = "System Notification: CAD generation is complete! The 3D model is now displayed for the user. Let them know it's ready."
             try:
-                await self.session.send(input=completion_msg, end_of_turn=True)
+                await self._notify_model(input=completion_msg, end_of_turn=True)
                 if INCLUDE_RAW_LOGS:
                     print(f"[JAMES DEBUG] [NOTE] Sent completion notification to model.")
             except Exception as e:
@@ -1366,7 +1387,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 print(f"[JAMES DEBUG] [ERR] CadAgent returned None.")
             # Optionally notify failure
             try:
-                await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
+                await self._notify_model(input="System Notification: CAD generation failed.", end_of_turn=True)
             except Exception:
                 pass
 
@@ -1431,7 +1452,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         
         # Send the final result back to the main model
         try:
-             await self.session.send(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
+             await self._notify_model(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
         except Exception as e:
              if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send web agent result to model: {e}")
@@ -1444,7 +1465,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             result = await self.research_agent.run_research_task(prompt, update_callback)
             
             # Send the final result back to the main model
-            await self.session.send(input=f"System Notification: Deep Research completed.\n\n{result}", end_of_turn=True)
+            await self._notify_model(input=f"System Notification: Deep Research completed.\n\n{result}", end_of_turn=True)
             
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [RESEARCH] Research Task Returned: {result[:200]}...")
@@ -1452,7 +1473,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Research task failed: {e}")
             try:
-                await self.session.send(input=f"System Notification: Research task failed: {e}", end_of_turn=True)
+                await self._notify_model(input=f"System Notification: Research task failed: {e}", end_of_turn=True)
             except Exception as e2:
                 if INCLUDE_RAW_LOGS:
                     print(f"[JAMES DEBUG] [ERR] Failed to send error notification: {e2}")
@@ -1478,7 +1499,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         # Notify
         msg = f"System Notification: Local Ollama agent started with ID '{session['id']}'. I will notify you when it completes."
         try:
-            await self.session.send(input=msg, end_of_turn=True)
+            await self._notify_model(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send ollama notification: {e}")
@@ -1491,7 +1512,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         session = await self.lm_studio_agent.spawn_agent(prompt, source, role)
         msg = f"System Notification: Local LM Studio agent started with ID '{session['id']}'. I will notify you when it completes."
         try:
-            await self.session.send(input=msg, end_of_turn=True)
+            await self._notify_model(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send notification: {e}")
@@ -1503,7 +1524,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         session = await self.openrouter_agent.spawn_agent(prompt, source, role)
         msg = f"System Notification: OpenRouter agent started with ID '{session['id']}'. I will notify you when it completes."
         try:
-            await self.session.send(input=msg, end_of_turn=True)
+            await self._notify_model(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [ERR] Failed to send notification: {e}")
@@ -1861,24 +1882,135 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         if current_tools and len(current_tools) > 0 and 'function_declarations' in current_tools[0]:
             current_tools[0]['function_declarations'].extend(dynamic_declarations)
 
-        return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
-            output_audio_transcription={},
-            input_audio_transcription={},
-            system_instruction=system_prompt,
-            tools=current_tools,
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=voice_name
-                    )
-                )
-            )
-        )
+        # google-genai removed: return provider-agnostic dict (Gemini Live disabled).
+        # Realtime voice now via backend/voice_pipeline (STT→LLM→TTS).
+        self._last_system_prompt = system_prompt
+        self._last_tools = current_tools
+        self._last_voice_name = voice_name
+        return {
+            "system_instruction": system_prompt,
+            "tools": current_tools,
+            "voice_name": voice_name,
+            "modalities": ["TEXT"],
+            "gemini_live_disabled": True,
+        }
+
+    def _build_system_prompt(self):
+        """Provider-agnostic system prompt for LLMClient text chat."""
+        cfg = self._get_live_connect_config()
+        if isinstance(cfg, dict):
+            return cfg.get("system_instruction", "")
+        return str(cfg)
+
+    async def _notify_model(self, text=None, end_of_turn=True, input=None):
+        """Send a system notification to the model (Gemini session) or fallback to UI."""
+        if text is None:
+            text = input if input is not None else ""
+        if self.session is not None:
+            try:
+                await self._notify_model(input=text, end_of_turn=end_of_turn)
+                return True
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[JAMES DEBUG] [ERR] Model notify failed: {e}")
+        if self.on_transcription:
+            try:
+                self.on_transcription({"sender": "James", "text": text})
+            except Exception:
+                pass
+        return False
+
+    async def handle_text_chat(self, text, image_payload=None):
+        """Hybrid text chat: LLM (OpenRouter/LM Studio) + tools + optional TTS.
+
+        Used by server.py user_input fallback when Gemini Live session is unavailable.
+        Returns the assistant text reply.
+        """
+        from backend.local_web_agent import convert_gemini_to_openai as _to_openai
+        try:
+            llm = get_llm()
+        except Exception as e:
+            err = f"LLM unavailable (set OPENROUTER_API_KEY or LM_STUDIO_BASE_URL): {e}"
+            if self.on_transcription:
+                self.on_transcription({"sender": "James", "text": err})
+            return err
+        system_prompt = self._build_system_prompt()
+        # Convert Gemini-style tool declarations to OpenAI function tools
+        try:
+            decls = []
+            for group in (self._last_tools or tools):
+                decls.extend(group.get("function_declarations", []))
+            openai_tools = _to_openai([
+                {"function_declarations": decls}
+            ]) if decls else None
+        except Exception:
+            openai_tools = None
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": text},
+        ]
+        if self.project_manager:
+            try:
+                self.project_manager.log_chat("User", text)
+            except Exception:
+                pass
+        # Tool-calling loop (max 5 turns)
+        reply = ""
+        for _ in range(5):
+            try:
+                resp = await llm.chat_completion(messages=messages, tools=openai_tools, temperature=0.2)
+            except Exception as e:
+                reply = f"LLM error: {e}"
+                break
+            msg = resp.choices[0].message
+            messages.append(msg)
+            if getattr(msg, "tool_calls", None):
+                import json as _json
+                for call in msg.tool_calls:
+                    try:
+                        args = _json.loads(call.function.arguments)
+                        if self.tool_registry.is_confirmation_required(call.function.name):
+                            result = f"Tool '{call.function.name}' requires confirmation in voice mode; skipping."
+                        else:
+                            result = await self.tool_registry.dispatch(call.function.name, args)
+                    except Exception as e:
+                        result = f"Error: {e}"
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "name": call.function.name,
+                        "content": str(result),
+                    })
+                continue
+            reply = msg.content or ""
+            break
+        if self.project_manager and reply:
+            try:
+                self.project_manager.log_chat("James", reply)
+            except Exception:
+                pass
+        if self.on_transcription and reply:
+            try:
+                self.on_transcription({"sender": "James", "text": reply})
+            except Exception:
+                pass
+        # Optional TTS → audio_data for realtime feel
+        try:
+            from backend.voice_pipeline import TTSProvider, split_sentences
+            tts = TTSProvider()
+            if reply and tts.is_available() and self.on_audio_data:
+                for chunk in split_sentences(reply)[:3]:
+                    pcm = await tts.synthesize(chunk)
+                    if pcm:
+                        self.on_audio_data(pcm)
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[JAMES DEBUG] [ERR] TTS fallback failed: {e}")
+        return reply
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
-        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
+        service_info = "Service: Agent James hybrid (LLM + voice_pipeline), Gemini Live removed"
         try:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [RECEIVE] Starting receive loop. {service_info}")
@@ -1970,7 +2102,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                                 asyncio.create_task(self.handle_openhands_request(p, repo_path=s))
                                                 # Tell the model the user chose OpenHands
                                                 try:
-                                                    await self.session.send(input="System Notification: The user chose OpenHands. The task has been routed.", end_of_turn=True)
+                                                    await self._notify_model(input="System Notification: The user chose OpenHands. The task has been routed.", end_of_turn=True)
                                                 except Exception:
                                                     pass
 
@@ -1984,7 +2116,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                                 asyncio.create_task(self.handle_opencode_request(p, repo_path=s))
                                                 # Tell the model the user chose OpenCode
                                                 try:
-                                                    await self.session.send(input="System Notification: The user chose OpenCode. The task has been routed.", end_of_turn=True)
+                                                    await self._notify_model(input="System Notification: The user chose OpenCode. The task has been routed.", end_of_turn=True)
                                                 except Exception:
                                                     pass
 
@@ -2034,10 +2166,10 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                             function_responses = []
                             for fc in response.tool_call.function_calls:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[JAMES DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
+                                    print(f"[JAMES DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}", flush=True)
                                 else:
                                     # Basic log as requested: tool, endpoint, status
-                                    print(f"[JAMES DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
+                                    print(f"[JAMES DEBUG] [TOOL] Tool: {fc.name}, Status: 200", flush=True)
 
                                 # --- Tool Registry Dispatch ---
 
@@ -2423,7 +2555,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                         else:
                             combined_text = f"System Notification: You have {len(messages)} new notifications. " + " ".join(messages)
                         try:
-                            await self.session.send(input=combined_text, end_of_turn=False)
+                            await self._notify_model(input=combined_text, end_of_turn=False)
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
                                 print(f"[JAMES DEBUG] Failed to send batched voice notification: {e}")
@@ -2471,13 +2603,79 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         return {"mime_type": "image/jpeg", "data": base64.b64encode(buffer).decode()}
 
     async def _session_runner(self, start_message=None, is_reconnect=False):
-        """Handles a single connection and run-loop of the voice agent."""
+        """Hybrid session runner (Gemini Live removed).
+
+        Text chat works via handle_text_chat (LLMClient). Realtime STT→LLM→TTS
+        streaming lands in Phase 2 (backend/voice_pipeline). This runner keeps
+        background LLM tasks alive and reports voice-realtime as disabled.
+        """
         # Force reset message_source to ensure clean state on new session/reconnect
         self.message_source = None
 
-        service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
+        service_info = "Service: Agent James hybrid (LLM + voice_pipeline), Gemini Live removed"
         if INCLUDE_RAW_LOGS:
-            print(f"[JAMES DEBUG] [SESSION] Starting session runner. Reconnect: {is_reconnect}")
+            print(f"[JAMES DEBUG] [SESSION] Starting hybrid session runner. Reconnect: {is_reconnect}")
+
+        # Gemini Live client removed — run in text/hybrid mode.
+        if True:  # HAS_GENAI is False; client is None
+            if INCLUDE_RAW_LOGS:
+                print(f"[JAMES DEBUG] [SESSION] {service_info}. Starting background LLM tasks (text mode).")
+            try:
+                self.session = None
+                try:
+                    self.timer_agent.session = None
+                except Exception:
+                    pass
+                try:
+                    self.proactive_agent.session = None
+                except Exception:
+                    pass
+
+                tasks = []
+                tasks.append(asyncio.create_task(self._implicit_learning_task()))
+                tasks.append(asyncio.create_task(self._context_nudging_task()))
+                tasks.append(asyncio.create_task(self.proactive_agent.run()))
+
+                notice = (
+                    "Voice realtime (Gemini Live) is disabled — google-genai removed. "
+                    "Text chat is active via hybrid LLM (OpenRouter/LM Studio). "
+                    "Realtime STT→LLM→TTS streams in Phase 2 (see backend/voice_pipeline.py)."
+                )
+                if self.on_transcription:
+                    try:
+                        self.on_transcription({"sender": "James", "text": notice})
+                    except Exception:
+                        pass
+                if start_message:
+                    await self.handle_text_chat(start_message)
+
+                stop_task = asyncio.create_task(self.stop_event.wait())
+                reconnect_task = asyncio.create_task(self._reconnect_needed.wait())
+                wait_tasks = tasks + [stop_task, reconnect_task]
+                done, _ = await asyncio.wait(wait_tasks, return_when=asyncio.FIRST_COMPLETED)
+                for t in tasks:
+                    try:
+                        t.cancel()
+                    except Exception:
+                        pass
+                if stop_task in done:
+                    try:
+                        reconnect_task.cancel()
+                    except Exception:
+                        pass
+                    return False
+                if reconnect_task in done:
+                    try:
+                        stop_task.cancel()
+                    except Exception:
+                        pass
+                    self._reconnect_needed.clear()
+                    return True
+                return False
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[JAMES DEBUG] [ERR] Hybrid session runner failed: {e}")
+                return False
         try:
             if INCLUDE_RAW_LOGS:
                 print(f"[JAMES DEBUG] [CONNECT] Connecting to {service_info}...")
@@ -2485,7 +2683,8 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
             config = self._get_live_connect_config()
 
             tasks = []
-            async with client.aio.live.connect(model=MODEL, config=config) as session:
+            raise RuntimeError("Gemini Live removed (google-genai deprecated). Use handle_text_chat().")
+            async with client.aio.live.connect(model=MODEL, config=config) as session:  # pragma: no cover
                 try:
                     self.session = session
                     self.timer_agent.session = session
@@ -2528,7 +2727,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                         if start_message:
                             if INCLUDE_RAW_LOGS:
                                 print(f"[JAMES DEBUG] [INFO] Sending start message: {start_message}")
-                            await self.session.send(input=start_message, end_of_turn=True)
+                            await self._notify_model(input=start_message, end_of_turn=True)
 
                         if self.on_project_update and self.project_manager:
                             self.on_project_update(self.project_manager.current_project)
@@ -2671,7 +2870,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                         nudge_text = f"System Notification: Silent context retrieval based on the user's last message. You do NOT need to mention this unless relevant to the conversation. Found historical context:\n{results[0]}"
                         if INCLUDE_RAW_LOGS:
                             print(f"[JAMES DEBUG] [NUDGE] Injecting context for message: '{latest_msg[:20]}...'")
-                        await self.session.send(input=nudge_text, end_of_turn=False)
+                        await self._notify_model(nudge_text, end_of_turn=False)
 
             except asyncio.CancelledError:
                 break
@@ -2694,11 +2893,16 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         return new_lines, last_processed_line
 
     async def _implicit_learning_task(self):
-        """Periodically scans chat history to update the user profile."""
+        """Periodically scans chat history to update the user profile (LLMClient, no Gemini)."""
         if not self.project_manager:
             return
 
-        client = genai.Client()
+        try:
+            llm = get_llm()
+        except Exception as e:
+            if INCLUDE_RAW_LOGS:
+                print(f"[JAMES DEBUG] [ERR] Implicit learning LLM unavailable: {e}")
+            return
         last_processed_line = 0
         last_processed_project = None
 
@@ -2737,14 +2941,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 )
 
                 try:
-                    response = await asyncio.to_thread(
-                        client.models.generate_content,
-                        model='gemini-2.5-flash',
-                        contents=prompt
+                    response = await llm.chat_completion(
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.2,
                     )
+                    text = ((response.choices[0].message.content or "") if response else "").strip()
 
-                    if response and response.text:
-                        text = response.text.strip()
+                    if text:
                         if text.startswith("```json"):
                             text = text[7:]
                         if text.endswith("```"):
@@ -2757,7 +2960,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                 print(f"[JAMES DEBUG] Updated user profile with new preferences: {new_prefs}")
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[JAMES DEBUG] [ERR] Implicit learning task genai failure: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Implicit learning task LLM failure: {e}")
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
                     print(f"[JAMES DEBUG] [ERR] Implicit learning task failed: {e}")

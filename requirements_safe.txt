@@ -2,8 +2,8 @@ fastapi
 uvicorn
 python-socketio
 python-multipart
-# Google GenAI SDK (v1beta)
-google-genai
+# LLM (OpenAI-compatible: OpenRouter / LM Studio / Ollama) + local/hybrid voice
+openai
 # Computer Vision & Audio
 opencv-python-headless
 pillow
@@ -32,5 +32,4 @@ psutil
 pytest-asyncio
 watchdog
 pyperclip
-google-genai
 aiofiles

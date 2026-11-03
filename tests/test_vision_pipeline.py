@@ -9,9 +9,6 @@ sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
 # 1. Mock Heavy Dependencies & Agents *before* importing agent_james
-sys.modules['google'] = MagicMock()
-sys.modules['google.genai'] = MagicMock()
-sys.modules['google.genai.types'] = MagicMock()
 sys.modules['pyaudio'] = MagicMock()
 sys.modules['httpx'] = MagicMock()
 

@@ -12,7 +12,7 @@ def test_server_port_config():
     custom_port = "9999"
     env = os.environ.copy()
     env["SERVER_PORT"] = custom_port
-    env["GEMINI_API_KEY"] = "dummy_key_for_testing"
+    env["OPENROUTER_API_KEY"] = "dummy_key_for_testing"
 
     print(f"Starting server with SERVER_PORT={custom_port}")
 
