@@ -1935,7 +1935,9 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 self.on_transcription({"sender": "James", "text": err})
             return err
         system_prompt = self._build_system_prompt()
-        # Convert Gemini-style tool declarations to OpenAI function tools
+        # Convert Gemini-style tool declarations to OpenAI function tools.
+        # NOTE: the default brain (mimo) cannot do native function calls, so
+        # the XML dialect below is the PRIMARY tool protocol, not a fallback.
         try:
             decls = []
             for group in (self._last_tools or tools):
@@ -1944,9 +1946,22 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 {"function_declarations": decls}
             ]) if decls else None
         except Exception:
-            openai_tools = None
+            decls, openai_tools = [], None
+        _tool_names = sorted({d.get("name", "") for d in decls if d.get("name")})
+        _tool_proto = (
+            "\n\nTOOL USE (mandatory when the request needs live data or actions — "
+            "never claim a tool is unavailable; the following tools exist): "
+            + ", ".join(_tool_names[:40]) + ("..." if len(_tool_names) > 40 else "") +
+            ". To call a tool, output ONLY this block and nothing else:\n"
+            "<tool_call><function=NAME><parameter=PARAM>value</parameter>...</function></tool_call>\n"
+            "The result returns as a tool message; then answer the user. "
+            "Never narrate the block, never wrap it in prose. "
+            "Example — user asks 'what time is it': you output ONLY "
+            "<tool_call><function=get_datetime></function></tool_call> "
+            "then answer with the returned time."
+        )
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": system_prompt + _tool_proto},
             {"role": "user", "content": text},
         ]
         if self.project_manager:
