@@ -1955,35 +1955,66 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
             except Exception:
                 pass
         # Tool-calling loop (max 5 turns)
+        import time as _time
         reply = ""
-        for _ in range(5):
+        for _turn in range(5):
+            _t0 = _time.time()
             try:
                 resp = await llm.chat_completion(messages=messages, tools=openai_tools, temperature=0.2)
             except Exception as e:
                 reply = f"LLM error: {e}"
                 break
             msg = resp.choices[0].message
+            if INCLUDE_RAW_LOGS:
+                print(f"[JAMES DEBUG] [LLM] turn {_turn + 1} took {_time.time() - _t0:.1f}s, "
+                      f"native_calls={len(getattr(msg, 'tool_calls', None) or [])}")
             messages.append(msg.to_dict() if hasattr(msg, "to_dict") else msg)
+            pending = []
             if getattr(msg, "tool_calls", None):
                 import json as _json
                 for call in msg.tool_calls:
                     try:
                         args = _json.loads(call.function.arguments)
-                        if self.tool_registry.is_confirmation_required(call.function.name):
-                            result = f"Tool '{call.function.name}' requires confirmation in voice mode; skipping."
+                    except Exception:
+                        args = {}
+                    pending.append((call.id, call.function.name, args))
+            else:
+                # Fallback: some models emit pseudo-XML <tool_call> blocks as text.
+                try:
+                    from backend.llm_client import extract_xml_tool_calls as _xt
+                except ImportError:
+                    try:
+                        from llm_client import extract_xml_tool_calls as _xt
+                    except ImportError:
+                        _xt = None
+                if _xt is not None:
+                    for _n, _a in _xt(msg.content or ""):
+                        pending.append((f"xml-{_turn}-{_n}", _n, _a))
+                    if pending and INCLUDE_RAW_LOGS:
+                        print(f"[JAMES DEBUG] [LLM] parsed {len(pending)} XML tool call(s) from text")
+            if pending:
+                import json as _json2
+                for _cid, _name, _args in pending:
+                    try:
+                        if self.tool_registry.is_confirmation_required(_name):
+                            result = f"Tool '{_name}' requires confirmation in voice mode; skipping."
                         else:
-                            result = await self.tool_registry.dispatch(call.function.name, args)
+                            result = await self.tool_registry.dispatch(_name, _args)
                     except Exception as e:
                         result = f"Error: {e}"
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": call.id,
-                        "name": call.function.name,
+                        "tool_call_id": _cid,
+                        "name": _name,
                         "content": str(result),
                     })
                 continue
             reply = msg.content or ""
             break
+        # Never display/speak unparsed pseudo-XML tool blocks.
+        if reply and "<tool_call>" in reply:
+            import re as _re
+            reply = _re.sub(r"<tool_call>.*?</tool_call>", "", reply, flags=_re.DOTALL).strip()
         if self.project_manager and reply:
             try:
                 self.project_manager.log_chat("James", reply)

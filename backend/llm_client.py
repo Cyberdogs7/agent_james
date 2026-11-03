@@ -113,6 +113,52 @@ def _clean_content(text: str) -> str:
     return text.strip()
 
 
+def extract_xml_tool_calls(text: str) -> List[tuple[str, Dict[str, Any]]]:
+    """Parse pseudo-XML tool calls some models emit as text.
+
+    Observed (mimo): ``<tool_call><function=NAME><parameter=P>V</parameter>…``
+    Also accepts ``<function=NAME>`` / ``<function:NAME>`` / ``<function NAME>``
+    openers and JSON bodies. Returns [(name, args)]. Never raises.
+    """
+    out: List[tuple[str, Dict[str, Any]]] = []
+    if not text or "<tool_call>" not in text and "<function" not in text:
+        return out
+    try:
+        for block in re.findall(r"<tool_call>(.*?)</tool_call>", text, re.DOTALL):
+            # JSON body variant
+            b = block.strip()
+            if b.startswith("{"):
+                try:
+                    obj = json.loads(b)
+                    name = obj.get("name") or obj.get("function") or ""
+                    args = obj.get("arguments") or obj.get("args") or {}
+                    if name:
+                        out.append((name, args if isinstance(args, dict) else {}))
+                        continue
+                except (ValueError, AttributeError):
+                    pass
+            m = re.search(r"<function\s*[:= ]\s*([A-Za-z0-9_.-]+)\s*>(.*?)</function>",
+                          block, re.DOTALL)
+            if not m:
+                continue
+            name, inner = m.group(1), m.group(2)
+            args: Dict[str, Any] = {}
+            for pm in re.finditer(
+                    r"<parameter\s*[:= ]\s*([A-Za-z0-9_.-]+)\s*>(.*?)</parameter>",
+                    inner, re.DOTALL):
+                args[pm.group(1)] = pm.group(2).strip()
+            if not args:
+                # <arg name="p">v</arg> variant
+                for pm in re.finditer(
+                        r"<arg\s+name\s*=\s*\"([^\"]+)\"\s*>(.*?)</arg>",
+                        inner, re.DOTALL):
+                    args[pm.group(1)] = pm.group(2).strip()
+            out.append((name, args))
+    except Exception:
+        pass
+    return out
+
+
 def _to_dict_message(m: Any) -> Dict[str, Any]:
     """Normalize SDK-style message objects and plain dicts to raw dicts."""
     if isinstance(m, dict):
