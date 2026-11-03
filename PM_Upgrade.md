@@ -39,7 +39,7 @@ Integrate the Routa engine alongside the existing `server.py` backend.
 
 ### Strategy B: Principle Adaptation (Recommended)
 Refactor the existing `FleetManager` and `WarRoomDashboard` to implement Routa's Kanban-specialist model natively in Python/React.
-- **Pros:** Maintains the current tech stack, tightly integrates with the existing Voice Agent (A.D.A) and `FleetManager` ecosystem, and allows incremental adoption.
+- **Pros:** Maintains the current tech stack, tightly integrates with the existing Voice Agent (Agent James) and `FleetManager` ecosystem, and allows incremental adoption.
 - **Cons:** Requires significant changes to `fleet_manager.py` task states and the introduction of distinct specialist agent personalities in the backend.
 
 ---

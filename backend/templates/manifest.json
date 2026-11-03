@@ -1,6 +1,6 @@
 {
-    "name": "A.D.A Mobile",
-    "short_name": "A.D.A",
+    "name": "Agent James Mobile",
+    "short_name": "James",
     "start_url": "/mobile",
     "display": "standalone",
     "background_color": "#0a0a0f",

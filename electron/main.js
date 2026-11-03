@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, MenuItem } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, MenuItem, globalShortcut } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -204,6 +204,18 @@ app.whenReady().then(() => {
         });
     });
 
+    // Register global media key shortcuts
+    const sendMediaAction = (action) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('media-key', action);
+        }
+    };
+
+    globalShortcut.register('MediaPlayPause', () => sendMediaAction('play_pause'));
+    globalShortcut.register('MediaStop', () => sendMediaAction('stop'));
+    globalShortcut.register('MediaNextTrack', () => sendMediaAction('next'));
+    globalShortcut.register('MediaPreviousTrack', () => sendMediaAction('previous'));
+
     checkBackendPort(SERVER_PORT).then((isTaken) => {
         if (isTaken) {
             console.log(`Port ${SERVER_PORT} is taken. Assuming backend is already running manually.`);
@@ -276,6 +288,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
     console.log('App closing... Killing Python backend.');
+    globalShortcut.unregisterAll();
     if (pythonProcess) {
         if (process.platform === 'win32') {
             // Windows: Force kill the process tree synchronously

@@ -1,6 +1,6 @@
 # Product Backlog & Vision
 
-This document serves as the single source of truth for the evolution of the A.D.A (Advanced Design Assistant) platform. It outlines the roadmap towards a "JARVIS-level" intelligence, prioritizing cinematic interactions, proactive assistance, and deep integration.
+This document serves as the single source of truth for the evolution of the Agent James platform. It outlines the roadmap towards a "JARVIS-level" intelligence, prioritizing cinematic interactions, proactive assistance, and deep integration.
 
 **North Star:** "Proactive, context-aware, cinematic, useful, and occasionally delightful."
 **Persona:** James (British, witty, professional).
@@ -11,8 +11,8 @@ This document serves as the single source of truth for the evolution of the A.D.
 *Big, bold, aspirational capabilities that define identity.*
 
 - [ ] The Overseer (Fleet Commander)
-  - Description: Orchestrate a massive fleet of external developers across multiple repositories. A.D.A acts as the Tech Lead/Manager, automatically triaging blockers, answering context questions, and reviewing PRs.
-  - Wow Factor: A massive multiplier effect. You act as "The Board", A.D.A acts as the Manager, and agents act as your engineering team, all running asynchronously.
+  - Description: Orchestrate a massive fleet of external developers across multiple repositories. Agent James acts as the Tech Lead/Manager, automatically triaging blockers, answering context questions, and reviewing PRs.
+  - Wow Factor: A massive multiplier effect. You act as "The Board", Agent James acts as the Manager, and agents act as your engineering team, all running asynchronously.
   - User Impact: Infinite scale. Stop micromanaging prompts and start managing a true software factory.
   - Technical Notes: Internal LLM routing (`OllamaAgent`), Git update hooks, and persistent dashboarding.
   - Status: Partially Implemented (Dashboard active; Auto-PR review pending)

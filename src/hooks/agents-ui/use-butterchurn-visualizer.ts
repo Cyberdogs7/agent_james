@@ -11,6 +11,17 @@ interface ButterchurnVisualizerOptions {
   socket?: any;
 }
 
+export interface PresetInfo {
+  name: string;
+  category: string;
+  isFavorite: boolean;
+}
+
+export interface PresetCategory {
+  name: string;
+  count: number;
+}
+
 interface ButterchurnVisualizerReturn {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   isReady: boolean;
@@ -20,6 +31,17 @@ interface ButterchurnVisualizerReturn {
   prevPreset: (blendTime?: number) => void;
   setPresetByName: (name: string, blendTime?: number) => void;
   getPresetNames: () => string[];
+  getAllPresets: () => PresetInfo[];
+  getCategories: () => PresetCategory[];
+  getCategoryPresets: (category: string) => PresetInfo[];
+  searchPresets: (query: string) => PresetInfo[];
+  toggleFavorite: (name: string) => void;
+  isFavorite: (name: string) => boolean;
+  getFavorites: () => string[];
+  lockedPreset: string | null;
+  setLockedPreset: (name: string) => void;
+  clearLockedPreset: () => void;
+  currentPresetName: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,6 +55,57 @@ const getPresetsMap = (module: any) => {
   const mod = module.default || module;
   return typeof mod.getPresets === 'function' ? mod.getPresets() : mod;
 };
+
+const FAVORITES_KEY = 'butterchurn-favorites';
+
+function loadFavorites(): Set<string> {
+  try {
+    const stored = localStorage.getItem(FAVORITES_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFavorites(favorites: Set<string>): void {
+  try {
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
+  } catch {
+    // localStorage not available
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let creamOfTheCropIndex: any = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const creamOfTheCropCache: Map<string, any> = new Map();
+
+async function loadCreamOfTheCropIndex() {
+  if (creamOfTheCropIndex) return creamOfTheCropIndex;
+  try {
+    const resp = await fetch('./presets/cream-of-the-crop/_index.json');
+    if (!resp.ok) return null;
+    creamOfTheCropIndex = await resp.json();
+    return creamOfTheCropIndex;
+  } catch {
+    return null;
+  }
+}
+
+async function loadCreamOfTheCropCategory(category: string) {
+  if (creamOfTheCropCache.has(category)) {
+    return creamOfTheCropCache.get(category);
+  }
+  try {
+    const resp = await fetch(`./presets/cream-of-the-crop/${encodeURIComponent(category)}.json`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    creamOfTheCropCache.set(category, data);
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 export function useButterchurnVisualizer(
   state: AgentState | undefined,
@@ -58,9 +131,18 @@ export function useButterchurnVisualizer(
 
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lockedPreset, setLockedPresetState] = useState<string | null>(null);
+  const [currentPresetName, setCurrentPresetName] = useState('');
+  const [favorites, setFavorites] = useState<Set<string>>(() => loadFavorites());
 
   const presetIndexRef = useRef(0);
   const presetHistoryRef = useRef<number[]>([]);
+
+  // All preset registries (lazy loaded)
+  const allPresetsRef = useRef<Map<string, object>>(new Map());
+  const presetCategoriesRef = useRef<Map<string, string[]>>(new Map());
+  const presetNamesRef = useRef<string[]>([]);
+  const allLoadedRef = useRef(false);
 
   const loadModules = useCallback(async () => {
     try {
@@ -76,11 +158,117 @@ export function useButterchurnVisualizer(
     }
   }, []);
 
+  // Load and merge all presets from both sources
+  const loadAllPresets = useCallback(async () => {
+    if (allLoadedRef.current) return;
+
+    // Load base presets from butterchurn-presets npm package
+    const { presets } = await loadModules();
+    const basePresets = getPresetsMap(presets);
+    const baseNames = Object.keys(basePresets);
+
+    for (const name of baseNames) {
+      allPresetsRef.current.set(name, basePresets[name]);
+      const category = 'Butterchurn Originals';
+      if (!presetCategoriesRef.current.has(category)) {
+        presetCategoriesRef.current.set(category, []);
+      }
+      presetCategoriesRef.current.get(category)!.push(name);
+    }
+
+    // Load cream of the crop index
+    const cotcIndex = await loadCreamOfTheCropIndex();
+    if (cotcIndex) {
+      const categoryNames = Object.keys(cotcIndex);
+      for (const catName of categoryNames) {
+        const catInfo = cotcIndex[catName];
+        // Load the category lazily
+        const catData = await loadCreamOfTheCropCategory(catName);
+        if (catData && catData.presets) {
+          const presetNames = catData._manifest || Object.keys(catData.presets);
+          for (const pName of presetNames) {
+            const fullName = `[CotC] ${catName} / ${pName}`;
+            allPresetsRef.current.set(fullName, catData.presets[pName]);
+            if (!presetCategoriesRef.current.has(catName)) {
+              presetCategoriesRef.current.set(catName, []);
+            }
+            presetCategoriesRef.current.get(catName)!.push(fullName);
+          }
+        }
+      }
+    }
+
+    presetNamesRef.current = [...allPresetsRef.current.keys()].sort();
+    allLoadedRef.current = true;
+  }, [loadModules]);
+
   const getPresetNames = useCallback(() => {
-    if (!butterchurnPresetsModule) return [];
-    const presets = getPresetsMap(butterchurnPresetsModule);
-    return Object.keys(presets).sort();
+    return presetNamesRef.current;
   }, []);
+
+  const getAllPresets = useCallback((): PresetInfo[] => {
+    return presetNamesRef.current.map(name => ({
+      name,
+      category: getCategoryForPreset(name),
+      isFavorite: favorites.has(name),
+    }));
+  }, [favorites]);
+
+  const getCategoryForPreset = (name: string): string => {
+    for (const [cat, names] of presetCategoriesRef.current) {
+      if (names.includes(name)) return cat;
+    }
+    return 'Other';
+  };
+
+  const getCategories = useCallback((): PresetCategory[] => {
+    const cats: PresetCategory[] = [];
+    for (const [name, names] of presetCategoriesRef.current) {
+      cats.push({ name, count: names.length });
+    }
+    return cats.sort((a, b) => a.name.localeCompare(b.name));
+  }, []);
+
+  const getCategoryPresets = useCallback((category: string): PresetInfo[] => {
+    const names = presetCategoriesRef.current.get(category) || [];
+    return names.map(name => ({
+      name,
+      category,
+      isFavorite: favorites.has(name),
+    }));
+  }, [favorites]);
+
+  const searchPresets = useCallback((query: string): PresetInfo[] => {
+    const lower = query.toLowerCase();
+    return presetNamesRef.current
+      .filter(name => name.toLowerCase().includes(lower))
+      .map(name => ({
+        name,
+        category: getCategoryForPreset(name),
+        isFavorite: favorites.has(name),
+      }));
+  }, [favorites]);
+
+  const toggleFavorite = useCallback((name: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      saveFavorites(next);
+      return next;
+    });
+  }, []);
+
+  const isFavorite = useCallback((name: string) => {
+    return favorites.has(name);
+  }, [favorites]);
+
+  const getFavorites = useCallback(() => {
+    return [...favorites];
+  }, [favorites]);
 
   const loadPreset = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,24 +282,26 @@ export function useButterchurnVisualizer(
 
   const nextPreset = useCallback(
     (blendTime = 5.7) => {
-      if (!butterchurnPresetsModule || !visualizerRef.current) return;
+      if (allPresetsRef.current.size === 0 || !visualizerRef.current) return;
 
       presetHistoryRef.current.push(presetIndexRef.current);
-      const presets = getPresetsMap(butterchurnPresetsModule);
-      const keys = Object.keys(presets).sort();
+      const keys = presetNamesRef.current;
       presetIndexRef.current = Math.floor(Math.random() * keys.length);
       const presetName = keys[presetIndexRef.current];
-      visualizerRef.current.loadPreset(presets[presetName], blendTime);
+      const preset = allPresetsRef.current.get(presetName);
+      if (preset) {
+        visualizerRef.current.loadPreset(preset, blendTime);
+        setCurrentPresetName(presetName);
+      }
     },
     [],
   );
 
   const prevPreset = useCallback(
     (blendTime = 5.7) => {
-      if (!butterchurnPresetsModule || !visualizerRef.current) return;
+      if (allPresetsRef.current.size === 0 || !visualizerRef.current) return;
 
-      const presets = getPresetsMap(butterchurnPresetsModule);
-      const keys = Object.keys(presets).sort();
+      const keys = presetNamesRef.current;
 
       if (presetHistoryRef.current.length > 0) {
         presetIndexRef.current = presetHistoryRef.current.pop()!;
@@ -120,22 +310,35 @@ export function useButterchurnVisualizer(
       }
 
       const presetName = keys[presetIndexRef.current];
-      visualizerRef.current.loadPreset(presets[presetName], blendTime);
+      const preset = allPresetsRef.current.get(presetName);
+      if (preset) {
+        visualizerRef.current.loadPreset(preset, blendTime);
+        setCurrentPresetName(presetName);
+      }
     },
     [],
   );
 
   const setPresetByName = useCallback(
     (name: string, blendTime = 5.7) => {
-      if (!butterchurnPresetsModule || !visualizerRef.current) return;
+      if (!visualizerRef.current) return;
 
-      const presets = getPresetsMap(butterchurnPresetsModule);
-      if (presets[name]) {
-        visualizerRef.current.loadPreset(presets[name], blendTime);
+      const preset = allPresetsRef.current.get(name);
+      if (preset) {
+        visualizerRef.current.loadPreset(preset, blendTime);
+        setCurrentPresetName(name);
       }
     },
     [],
   );
+
+  const setLockedPreset = useCallback((name: string) => {
+    setLockedPresetState(name);
+  }, []);
+
+  const clearLockedPreset = useCallback(() => {
+    setLockedPresetState(null);
+  }, []);
 
   const startRenderer = useCallback(() => {
     const render = () => {
@@ -158,10 +361,10 @@ export function useButterchurnVisualizer(
     if (cycleIntervalRef.current) {
       clearInterval(cycleIntervalRef.current);
     }
-    if (autoRotatePresets) {
+    if (autoRotatePresets && !lockedPreset) {
       cycleIntervalRef.current = setInterval(() => nextPreset(2.7), presetCycleInterval);
     }
-  }, [autoRotatePresets, presetCycleInterval, nextPreset]);
+  }, [autoRotatePresets, presetCycleInterval, nextPreset, lockedPreset]);
 
   const stopPresetCycle = useCallback(() => {
     if (cycleIntervalRef.current) {
@@ -172,21 +375,19 @@ export function useButterchurnVisualizer(
 
   useEffect(() => {
     if (canvasRef.current) {
-      // Set actual canvas size to match display size, but capped to prevent GPU OOM
       const rect = canvasRef.current.getBoundingClientRect();
       const MAX_WIDTH = 1280;
       const MAX_HEIGHT = 720;
-      
+
       let w = rect.width;
       let h = rect.height;
-      
-      // Scale down proportionally if it exceeds max bounds
+
       if (w > MAX_WIDTH || h > MAX_HEIGHT) {
           const ratio = Math.min(MAX_WIDTH / w, MAX_HEIGHT / h);
           w = Math.floor(w * ratio);
           h = Math.floor(h * ratio);
       }
-      
+
       canvasRef.current.width = w || window.innerWidth;
       canvasRef.current.height = h || window.innerHeight;
     }
@@ -202,10 +403,8 @@ export function useButterchurnVisualizer(
 
         if (!mounted || !canvasRef.current) return;
 
-        // Create audio context (without passing options to maximize compatibility)
         audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-        
-        // Force resume context (fixes black screen if browser auto-suspended it)
+
         if (audioContextRef.current.state === 'suspended') {
             audioContextRef.current.resume();
         }
@@ -213,8 +412,7 @@ export function useButterchurnVisualizer(
         const canvas = canvasRef.current;
         let width = canvas.width || window.innerWidth;
         let height = canvas.height || window.innerHeight;
-        
-        // Clamp dimensions to prevent massive GPU allocations on large screens
+
         const MAX_WIDTH = 1280;
         const MAX_HEIGHT = 720;
         if (width > MAX_WIDTH || height > MAX_HEIGHT) {
@@ -222,11 +420,9 @@ export function useButterchurnVisualizer(
             width = Math.floor(width * ratio);
             height = Math.floor(height * ratio);
         }
-        
-        // Force pixelRatio to 1 to prevent massive WebGL framebuffers on High-DPI screens
+
         const pixelRatio = 1;
-        
-        // Create visualizer
+
         visualizerRef.current = butterchurn.createVisualizer(
           audioContextRef.current,
           canvasRef.current,
@@ -241,7 +437,7 @@ export function useButterchurnVisualizer(
         if (socket) {
           const bufferSize = 4096;
           const scriptNode = audioContextRef.current.createScriptProcessor(bufferSize, 1, 1);
-          
+
           let audioBuffer = new Float32Array(0);
 
           const handlePCM = (payload: { data: string, rate: number }) => {
@@ -255,14 +451,14 @@ export function useButterchurnVisualizer(
             const numSamples = len / 2;
             const floatSamples = new Float32Array(numSamples);
             for (let i = 0; i < numSamples; i++) {
-                const int16 = dataView.getInt16(i * 2, true); // little-endian
+                const int16 = dataView.getInt16(i * 2, true);
                 floatSamples[i] = int16 / 32768.0;
             }
-            
+
             const newBuffer = new Float32Array(audioBuffer.length + floatSamples.length);
             newBuffer.set(audioBuffer);
             newBuffer.set(floatSamples, audioBuffer.length);
-            
+
             if (newBuffer.length > 24000 * 5) {
                audioBuffer = newBuffer.slice(newBuffer.length - 24000 * 5);
             } else {
@@ -271,11 +467,11 @@ export function useButterchurnVisualizer(
           };
 
           socket.on('music_pcm_stream', handlePCM);
-          
+
           scriptNode.onaudioprocess = (audioProcessingEvent) => {
              const outputBuffer = audioProcessingEvent.outputBuffer;
              const channelData = outputBuffer.getChannelData(0);
-             
+
              if (audioBuffer.length >= channelData.length) {
                  channelData.set(audioBuffer.slice(0, channelData.length));
                  audioBuffer = audioBuffer.slice(channelData.length);
@@ -287,14 +483,14 @@ export function useButterchurnVisualizer(
                  audioBuffer = new Float32Array(0);
              }
           };
-          
+
           const gainNode = audioContextRef.current.createGain();
-          gainNode.gain.value = 0; // Mute to prevent echoing the backend PyAudio
+          gainNode.gain.value = 0;
           scriptNode.connect(gainNode);
           gainNode.connect(audioContextRef.current.destination);
-          
+
           visualizerRef.current.connectAudio(scriptNode);
-          
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (scriptNode as any)._cleanup = () => {
              socket.off('music_pcm_stream', handlePCM);
@@ -314,14 +510,18 @@ export function useButterchurnVisualizer(
           }
         }
 
+        // Load all presets (both butterchurn-presets + cream of the crop)
+        await loadAllPresets();
+
         // Load initial preset
-        const { presets } = await loadModules();
-        const presetModule = getPresetsMap(presets);
-        const presetKeys = Object.keys(presetModule).sort();
-        if (presetKeys.length > 0) {
-          presetIndexRef.current = Math.floor(Math.random() * presetKeys.length);
-          const initialPreset = presetModule[presetKeys[presetIndexRef.current]];
-          visualizerRef.current.loadPreset(initialPreset, 0);
+        if (presetNamesRef.current.length > 0) {
+          presetIndexRef.current = Math.floor(Math.random() * presetNamesRef.current.length);
+          const initialPresetName = presetNamesRef.current[presetIndexRef.current];
+          const initialPreset = allPresetsRef.current.get(initialPresetName);
+          if (initialPreset) {
+            visualizerRef.current.loadPreset(initialPreset, 0);
+            setCurrentPresetName(initialPresetName);
+          }
         }
 
         startRenderer();
@@ -360,22 +560,26 @@ export function useButterchurnVisualizer(
 
       visualizerRef.current = null;
     };
-  }, [width, height, pixelRatio, loadModules, startRenderer, stopRenderer, startPresetCycle, stopPresetCycle]);
+  }, [width, height, pixelRatio, loadModules, loadAllPresets, startRenderer, stopRenderer, startPresetCycle, stopPresetCycle]);
 
   // Respond to agent state changes by adjusting preset cycle speed
   useEffect(() => {
     if (!isReady) return;
 
+    // If preset is locked, don't auto-rotate
+    if (lockedPreset) {
+      stopPresetCycle();
+      return;
+    }
+
     switch (state) {
       case 'speaking':
-        // Speed up preset cycling when speaking
         stopPresetCycle();
         if (autoRotatePresets) {
           cycleIntervalRef.current = setInterval(() => nextPreset(1.0), presetCycleInterval / 3);
         }
         break;
       case 'thinking':
-        // Slower, more contemplative transitions
         stopPresetCycle();
         if (autoRotatePresets) {
           cycleIntervalRef.current = setInterval(() => nextPreset(3.0), presetCycleInterval * 1.5);
@@ -384,14 +588,13 @@ export function useButterchurnVisualizer(
       case 'idle':
       case 'failed':
       case 'disconnected':
-        // Normal cycle speed
         stopPresetCycle();
         startPresetCycle();
         break;
       default:
         break;
     }
-  }, [state, isReady, autoRotatePresets, presetCycleInterval, nextPreset, stopPresetCycle, startPresetCycle]);
+  }, [state, isReady, autoRotatePresets, presetCycleInterval, nextPreset, stopPresetCycle, startPresetCycle, lockedPreset]);
 
   // Resize observer
   useEffect(() => {
@@ -420,5 +623,16 @@ export function useButterchurnVisualizer(
     prevPreset,
     setPresetByName,
     getPresetNames,
+    getAllPresets,
+    getCategories,
+    getCategoryPresets,
+    searchPresets,
+    toggleFavorite,
+    isFavorite,
+    getFavorites,
+    lockedPreset,
+    setLockedPreset,
+    clearLockedPreset,
+    currentPresetName,
   };
 }

@@ -28,3 +28,8 @@ declare module 'butterchurn-presets' {
   const presets: Record<string, object>;
   export default presets;
 }
+
+declare module '*.json' {
+  const value: any;
+  export default value;
+}

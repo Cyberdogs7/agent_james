@@ -1,0 +1,46 @@
+{
+  "! Transition": {
+    "count": 4,
+    "file": "! Transition.json"
+  },
+  "Dancer": {
+    "count": 1351,
+    "file": "Dancer.json"
+  },
+  "Drawing": {
+    "count": 1143,
+    "file": "Drawing.json"
+  },
+  "Fractal": {
+    "count": 1354,
+    "file": "Fractal.json"
+  },
+  "Geometric": {
+    "count": 1027,
+    "file": "Geometric.json"
+  },
+  "Hypnotic": {
+    "count": 280,
+    "file": "Hypnotic.json"
+  },
+  "Particles": {
+    "count": 389,
+    "file": "Particles.json"
+  },
+  "Reaction": {
+    "count": 1791,
+    "file": "Reaction.json"
+  },
+  "Sparkle": {
+    "count": 797,
+    "file": "Sparkle.json"
+  },
+  "Supernova": {
+    "count": 380,
+    "file": "Supernova.json"
+  },
+  "Waveform": {
+    "count": 1279,
+    "file": "Waveform.json"
+  }
+}

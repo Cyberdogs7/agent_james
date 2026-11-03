@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0a0a0f">
-    <title>A.D.A Mobile</title>
+    <title>Agent James Mobile</title>
     <link rel="manifest" href="/mobile/manifest.json">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -75,7 +75,7 @@
             max-width: 85%; animation: fadeIn 0.2s ease;
         }
         .msg.user { align-self: flex-end; background: var(--accent); color: white; }
-        .msg.ada { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
+        .msg.ada, .msg.james { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
         .msg.system { align-self: center; background: transparent; color: var(--muted); font-size: 12px; padding: 4px 8px; }
         .msg .sender { font-size: 11px; color: var(--muted); margin-bottom: 2px; font-weight: 600; }
         .msg.user .sender { color: rgba(255,255,255,0.7); }
@@ -158,7 +158,7 @@
 <body>
     <!-- Auth Screen -->
     <div id="auth-screen" class="hidden">
-        <h1>A.D.A</h1>
+        <h1>AGENT JAMES</h1>
         <p>Enter your access token to connect</p>
         <input id="token-input" type="password" placeholder="Access Token" autocomplete="off">
         <button id="token-submit">Connect</button>
@@ -167,7 +167,7 @@
 
     <!-- Main App -->
     <div class="header">
-        <h1>A.D.A</h1>
+        <h1>AGENT JAMES</h1>
         <div class="header-right">
             <span id="status-text">Disconnected</span>
             <div class="status-dot" id="status-dot"></div>
@@ -216,13 +216,13 @@
         let audioContext = null;
         let isRecording = false;
         let notifCount = 0;
-        let currentADAChunk = null;
-        let token = localStorage.getItem('ada_token') || '';
+        let currentJamesChunk = null;
+        let token = localStorage.getItem('james_token') || localStorage.getItem('ada_token') || '';
 
         // --- Auth ---
         if (window.location.search.includes('token=')) {
             token = new URLSearchParams(window.location.search).get('token');
-            localStorage.setItem('ada_token', token);
+            localStorage.setItem('james_token', token);
             window.history.replaceState({}, '', '/mobile');
         }
 
@@ -233,7 +233,7 @@
         tokenSubmit.addEventListener('click', () => {
             token = tokenInput.value.trim();
             if (token) {
-                localStorage.setItem('ada_token', token);
+                localStorage.setItem('james_token', token);
                 authScreen.classList.add('hidden');
                 connectSocket();
             }
@@ -253,7 +253,7 @@
             socket.on('connect', () => {
                 statusDot.classList.add('connected');
                 statusText.textContent = 'Connected';
-                addMessage('system', 'Connected to A.D.A');
+                addMessage('system', 'Connected to Agent James');
                 notifCount = 0;
                 notifBadge.style.display = 'none';
             });
@@ -261,7 +261,7 @@
             socket.on('disconnect', () => {
                 statusDot.classList.remove('connected');
                 statusText.textContent = 'Disconnected';
-                addMessage('system', 'Disconnected from A.D.A');
+                addMessage('system', 'Disconnected from Agent James');
             });
 
             socket.on('auth_required', (data) => {
@@ -270,10 +270,10 @@
             });
 
             socket.on('transcription', (data) => {
-                const sender = data.sender || 'ADA';
+                const sender = data.sender || 'James';
                 const text = data.text || '';
-                if (sender === 'ADA') {
-                    appendADAMessage(text);
+                if (sender === 'James' || sender === 'ADA') {
+                    appendJamesMessage(text);
                 } else {
                     addMessage('user', text, 'You');
                 }
@@ -308,7 +308,7 @@
             });
 
             socket.on('proactive_suggestion', (data) => {
-                addMessage('ada', data.suggestion || 'Suggestion received', 'A.D.A');
+                addMessage('james', data.suggestion || 'Suggestion received', 'Agent James');
             });
 
             socket.on('display_content', (data) => {
@@ -337,21 +337,23 @@
             feed.scrollTop = feed.scrollHeight;
         }
 
-        function appendADAMessage(text) {
-            if (currentADAChunk && !currentADAChunk.dataset.done) {
-                currentADAChunk.querySelector('.text').textContent += text;
+        function appendJamesMessage(text) {
+            if (currentJamesChunk && !currentJamesChunk.dataset.done) {
+                currentJamesChunk.querySelector('.text').textContent += text;
             } else {
                 const div = document.createElement('div');
-                div.className = 'msg ada';
+                div.className = 'msg james';
                 const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                div.innerHTML = `<div class="sender">A.D.A</div><div class="text">${escHtml(text)}</div><div class="time">${time}</div>`;
+                div.innerHTML = `<div class="sender">Agent James</div><div class="text">${escHtml(text)}</div><div class="time">${time}</div>`;
                 feed.appendChild(div);
-                currentADAChunk = div;
+                currentJamesChunk = div;
                 div.dataset.done = '0';
-                setTimeout(() => { div.dataset.done = '1'; currentADAChunk = null; }, 2000);
+                setTimeout(() => { div.dataset.done = '1'; currentJamesChunk = null; }, 2000);
             }
             feed.scrollTop = feed.scrollHeight;
         }
+        // Backward compat alias
+        const appendADAMessage = appendJamesMessage;
 
         function escHtml(s) {
             return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');

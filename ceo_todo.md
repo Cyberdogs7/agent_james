@@ -1,6 +1,6 @@
 # Fleet Commander (CEO Mode) & Orchestration Backlog
 
-This document outlines the detailed tasks required to upgrade A.D.A's orchestration capabilities. The core mission is for A.D.A to act as a "Tech Lead" or "Manager" over a fleet of concurrent external agents across multiple repositories, shifting the user into the role of "The Board" that only steps in for high-level approvals.
+This document outlines the detailed tasks required to upgrade Agent James' orchestration capabilities. The core mission is for Agent James to act as a "Tech Lead" or "Manager" over a fleet of concurrent external agents across multiple repositories, shifting the user into the role of "The Board" that only steps in for high-level approvals.
 
 ## 1. Data Model & Hierarchical State
 
@@ -55,9 +55,9 @@ This document outlines the detailed tasks required to upgrade A.D.A's orchestrat
   - Allow the Board to pause/resume any agent or task at any time directly from the UI.
   - Allow the Board to reassign tasks, edit descriptions, or manually adjust the priority of work.
 
-## 4. Integration with Existing A.D.A Systems
+## 4. Integration with Existing Agent James Systems
 
-**Goal:** Connect the new orchestration layer to A.D.A's current tooling.
+**Goal:** Connect the new orchestration layer to Agent James' current tooling.
 
 - [ ] **Project Manager Integration**
   - Link the new hierarchical task system with `ProjectManager`'s isolated context storage, ensuring each "Company" or "Initiative" has its own sandbox.
@@ -69,7 +69,7 @@ This document outlines the detailed tasks required to upgrade A.D.A's orchestrat
 **Goal:** Close the CI/CD loop so the fleet operates continuously without human intervention until the final step.
 
 - [ ] **Automated Code Review Agent**
-  - When an agent commits code or opens a PR, A.D.A should automatically detect this via webhook or polling.
+  - When an agent commits code or opens a PR, Agent James should automatically detect this via webhook or polling.
   - Spawn an internal Git/Review agent to assess the commit against project standards.
   - Post the review comments back to the agent session automatically.
 - [ ] **CI Failure Routing**

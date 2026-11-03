@@ -1,12 +1,14 @@
 {
-  "name": "ada-v2",
+  "name": "agent-james",
   "version": "1.0.0",
-  "description": "A.D.A V2 - AI Assistant",
+  "description": "Agent James - AI Assistant",
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && npx electron . --no-sandbox\"",
     "build": "vite build",
-    "start": "npx electron . --no-sandbox"
+    "start": "npx electron . --no-sandbox",
+    "presets:download": "bash scripts/download-presets.sh",
+    "presets:convert": "node scripts/convert-presets.js"
   },
   "keywords": [],
   "author": "",
@@ -39,6 +41,8 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^28.3.3",
+    "milkdrop-eel-parser": "^0.0.4",
+    "milkdrop-preset-utils": "^0.2.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^5.4.21",

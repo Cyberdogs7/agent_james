@@ -57,7 +57,7 @@ if pyaudio:
     try:
         pya = pyaudio.PyAudio()
     except Exception:
-        print("[ADA] Warning: PyAudio failed to initialize.")
+        print("[JAMES] Warning: PyAudio failed to initialize.")
         pya = None
 else:
     pya = None
@@ -94,7 +94,8 @@ except ImportError:
 from backend.oauth_manager import OAuthManager
 from backend.providers import register_all_providers
 
-class AudioLoop:
+class AgentJames:
+    """Agent James — voice assistant core (formerly AudioLoop)."""
     def __init__(self, sio=None, video_mode=DEFAULT_MODE, on_audio_data=None, on_video_frame=None, on_cad_data=None, on_web_data=None, on_transcription=None, on_tool_confirmation=None, on_cad_status=None, on_cad_thought=None, on_project_update=None, on_device_update=None, on_error=None, input_device_index=None, input_device_name=None, output_device_index=None, kasa_agent=None, project_manager=None, on_display_content=None, slack_agent=None, scraper_agent=None):
         self.sio = sio
         self.slack_agent = slack_agent
@@ -163,7 +164,7 @@ class AudioLoop:
         
         def handle_update_log(message):
             # Always print to console from the main thread context
-            print(f"[ADA DEBUG] {message}", flush=True)
+            print(f"[JAMES DEBUG] {message}", flush=True)
 
         self.update_agent = UpdateAgent(on_log=handle_update_log)
 
@@ -226,7 +227,7 @@ class AudioLoop:
             self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [WARN] Failed to load face cascade: {e}")
+                print(f"[JAMES DEBUG] [WARN] Failed to load face cascade: {e}")
             self.face_cascade = None
         self._last_face_check_time = 0
         self.notification_deduplicator = MessageDeduplicator(max_size=100)
@@ -240,7 +241,7 @@ class AudioLoop:
 
     def interrupt(self):
         """Interrupts the current agent task, clears audio queues, and cancels any running tool."""
-        print("[ADA DEBUG] Interrupting agent...", flush=True)
+        print("[JAMES DEBUG] Interrupting agent...", flush=True)
         # Clear audio queues
         if self.audio_in_queue:
             while not self.audio_in_queue.empty():
@@ -275,7 +276,7 @@ class AudioLoop:
         """Triggers the morning briefing offer if pending."""
         if self.automation_engine and self.automation_engine.briefing_status == "PENDING":
             if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [BRIEFING] Triggering Morning Briefing Offer (Presence/Interaction detected).")
+                print("[JAMES DEBUG] [BRIEFING] Triggering Morning Briefing Offer (Presence/Interaction detected).")
 
             # Mark as OFFERED so we don't spam
             self.automation_engine.briefing_status = "OFFERED"
@@ -290,7 +291,7 @@ class AudioLoop:
                     await self.session.send(input=msg, end_of_turn=False)
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send briefing offer: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Failed to send briefing offer: {e}")
 
     def flush_chat(self):
         """Forces the current chat buffer to be written to log."""
@@ -303,7 +304,7 @@ class AudioLoop:
 
     def update_permissions(self, permissions):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] Updating permissions: {permissions}")
+            print(f"[JAMES DEBUG] Updating permissions: {permissions}")
         self.tool_permissions = permissions
 
     def set_paused(self, paused):
@@ -339,7 +340,7 @@ class AudioLoop:
     def reconnect(self):
         """Signals the main loop to reconnect."""
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [RECONNECT] Reconnect signaled.")
+            print("[JAMES DEBUG] [RECONNECT] Reconnect signaled.")
         self._reconnect_needed.set()
 
 
@@ -347,19 +348,19 @@ class AudioLoop:
 
     def resolve_tool_confirmation(self, request_id, confirmed):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
+            print(f"[JAMES DEBUG] [RESOLVE] resolve_tool_confirmation called. ID: {request_id}, Confirmed: {confirmed}")
         if request_id in self._pending_confirmations:
             future = self._pending_confirmations[request_id]
             if not future.done():
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [RESOLVE] Future found and pending. Setting result to: {confirmed}")
+                    print(f"[JAMES DEBUG] [RESOLVE] Future found and pending. Setting result to: {confirmed}")
                 future.set_result(confirmed)
             else:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Request {request_id} future already done. Result: {future.result()}")
+                    print(f"[JAMES DEBUG] [WARN] Request {request_id} future already done. Result: {future.result()}")
         else:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [WARN] Confirmation Request {request_id} not found in pending dict. Keys: {list(self._pending_confirmations.keys())}")
+                print(f"[JAMES DEBUG] [WARN] Confirmation Request {request_id} not found in pending dict. Keys: {list(self._pending_confirmations.keys())}")
 
     def clear_audio_queue(self):
         """Clears the queue of pending audio chunks to stop playback immediately."""
@@ -370,10 +371,10 @@ class AudioLoop:
                 count += 1
             if count > 0:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [AUDIO] Cleared {count} chunks from playback queue due to interruption.")
+                    print(f"[JAMES DEBUG] [AUDIO] Cleared {count} chunks from playback queue due to interruption.")
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to clear audio queue: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to clear audio queue: {e}")
 
     async def send_frame(self, frame_data):
         # Update the latest frame payload
@@ -396,7 +397,7 @@ class AudioLoop:
     async def listen_audio(self):
         if not pya:
              if INCLUDE_RAW_LOGS:
-                 print("[ADA] PyAudio not available. Audio input disabled.")
+                 print("[JAMES] PyAudio not available. Audio input disabled.")
              while not self.stop_event.is_set():
                  await asyncio.sleep(1)
              return
@@ -405,7 +406,7 @@ class AudioLoop:
             mic_info = pya.get_default_input_device_info()
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA] [WARN] No default input device found: {e}")
+                print(f"[JAMES] [WARN] No default input device found: {e}")
             mic_info = {"index": -1}
 
         # Resolve Input Device by Name if provided
@@ -413,7 +414,7 @@ class AudioLoop:
         
         if self.input_device_name:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA] Attempting to find input device matching: '{self.input_device_name}'")
+                print(f"[JAMES] Attempting to find input device matching: '{self.input_device_name}'")
             count = pya.get_device_count()
             best_match = None
             
@@ -435,32 +436,32 @@ class AudioLoop:
             
             if resolved_input_device_index is not None:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] Resolved input device '{self.input_device_name}' to index {resolved_input_device_index} ({best_match})")
+                    print(f"[JAMES] Resolved input device '{self.input_device_name}' to index {resolved_input_device_index} ({best_match})")
             else:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] Could not find device matching '{self.input_device_name}'. Checking index...")
+                    print(f"[JAMES] Could not find device matching '{self.input_device_name}'. Checking index...")
 
         # Fallback to index if Name lookup failed or wasn't provided
         if resolved_input_device_index is None and self.input_device_index is not None:
              try:
                  resolved_input_device_index = int(self.input_device_index)
                  if INCLUDE_RAW_LOGS:
-                     print(f"[ADA] Requesting Input Device Index: {resolved_input_device_index}")
+                     print(f"[JAMES] Requesting Input Device Index: {resolved_input_device_index}")
              except ValueError:
                  if INCLUDE_RAW_LOGS:
-                     print(f"[ADA] Invalid device index '{self.input_device_index}', reverting to default.")
+                     print(f"[JAMES] Invalid device index '{self.input_device_index}', reverting to default.")
                  resolved_input_device_index = None
 
         if resolved_input_device_index is None:
              if INCLUDE_RAW_LOGS:
-                 print("[ADA] Using Default Input Device")
+                 print("[JAMES] Using Default Input Device")
 
         # Determine actual channels to use
         actual_input_device_index = resolved_input_device_index if resolved_input_device_index is not None else mic_info.get("index")
         
         if actual_input_device_index == -1 or actual_input_device_index is None:
              if INCLUDE_RAW_LOGS:
-                 print("[ADA] [WARN] No valid input device index. Audio input disabled (Waiting loop).")
+                 print("[JAMES] [WARN] No valid input device index. Audio input disabled (Waiting loop).")
              # Keep the task alive but idle to prevent session teardown
              while not self.stop_event.is_set():
                  await asyncio.sleep(1)
@@ -482,7 +483,7 @@ class AudioLoop:
             )
         except OSError:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA] Failed to open stream with {CHANNELS} channels. Trying to detect supported channels...")
+                print(f"[JAMES] Failed to open stream with {CHANNELS} channels. Trying to detect supported channels...")
             try:
                 device_info = pya.get_device_info_by_index(actual_input_device_index)
                 max_channels = int(device_info.get('maxInputChannels', 0))
@@ -503,18 +504,18 @@ class AudioLoop:
                         )
                         stream_channels = c
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA] Successfully opened audio stream with {c} channels.")
+                            print(f"[JAMES] Successfully opened audio stream with {c} channels.")
                         break
                     except OSError:
                         continue
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] [ERR] Device info lookup failed: {e}")
+                    print(f"[JAMES] [ERR] Device info lookup failed: {e}")
 
         if not self.audio_stream:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
-                print("[ADA] [WARN] Audio features will be disabled. Please check microphone permissions.")
+                print(f"[JAMES] [ERR] Failed to open audio input stream: Invalid number of channels or device unavailable.")
+                print("[JAMES] [WARN] Audio features will be disabled. Please check microphone permissions.")
             # Keep the task alive but idle to prevent session teardown
             while not self.stop_event.is_set():
                 await asyncio.sleep(1)
@@ -572,7 +573,7 @@ class AudioLoop:
                         asyncio.create_task(self._trigger_morning_briefing_offer())
 
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [VAD] Speech Detected (RMS: {rms}). Starting Stream.")
+                            print(f"[JAMES DEBUG] [VAD] Speech Detected (RMS: {rms}). Starting Stream.")
                         
                         # 1. Send Buffered Pre-roll (catch the start of the word)
                         while audio_buffer:
@@ -585,7 +586,7 @@ class AudioLoop:
                             await self.out_queue.put(self._latest_image_payload)
                         else:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [VAD] No video frame available to send.")
+                                print(f"[JAMES DEBUG] [VAD] No video frame available to send.")
 
                     # Send Current Chunk
                     if self.out_queue:
@@ -604,7 +605,7 @@ class AudioLoop:
                         elif time.time() - self._silence_start_time > SILENCE_DURATION:
                             # Silence confirmed, stop sending
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [VAD] Silence timeout. Stopping Stream.")
+                                print(f"[JAMES DEBUG] [VAD] Silence timeout. Stopping Stream.")
                             self._is_speaking = False
                             self._silence_start_time = None
                     else:
@@ -801,18 +802,30 @@ class AudioLoop:
     def _setup_authenticated_music_agent(self):
         """Check for existing YouTube Music credentials and set up authenticated client."""
         try:
-            if self.oauth_manager.is_authenticated("youtube_music"):
-                print("[ADA] Found existing YouTube Music credentials, setting up authenticated client...")
+            authenticated = self.oauth_manager.is_authenticated("youtube_music")
+            print(f"[JAMES] YouTube Music is_authenticated: {authenticated}")
+            if authenticated:
                 config = self.oauth_manager.get_provider("youtube_music")
-                if config and config.get("client_factory"):
+                has_factory = config and config.get("client_factory")
+                print(f"[JAMES] YouTube Music provider config loaded: {bool(config)}, has client_factory: {has_factory}")
+                if has_factory:
                     creds = self.oauth_manager.get_credentials("youtube_music")
+                    has_creds = bool(creds)
+                    print(f"[JAMES] YouTube Music credentials loaded: {has_creds}")
                     if creds:
+                        print(f"[JAMES] YouTube Music credentials headers keys: {list(creds.get('headers', {}).keys())}")
                         yt_client = config["client_factory"](creds)
                         if yt_client:
                             self.music_agent.set_authenticated_client(yt_client)
-                            print("[ADA] YouTube Music authenticated successfully")
+                            print("[JAMES] YouTube Music authenticated successfully")
+                        else:
+                            print("[JAMES] YouTube Music client_factory returned None!")
+            else:
+                print("[JAMES] YouTube Music not authenticated - skipping client setup")
         except Exception as e:
-            print(f"[ADA] Warning: Failed to set up authenticated music agent: {e}")
+            print(f"[JAMES] Warning: Failed to set up authenticated music agent: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def handle_google_login(self, service):
         """Handler for google_login tool."""
@@ -857,18 +870,18 @@ class AudioLoop:
     async def handle_cad_request(self, prompt):
         # CAD functionality is disabled. Inform the user.
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] CAD request received but disabled: '{prompt}'")
+            print(f"[JAMES DEBUG] [TOOL] CAD request received but disabled: '{prompt}'")
         return "CAD generation is currently disabled."
 
     async def handle_web_agent_request(self, prompt):
         if INCLUDE_RAW_LOGS:
-             print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
+             print(f"[JAMES DEBUG] [TOOL] Tool Call: 'run_web_agent' with prompt='{prompt}'")
         asyncio.create_task(self._run_web_agent_task(prompt))
         return "Web Navigation started. Do not reply to this message."
 
     async def handle_research_request(self, prompt):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'run_research_agent' with prompt='{prompt}'")
+            print(f"[JAMES DEBUG] [TOOL] Tool Call: 'run_research_agent' with prompt='{prompt}'")
         
         async def update_callback(msg):
             if self.on_display_content:
@@ -885,7 +898,7 @@ class AudioLoop:
     async def handle_create_coding_task(self, prompt, source=None):
         """Initiates a coding task by pausing to ask the user which agent to use."""
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [ROUTING] 'create_coding_task' called. Prompt: '{prompt}'")
+            print(f"[JAMES DEBUG] [ROUTING] 'create_coding_task' called. Prompt: '{prompt}'")
 
         self._pending_coding_task_prompt = prompt
         self._pending_coding_task_source = source
@@ -906,13 +919,13 @@ class AudioLoop:
             await self.session.send(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send routing prompt: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send routing prompt: {e}")
 
         return "Waiting for user to choose the agent."
 
     async def handle_openhands_request(self, prompt, repo_path=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENHANDS] Task: '{prompt}' (Repo: {repo_path})")
+            print(f"[JAMES DEBUG] [OPENHANDS] Task: '{prompt}' (Repo: {repo_path})")
 
         # Start the agent
         session = await self.openhands_agent.spawn_agent(prompt, repo_path)
@@ -926,7 +939,7 @@ class AudioLoop:
             await self.session.send(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send OpenHands notification: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send OpenHands notification: {e}")
 
         return f"Agent started. ID: {session.get('conversation_id') if session else 'Failed'}"
 
@@ -948,7 +961,7 @@ class AudioLoop:
             kanban_status = "todo_planning"
 
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENCODE] Task: '{prompt}' (Repo: {repo_path}, Tier: {model_tier}, Kanban: {kanban_status})")
+            print(f"[JAMES DEBUG] [OPENCODE] Task: '{prompt}' (Repo: {repo_path}, Tier: {model_tier}, Kanban: {kanban_status})")
 
         # Ensure server is running
         server_ok = await self.opencode_agent.ensure_server_running()
@@ -974,7 +987,7 @@ class AudioLoop:
             if worktree_path:
                 directory = worktree_path
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [OPENCODE] Created workspace: {worktree_path}")
+                    print(f"[JAMES DEBUG] [OPENCODE] Created workspace: {worktree_path}")
 
         # Resolve model tier
         model = None
@@ -1009,7 +1022,7 @@ class AudioLoop:
                         return "Duplicate task detected."
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OPENCODE] Duplicate check failed: {e}")
+                print(f"[JAMES DEBUG] [OPENCODE] Duplicate check failed: {e}")
 
         # Create session
         session = await self.opencode_agent.create_session(title=f"OpenCode: {clean_title}", directory=directory)
@@ -1023,7 +1036,7 @@ class AudioLoop:
 
         session_id = session.get("id", "")
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENCODE] Session created: {session_id}")
+            print(f"[JAMES DEBUG] [OPENCODE] Session created: {session_id}")
 
         # Inject mode prefix based on kanban status
         mode_prefix = self.OPENCODE_MODE_PREFIXES.get(kanban_status, "")
@@ -1046,7 +1059,7 @@ class AudioLoop:
                     asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OPENCODE] Fleet tracking failed: {e}")
+                print(f"[JAMES DEBUG] [OPENCODE] Fleet tracking failed: {e}")
 
         # Start polling
         use_interceptor = SETTINGS.get("opencode_use_interceptor", True)
@@ -1061,7 +1074,7 @@ class AudioLoop:
                     )
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to send OpenCode update: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Failed to send OpenCode update: {e}")
 
             # Auto-update fleet manager task status on completion
             if "appears completed" in message or "session failed" in message:
@@ -1075,7 +1088,7 @@ class AudioLoop:
                         asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [OPENCODE] Auto-complete update failed: {e}")
+                        print(f"[JAMES DEBUG] [OPENCODE] Auto-complete update failed: {e}")
 
         self.opencode_agent.start_polling(session_id, callback=_opencode_update_callback, interceptor_callback=interceptor, directory=directory)
 
@@ -1085,19 +1098,19 @@ class AudioLoop:
             await self.session.send(input=f"System Notification: OpenCode session created: '{title}'", end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send OpenCode notification: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send OpenCode notification: {e}")
 
         return f"OpenCode task started. Session ID: {session_id}"
 
     async def handle_opencode_mode_switch(self, session_id, kanban_status, repo_name=None):
         """Re-prompts an OpenCode session with the appropriate mode prefix when task moves lanes."""
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENCODE] Mode switch: Session {session_id} -> {kanban_status}")
+            print(f"[JAMES DEBUG] [OPENCODE] Mode switch: Session {session_id} -> {kanban_status}")
 
         mode_prefix = self.OPENCODE_MODE_PREFIXES.get(kanban_status, "")
         if not mode_prefix:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OPENCODE] No mode prefix for status: {kanban_status}")
+                print(f"[JAMES DEBUG] [OPENCODE] No mode prefix for status: {kanban_status}")
             return
 
         # Get directory
@@ -1118,15 +1131,15 @@ class AudioLoop:
                 )
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to send mode switch notification: {e}")
+                    print(f"[JAMES DEBUG] [ERR] Failed to send mode switch notification: {e}")
         else:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OPENCODE] Failed to send mode switch prompt")
+                print(f"[JAMES DEBUG] [OPENCODE] Failed to send mode switch prompt")
 
     async def handle_opencode_feedback(self, session_id, feedback):
         """Sends feedback to an existing OpenCode session."""
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENCODE] Sending feedback to session: {session_id}")
+            print(f"[JAMES DEBUG] [OPENCODE] Sending feedback to session: {session_id}")
 
         directory = None
         if self.project_manager:
@@ -1160,7 +1173,7 @@ class AudioLoop:
         and either auto-replies or escalates to the human user.
         """
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENCODE] [TRIAGE] Intercepted message for {session_id}: {message_content[:80]}...")
+            print(f"[JAMES DEBUG] [OPENCODE] [TRIAGE] Intercepted message for {session_id}: {message_content[:80]}...")
 
         context = ""
         if self.project_manager:
@@ -1201,7 +1214,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                         asyncio.create_task(sio.emit('fleet_state_update', fleet_manager.get_state()))
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to sync fleet status: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Failed to sync fleet status: {e}")
 
                 if self.session:
                     try:
@@ -1209,7 +1222,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                         asyncio.create_task(self.session.send(input=message, end_of_turn=False))
                     except Exception as e:
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [ERR] Failed to notify Ada: {e}")
+                            print(f"[JAMES DEBUG] [ERR] Failed to notify James: {e}")
             else:
                 # Auto-reply
                 directory = None
@@ -1221,7 +1234,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
 
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Triage failed for {session_id}: {e}")
+                print(f"[JAMES DEBUG] [ERR] Triage failed for {session_id}: {e}")
             self.notify_user(f"OpenCode task {session_id} sent a message: {message_content[:80]}...", duration=20000)
 
 
@@ -1251,7 +1264,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
 
     async def handle_iterate_cad(self, prompt):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
+            print(f"[JAMES DEBUG] [TOOL] Tool Call: 'iterate_cad' Prompt='{prompt}'")
 
         # Emit status
         if self.on_cad_status:
@@ -1266,15 +1279,15 @@ If NO (requires human approval, complex decisions, or external input): Output EX
 
         if cad_data:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OK] CadAgent iteration returned data successfully.")
+                print(f"[JAMES DEBUG] [OK] CadAgent iteration returned data successfully.")
 
             # Dispatch to frontend
             if self.on_cad_data:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
+                    print(f"[JAMES DEBUG] [SEND] Dispatching iterated CAD data to frontend...")
                 self.on_cad_data(cad_data)
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
+                    print(f"[JAMES DEBUG] [SENT] Dispatch complete.")
 
             # Save to Project
             self.project_manager.save_cad_artifact("output.stl", f"Iteration: {prompt}")
@@ -1282,13 +1295,13 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             result_str = f"Successfully iterated design: {prompt}. The updated 3D model is now displayed."
         else:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] CadAgent iteration returned None.")
+                print(f"[JAMES DEBUG] [ERR] CadAgent iteration returned None.")
             result_str = f"Failed to iterate design with prompt: {prompt}"
         return result_str
 
     async def _run_cad_generation_task(self, prompt):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CAD] Background Task Started: _run_cad_generation_task('{prompt}')")
+            print(f"[JAMES DEBUG] [CAD] Background Task Started: _run_cad_generation_task('{prompt}')")
         if self.on_cad_status:
             self.on_cad_status("generating")
             
@@ -1298,7 +1311,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             new_project_name = f"Project_{timestamp}"
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [CAD] Auto-creating project: {new_project_name}")
+                print(f"[JAMES DEBUG] [CAD] Auto-creating project: {new_project_name}")
             
             success, msg = self.project_manager.create_project(new_project_name)
             if success:
@@ -1310,7 +1323,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                          self.on_project_update(new_project_name)
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Failed to notify auto-project: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Failed to notify auto-project: {e}")
         
         # Get project cad folder path
         cad_output_dir = str(self.project_manager.get_current_project_path() / "cad")
@@ -1321,15 +1334,15 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         
         if cad_data:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [OK] CadAgent returned data successfully.")
-                print(f"[ADA DEBUG] [INFO] Data Check: {len(cad_data.get('vertices', []))} vertices, {len(cad_data.get('edges', []))} edges.")
+                print(f"[JAMES DEBUG] [OK] CadAgent returned data successfully.")
+                print(f"[JAMES DEBUG] [INFO] Data Check: {len(cad_data.get('vertices', []))} vertices, {len(cad_data.get('edges', []))} edges.")
             
             if self.on_cad_data:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SEND] Dispatching data to frontend callback...")
+                    print(f"[JAMES DEBUG] [SEND] Dispatching data to frontend callback...")
                 self.on_cad_data(cad_data)
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [SENT] Dispatch complete.")
+                    print(f"[JAMES DEBUG] [SENT] Dispatch complete.")
             
             # Save to Project
             if 'file_path' in cad_data:
@@ -1343,14 +1356,14 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             try:
                 await self.session.send(input=completion_msg, end_of_turn=True)
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [NOTE] Sent completion notification to model.")
+                    print(f"[JAMES DEBUG] [NOTE] Sent completion notification to model.")
             except Exception as e:
                  if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to send completion notification: {e}")
+                    print(f"[JAMES DEBUG] [ERR] Failed to send completion notification: {e}")
 
         else:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] CadAgent returned None.")
+                print(f"[JAMES DEBUG] [ERR] CadAgent returned None.")
             # Optionally notify failure
             try:
                 await self.session.send(input="System Notification: CAD generation failed.", end_of_turn=True)
@@ -1360,7 +1373,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
 
     async def handle_display_content(self, content_type, url=None, widget_type=None, data=None, duration=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DISPLAY] Displaying content: {content_type}")
+            print(f"[JAMES DEBUG] [DISPLAY] Displaying content: {content_type}")
 
         # If data is a string, assume it's JSON and parse it.
         # This handles the case where the model passes the result of one tool (get_weather)
@@ -1371,7 +1384,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                 parsed_data = json.loads(data)
             except json.JSONDecodeError:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Could not decode JSON string for display content: {data}")
+                    print(f"[JAMES DEBUG] [WARN] Could not decode JSON string for display content: {data}")
                 pass # Leave it as a string if it's not valid JSON
 
         # More robust check for wrapped data, especially for weather widgets.
@@ -1380,7 +1393,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             key = list(parsed_data.keys())[0]
             if isinstance(parsed_data[key], list):
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WEATHER WIDGET] Detected single-key dictionary wrapping the data with key '{key}'. Extracting the list.")
+                    print(f"[JAMES DEBUG] [WEATHER WIDGET] Detected single-key dictionary wrapping the data with key '{key}'. Extracting the list.")
                 parsed_data = parsed_data[key]
 
         if self.on_display_content:
@@ -1399,13 +1412,13 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         if hasattr(self, 'web_agent') and hasattr(self.web_agent, 'interrupt'):
             self.web_agent.interrupt()
             if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [WEB AGENT] Sent interrupt signal to Web Agent via tool.")
+                print("[JAMES DEBUG] [WEB AGENT] Sent interrupt signal to Web Agent via tool.")
             return "Successfully interrupted the web agent task."
         return "No web agent is currently running or it does not support interruption."
 
     async def _run_web_agent_task(self, prompt):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Background Task Started: _run_web_agent_task('{prompt}')")
+            print(f"[JAMES DEBUG] [WEB] Background Task Started: _run_web_agent_task('{prompt}')")
         
         async def update_frontend(image_b64, log_text):
             if self.on_web_data:
@@ -1414,18 +1427,18 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         # Run the web agent and wait for it to return
         result = await self.web_agent.run_task(prompt, update_callback=update_frontend)
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [WEB] Web Agent Task Returned: {result}")
+            print(f"[JAMES DEBUG] [WEB] Web Agent Task Returned: {result}")
         
         # Send the final result back to the main model
         try:
              await self.session.send(input=f"System Notification: Web Agent has finished.\nResult: {result}", end_of_turn=True)
         except Exception as e:
              if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send web agent result to model: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send web agent result to model: {e}")
 
     async def _run_research_task(self, prompt, update_callback):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [RESEARCH] Background Task Started: _run_research_task('{prompt}')")
+            print(f"[JAMES DEBUG] [RESEARCH] Background Task Started: _run_research_task('{prompt}')")
         
         try:
             result = await self.research_agent.run_research_task(prompt, update_callback)
@@ -1434,19 +1447,19 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             await self.session.send(input=f"System Notification: Deep Research completed.\n\n{result}", end_of_turn=True)
             
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [RESEARCH] Research Task Returned: {result[:200]}...")
+                print(f"[JAMES DEBUG] [RESEARCH] Research Task Returned: {result[:200]}...")
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Research task failed: {e}")
+                print(f"[JAMES DEBUG] [ERR] Research task failed: {e}")
             try:
                 await self.session.send(input=f"System Notification: Research task failed: {e}", end_of_turn=True)
             except Exception as e2:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to send error notification: {e2}")
+                    print(f"[JAMES DEBUG] [ERR] Failed to send error notification: {e2}")
 
     async def handle_create_swarm_mission(self, title):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [SWARM] Creating mission: '{title}'")
+            print(f"[JAMES DEBUG] [SWARM] Creating mission: '{title}'")
         swarm_id, msg = self.project_manager.create_swarm(title)
 
         if self.sio:
@@ -1457,7 +1470,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
 
     async def handle_ollama_request(self, prompt, source=None, role=None, model="llama3"):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OLLAMA] Task: '{prompt}' (Model: {model}, Source: {source})")
+            print(f"[JAMES DEBUG] [OLLAMA] Task: '{prompt}' (Model: {model}, Source: {source})")
 
         # Start the agent
         session = await self.ollama_agent.spawn_agent(prompt, source, role, model)
@@ -1468,39 +1481,39 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             await self.session.send(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send ollama notification: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send ollama notification: {e}")
 
         return f"Agent started. ID: {session['id']}"
 
     async def handle_lm_studio_request(self, prompt, source=None, role=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [LM_STUDIO] Task: '{prompt}'")
+            print(f"[JAMES DEBUG] [LM_STUDIO] Task: '{prompt}'")
         session = await self.lm_studio_agent.spawn_agent(prompt, source, role)
         msg = f"System Notification: Local LM Studio agent started with ID '{session['id']}'. I will notify you when it completes."
         try:
             await self.session.send(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send notification: {e}")
         return f"Agent started. ID: {session['id']}"
 
     async def handle_openrouter_request(self, prompt, source=None, role=None):
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [OPENROUTER] Task: '{prompt}'")
+            print(f"[JAMES DEBUG] [OPENROUTER] Task: '{prompt}'")
         session = await self.openrouter_agent.spawn_agent(prompt, source, role)
         msg = f"System Notification: OpenRouter agent started with ID '{session['id']}'. I will notify you when it completes."
         try:
             await self.session.send(input=msg, end_of_turn=True)
         except Exception as e:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to send notification: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to send notification: {e}")
         return f"Agent started. ID: {session['id']}"
 
 
     async def get_dashboard_data(self):
         """Gathers all data for the War Room Dashboard."""
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [DASHBOARD] Gathering data for War Room...")
+            print("[JAMES DEBUG] [DASHBOARD] Gathering data for War Room...")
 
         # 1. Project Info
         project = self.project_manager.current_project
@@ -1530,13 +1543,13 @@ If NO (requires human approval, complex decisions, or external input): Output EX
         for k in keys:
             if isinstance(res_dict[k], Exception):
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Dashboard task {k} failed: {res_dict[k]}")
+                    print(f"[JAMES DEBUG] [ERR] Dashboard task {k} failed: {res_dict[k]}")
                 res_dict[k] = None
 
         ollama_sessions = res_dict.get("ollama") or []
 
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DASHBOARD] Ollama sessions: {len(ollama_sessions)}")
+            print(f"[JAMES DEBUG] [DASHBOARD] Ollama sessions: {len(ollama_sessions)}")
 
         # 3. System Stats (REPLACED WITH AGENT STATS)
         # Calculate stats from Ollama sessions
@@ -1586,7 +1599,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
                             })
         except Exception as e:
              if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [ERR] Failed to fetch Trello data: {e}")
+                print(f"[JAMES DEBUG] [ERR] Failed to fetch Trello data: {e}")
 
         # 6. Session Data (Ollama only)
         enriched_sessions = []
@@ -1611,7 +1624,7 @@ If NO (requires human approval, complex decisions, or external input): Output EX
             })
 
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [DASHBOARD] Enriched sessions: {len(enriched_sessions)}")
+            print(f"[JAMES DEBUG] [DASHBOARD] Enriched sessions: {len(enriched_sessions)}")
 
         # 6. Device Data
         devices = []
@@ -1836,9 +1849,9 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         voice_name = project_config.get("voice_name", "Sadaltager")
 
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [CONFIG] Using Project: '{self.project_manager.current_project}'")
-            print(f"[ADA DEBUG] [CONFIG] Using System Prompt: '{system_prompt[:80]}...'")
-            print(f"[ADA DEBUG] [CONFIG] Using Voice: '{voice_name}'")
+            print(f"[JAMES DEBUG] [CONFIG] Using Project: '{self.project_manager.current_project}'")
+            print(f"[JAMES DEBUG] [CONFIG] Using System Prompt: '{system_prompt[:80]}...'")
+            print(f"[JAMES DEBUG] [CONFIG] Using Voice: '{voice_name}'")
 
         dynamic_declarations = self.tool_registry.get_dynamic_tool_declarations()
 
@@ -1868,7 +1881,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
         try:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [RECEIVE] Starting receive loop. {service_info}")
+                print(f"[JAMES DEBUG] [RECEIVE] Starting receive loop. {service_info}")
             consecutive_empty_fast_turns = 0
             import time
             while True:
@@ -1877,7 +1890,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     turn = self.session.receive()
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Session receive error ({service_info}): {e}")
+                        print(f"[JAMES DEBUG] [ERR] Session receive error ({service_info}): {e}")
                     raise e
 
                 full_turn_text_response = ""
@@ -1894,26 +1907,26 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                 if hasattr(part, 'thought') and part.thought:
                                     thought_text = part.thought
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [THOUGHT] {thought_text}")
+                                        print(f"[JAMES DEBUG] [THOUGHT] {thought_text}")
                                     if self.on_cad_thought:
                                         self.on_cad_thought(thought_text)
                                 
                                 if hasattr(part, 'text') and part.text:
                                     text_content = part.text
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TEXT] {text_content}")
+                                        print(f"[JAMES DEBUG] [TEXT] {text_content}")
                                     if self.on_transcription:
-                                        self.on_transcription({"sender": "ADA", "text": text_content})
+                                        self.on_transcription({"sender": "James", "text": text_content})
                                     
                                     # If the message is from Slack, accumulate the response
                                     if self.message_source == 'slack':
                                         full_turn_text_response += text_content + " "
 
                                     # Update chat buffer for logging
-                                    if self.chat_buffer["sender"] != "ADA":
+                                    if self.chat_buffer["sender"] != "James":
                                         if self.chat_buffer["sender"] and self.chat_buffer["text"].strip():
                                             self.project_manager.log_chat(self.chat_buffer["sender"], self.chat_buffer["text"])
-                                        self.chat_buffer = {"sender": "ADA", "text": text_content}
+                                        self.chat_buffer = {"sender": "James", "text": text_content}
                                     else:
                                         self.chat_buffer["text"] += text_content
 
@@ -1922,7 +1935,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                                 if hasattr(part, 'call') and part.call:
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [TOOL] Tool call in Part: {part.call.name}, Args: {part.call.args}", flush=True)
+                                        print(f"[JAMES DEBUG] [TOOL] Tool call in Part: {part.call.name}, Args: {part.call.args}", flush=True)
 
                     # 1. Handle Audio Data (Fallback if not handled in parts loop, though parts loop is preferred)
                     # We only use this if we didn't find inline_data in the parts loop to avoid duplicates
@@ -1949,7 +1962,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                             lower_transcript = transcript.lower()
                                             if "openhands" in lower_transcript or "open hands" in lower_transcript:
                                                 if INCLUDE_RAW_LOGS:
-                                                    print("[ADA DEBUG] [ROUTING] Intercepted 'openhands'.")
+                                                    print("[JAMES DEBUG] [ROUTING] Intercepted 'openhands'.")
                                                 p = self._pending_coding_task_prompt
                                                 s = self._pending_coding_task_source
                                                 self._pending_coding_task_prompt = None
@@ -1963,7 +1976,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                                             elif "opencode" in lower_transcript or "open code" in lower_transcript:
                                                 if INCLUDE_RAW_LOGS:
-                                                    print("[ADA DEBUG] [ROUTING] Intercepted 'opencode'.")
+                                                    print("[JAMES DEBUG] [ROUTING] Intercepted 'opencode'.")
                                                 p = self._pending_coding_task_prompt
                                                 s = self._pending_coding_task_source
                                                 self._pending_coding_task_prompt = None
@@ -2021,10 +2034,10 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                             function_responses = []
                             for fc in response.tool_call.function_calls:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
+                                    print(f"[JAMES DEBUG] [TOOL] Tool call: {fc.name}, Args: {fc.args}, Endpoint: {MODEL}", flush=True)
                                 else:
                                     # Basic log as requested: tool, endpoint, status
-                                    print(f"[ADA DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
+                                    print(f"[JAMES DEBUG] [TOOL] Tool: {fc.name}, Endpoint: {MODEL}, Status: 200", flush=True)
 
                                 # --- Tool Registry Dispatch ---
 
@@ -2044,7 +2057,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                         import uuid
                                         request_id = str(uuid.uuid4())
                                         if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
+                                            print(f"[JAMES DEBUG] [STOP] Requesting confirmation for '{fc.name}' (ID: {request_id})")
 
                                         future = asyncio.Future()
                                         self._pending_confirmations[request_id] = future
@@ -2061,15 +2074,15 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                             self._pending_confirmations.pop(request_id, None)
 
                                         if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
+                                            print(f"[JAMES DEBUG] [CONFIRM] Request {request_id} resolved. Confirmed: {confirmed}")
                                     else:
                                         if INCLUDE_RAW_LOGS:
-                                            print(f"[ADA DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
+                                            print(f"[JAMES DEBUG] [WARN] Confirmation required for '{fc.name}' but no confirmation handler is registered. Denying.")
                                         confirmed = False
 
                                 if confirmed is not True:
                                     if INCLUDE_RAW_LOGS:
-                                        print(f"[ADA DEBUG] [DENY] Tool call '{fc.name}' denied by user. Reason: {confirmed}")
+                                        print(f"[JAMES DEBUG] [DENY] Tool call '{fc.name}' denied by user. Reason: {confirmed}")
                                     result_str = confirmed if isinstance(confirmed, str) else "User denied the request to use this tool."
                                     function_response = types.FunctionResponse(
                                         id=fc.id,
@@ -2083,13 +2096,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                                 # Execute Tool via Registry
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] Executing tool {fc.name}...", flush=True)
+                                    print(f"[JAMES DEBUG] Executing tool {fc.name}...", flush=True)
                                 
                                 self._current_tool_task = asyncio.create_task(self.tool_registry.dispatch(fc.name, fc.args))
                                 try:
                                     result = await self._current_tool_task
                                 except asyncio.CancelledError:
-                                    print(f"[ADA DEBUG] Tool {fc.name} execution was cancelled.")
+                                    print(f"[JAMES DEBUG] Tool {fc.name} execution was cancelled.")
                                     result = "Tool execution was cancelled by the user."
                                 finally:
                                     self._current_tool_task = None
@@ -2104,12 +2117,12 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                             if function_responses:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
+                                    print(f"[JAMES DEBUG] [TOOL] Sending tool responses back to model: {function_responses}", flush=True)
                                 await self.session.send_tool_response(function_responses=function_responses)
                         
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [ERR] Error processing tool call: {e}")
+                                print(f"[JAMES DEBUG] [ERR] Error processing tool call: {e}")
                             raise e
                         finally:
                             self._is_tool_call_pending = False
@@ -2118,7 +2131,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 # Check if we have a Slack message to send
                 if self.message_source == 'slack' and self.slack_agent and full_turn_text_response.strip():
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [SLACK] End of turn. Sending full response to Slack: '{full_turn_text_response.strip()}'")
+                        print(f"[JAMES DEBUG] [SLACK] End of turn. Sending full response to Slack: '{full_turn_text_response.strip()}'")
                     asyncio.create_task(self.slack_agent.send_message(full_turn_text_response.strip()))
 
                 # Reset the message source after the turn is fully processed
@@ -2144,7 +2157,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
             import websockets.exceptions
             if "1011" in str(e) or "1008" in str(e) or "CANCELLED" in str(e).upper() or isinstance(e, websockets.exceptions.ConnectionClosedError):
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
+                    print(f"[JAMES DEBUG] [WARN] Transient Session Error in receive_audio: {e}")
             else:
                 if INCLUDE_RAW_LOGS:
                     print(f"Error in receive_audio: {e}")
@@ -2165,11 +2178,11 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 )
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] [ERR] Failed to open audio output stream: {e}")
+                    print(f"[JAMES] [ERR] Failed to open audio output stream: {e}")
                 stream = None
         else:
             if INCLUDE_RAW_LOGS:
-                print("[ADA] PyAudio not available. Audio output will only be sent to frontend.")
+                print("[JAMES] PyAudio not available. Audio output will only be sent to frontend.")
 
         import struct
         last_voice_time = 0
@@ -2278,7 +2291,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA] [ERR] Error in play_audio loop: {e}")
+                    print(f"[JAMES] [ERR] Error in play_audio loop: {e}")
 
     async def video_loop(self):
         cap = None
@@ -2309,7 +2322,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                      await self._trigger_morning_briefing_offer()
                              except Exception as e:
                                  if INCLUDE_RAW_LOGS:
-                                     print(f"[ADA DEBUG] [WARN] Face detection error: {e}")
+                                     print(f"[JAMES DEBUG] [WARN] Face detection error: {e}")
 
                      frame = self._process_frame(raw_frame)
                 else:
@@ -2324,7 +2337,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     frame = await asyncio.to_thread(self._get_screen_sync)
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Screen capture failed: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Screen capture failed: {e}")
 
             else:
                  # None or unknown
@@ -2367,7 +2380,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 self.sct.close()
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Failed to close MSS: {e}")
+                    print(f"[JAMES DEBUG] [ERR] Failed to close MSS: {e}")
             self.sct = None
 
         self._pending_voice_notifications = []
@@ -2380,11 +2393,11 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         dedup_id = message_id or text
         if not self.notification_deduplicator.check_and_add(dedup_id):
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [NOTIFY] Suppressed duplicate notification: {text}")
+                print(f"[JAMES DEBUG] [NOTIFY] Suppressed duplicate notification: {text}")
             return
 
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [NOTIFY] {text}")
+            print(f"[JAMES DEBUG] [NOTIFY] {text}")
 
         # UI
         if self.on_display_content:
@@ -2413,7 +2426,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                             await self.session.send(input=combined_text, end_of_turn=False)
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] Failed to send batched voice notification: {e}")
+                                print(f"[JAMES DEBUG] Failed to send batched voice notification: {e}")
                 self._notification_batch_task = asyncio.create_task(process_notifications())
 
         # Slack
@@ -2464,10 +2477,10 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
         service_info = f"Service: Gemini Multimodal Live API, Endpoint: {MODEL}"
         if INCLUDE_RAW_LOGS:
-            print(f"[ADA DEBUG] [SESSION] Starting session runner. Reconnect: {is_reconnect}")
+            print(f"[JAMES DEBUG] [SESSION] Starting session runner. Reconnect: {is_reconnect}")
         try:
             if INCLUDE_RAW_LOGS:
-                print(f"[ADA DEBUG] [CONNECT] Connecting to {service_info}...")
+                print(f"[JAMES DEBUG] [CONNECT] Connecting to {service_info}...")
 
             config = self._get_live_connect_config()
 
@@ -2514,7 +2527,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     if not is_reconnect:
                         if start_message:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [INFO] Sending start message: {start_message}")
+                                print(f"[JAMES DEBUG] [INFO] Sending start message: {start_message}")
                             await self.session.send(input=start_message, end_of_turn=True)
 
                         if self.on_project_update and self.project_manager:
@@ -2522,13 +2535,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     else:
                         # Display Reconnect GIF and Stay Silent
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [RECONNECT] Connection restored. Fetching reconnect GIF...")
+                            print(f"[JAMES DEBUG] [RECONNECT] Connection restored. Fetching reconnect GIF...")
 
                         try:
                             gif_url = await self.giphy_agent.get_random_gif("I'm back")
                             if gif_url:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [RECONNECT] Selected GIF: {gif_url}")
+                                    print(f"[JAMES DEBUG] [RECONNECT] Selected GIF: {gif_url}")
 
                                 # Display GIF for 10 seconds
                                 if self.on_display_content:
@@ -2539,11 +2552,11 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                                     })
                             else:
                                 if INCLUDE_RAW_LOGS:
-                                    print(f"[ADA DEBUG] [RECONNECT] No GIFs found.")
+                                    print(f"[JAMES DEBUG] [RECONNECT] No GIFs found.")
 
                         except Exception as e:
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] [ERR] Failed to display reconnect GIF: {e}")
+                                print(f"[JAMES DEBUG] [ERR] Failed to display reconnect GIF: {e}")
 
                     self._last_input_transcription = ""
                     self._last_output_transcription = ""
@@ -2566,12 +2579,12 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     else:
                         # A worker task finished (likely crashed). Log and trigger reconnect.
                         if INCLUDE_RAW_LOGS:
-                            print("[ADA DEBUG] [ERR] A worker task exited unexpectedly. Triggering reconnect.")
+                            print("[JAMES DEBUG] [ERR] A worker task exited unexpectedly. Triggering reconnect.")
                         # Attempt to find the crashed task and log its exception
                         for done_task in done:
                             try:
                                 if done_task.exception():
-                                    print(f"[ADA DEBUG] [ERR] Task exception: {done_task.exception()}")
+                                    print(f"[JAMES DEBUG] [ERR] Task exception: {done_task.exception()}")
                             except asyncio.InvalidStateError:
                                 pass # No exception
                         reconnect_task.cancel()
@@ -2581,7 +2594,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
                     if reconnect_task in done:
                         if INCLUDE_RAW_LOGS:
-                            print("[ADA DEBUG] [RECONNECT] Reconnect event received. Ending session...")
+                            print("[JAMES DEBUG] [RECONNECT] Reconnect event received. Ending session...")
                         self._reconnect_needed.clear()
                         return True # Signal for reconnect
 
@@ -2592,19 +2605,19 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     # Flush chat buffer to save any pending conversation before teardown
                     self.flush_chat()
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [SESSION] Tearing down {len(tasks)} session tasks...")
+                        print(f"[JAMES DEBUG] [SESSION] Tearing down {len(tasks)} session tasks...")
                     for task in tasks:
                         task.cancel()
                     await asyncio.gather(*tasks, return_exceptions=True)
                     if INCLUDE_RAW_LOGS:
-                        print("[ADA DEBUG] [SESSION] All session tasks cancelled.")
+                        print("[JAMES DEBUG] [SESSION] All session tasks cancelled.")
                     # Add small delay as requested
                     await asyncio.sleep(0.1)
 
         except (Exception, asyncio.CancelledError) as e:
             if self.stop_event.is_set():
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [INFO] Session runner stopping.")
+                    print(f"[JAMES DEBUG] [INFO] Session runner stopping.")
                 return False
 
             error_msg = str(e)
@@ -2612,7 +2625,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                  print(f"Rate limited (429) for {service_info}.")
             else:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Connection Error in session runner ({service_info}): {e}")
+                    print(f"[JAMES DEBUG] [ERR] Connection Error in session runner ({service_info}): {e}")
 
             if hasattr(e, 'exceptions'):
                 for idx, se in enumerate(e.exceptions):
@@ -2622,7 +2635,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
             return True
         finally:
             if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [SESSION] Session runner cleanup.")
+                print("[JAMES DEBUG] [SESSION] Session runner cleanup.")
             if hasattr(self, 'audio_stream') and self.audio_stream:
                 try:
                     self.audio_stream.close()
@@ -2657,13 +2670,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     if results:
                         nudge_text = f"System Notification: Silent context retrieval based on the user's last message. You do NOT need to mention this unless relevant to the conversation. Found historical context:\n{results[0]}"
                         if INCLUDE_RAW_LOGS:
-                            print(f"[ADA DEBUG] [NUDGE] Injecting context for message: '{latest_msg[:20]}...'")
+                            print(f"[JAMES DEBUG] [NUDGE] Injecting context for message: '{latest_msg[:20]}...'")
                         await self.session.send(input=nudge_text, end_of_turn=False)
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f"[ADA DEBUG] [ERR] Context nudging task failed: {e}")
+                print(f"[JAMES DEBUG] [ERR] Context nudging task failed: {e}")
 
     @staticmethod
     def _read_and_parse_chat_lines(chat_file, last_processed_line):
@@ -2741,13 +2754,13 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                         if new_prefs and isinstance(new_prefs, dict):
                             self.project_manager.update_user_profile(new_prefs)
                             if INCLUDE_RAW_LOGS:
-                                print(f"[ADA DEBUG] Updated user profile with new preferences: {new_prefs}")
+                                print(f"[JAMES DEBUG] Updated user profile with new preferences: {new_prefs}")
                 except Exception as e:
                     if INCLUDE_RAW_LOGS:
-                        print(f"[ADA DEBUG] [ERR] Implicit learning task genai failure: {e}")
+                        print(f"[JAMES DEBUG] [ERR] Implicit learning task genai failure: {e}")
             except Exception as e:
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [ERR] Implicit learning task failed: {e}")
+                    print(f"[JAMES DEBUG] [ERR] Implicit learning task failed: {e}")
 
     async def run(self, start_message=None):
         self._main_task = asyncio.current_task()
@@ -2765,12 +2778,12 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
         while not self.stop_event.is_set():
             if INCLUDE_RAW_LOGS:
-                print("[ADA DEBUG] [RUN] Main loop is running. Starting session runner.")
+                print("[JAMES DEBUG] [RUN] Main loop is running. Starting session runner.")
             should_reconnect = await self._session_runner(start_message, is_reconnect)
 
             if not should_reconnect:
                 if INCLUDE_RAW_LOGS:
-                    print("[ADA DEBUG] [RUN] Session runner requested no reconnect. Exiting main loop.")
+                    print("[JAMES DEBUG] [RUN] Session runner requested no reconnect. Exiting main loop.")
                 break
 
             is_reconnect = True
@@ -2778,12 +2791,12 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
 
             if not self.stop_event.is_set():
                 if INCLUDE_RAW_LOGS:
-                    print(f"[ADA DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
+                    print(f"[JAMES DEBUG] [RETRY] Reconnecting in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 10)
 
         if INCLUDE_RAW_LOGS:
-            print("[ADA DEBUG] [INFO] Main run loop has exited.")
+            print("[JAMES DEBUG] [INFO] Main run loop has exited.")
 
 
 if __name__ == "__main__":
@@ -2796,5 +2809,10 @@ if __name__ == "__main__":
         choices=["camera", "screen", "none"],
     )
     args = parser.parse_args()
-    main = AudioLoop(video_mode=args.mode)
+    main = AgentJames(video_mode=args.mode)
     asyncio.run(main.run())
+
+
+# Backward compatibility: old imports (from backend.ada import AudioLoop)
+# and (from ada import AudioLoop) should keep working during transition.
+AudioLoop = AgentJames

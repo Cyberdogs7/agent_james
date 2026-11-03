@@ -22,7 +22,7 @@
     ],
     "music_acknowledgment_method": "gif",
     "minimize_interruptions_during_music": true,
-    "preferred_music_genre": "90s euro techno",
+    "preferred_music_genre": "90s_Euro_Techno",
     "flexible_music_search_on_failure": true,
     "music_acknowledgment_during_playback": "non_verbal_gif",
     "always_remember_user_location": true,
@@ -52,7 +52,7 @@
     "prefer_verbal_confirmation_for_important_system_actions": true,
     "non_verbal_acknowledgment_type_during_music_playback": "GIF",
     "verbal_output_preference": "minimal",
-    "acknowledgment_method": "non_verbal_via_gif",
+    "acknowledgment_method": "non_verbal_gif",
     "preferred_communication_style": "minimal_verbal_output",
     "non_verbal_acknowledgment_method": "GIFs",
     "verbal_communication_override_conditions": [
@@ -102,7 +102,7 @@
         "direct_command",
         "important_actions"
     ],
-    "non_verbal_acknowledgment_preferred": "GIF",
+    "non_verbal_acknowledgment_preferred": true,
     "verbal_confirmation_for_important_actions": true,
     "merge_method_for_NLevelSoftware/open-horizons-frontend": "rebase",
     "default_communication_mode_when_music_playing": "non_verbal",
@@ -114,7 +114,7 @@
     "prefer_non_verbal_acknowledgment_during_music": true,
     "maintain_unobtrusive_operational_mode": true,
     "respond_only_to_critical_events_or_direct_commands": true,
-    "acknowledgment_preference": "non_verbal",
+    "acknowledgment_preference": "non_verbal_gif",
     "verbal_response_avoidance": true,
     "default_operational_state": "unobtrusive_silent_observation",
     "default_interaction_policy": "unobtrusive",
@@ -129,5 +129,63 @@
     "minimal_verbal_response_preference": true,
     "whatever_you_can_find_preference": true,
     "directness_preference": true,
-    "explicit_acknowledgment_preference": true
+    "explicit_acknowledgment_preference": true,
+    "interaction_style": "unobtrusive_and_minimized_interruptions_during_music_playback_and_idle_operation",
+    "preferred_radio_source_playlist_name": "programming",
+    "general_interaction_style": "unobtrusive",
+    "verbal_output_policy": "minimal",
+    "avoid_verbal_interruptions_during_music_and_idle": true,
+    "music_search_fallback_enabled": true,
+    "unobtrusive_mode_during_idle_operation": true,
+    "non_verbal_acknowledgment_preference": "Use GIFs for acknowledgment in situations like ambiguous input, minimal verbal output, before displaying information, after initiating music, and for automated greetings, to maintain an unobtrusive mode.",
+    "preferred_music_genres_for_fallback": [
+        "90s Euro Techno",
+        "Techno"
+    ],
+    "music_search_failure_strategy": "flexible_and_broaden_query",
+    "operational_mode_during_music_playback_and_idle": "Minimized interruptions and unobtrusive.",
+    "critical_system_notification_response": "Verbal acknowledgment and investigation.",
+    "music_preferences": {
+        "preferred_genres": [
+            "90s Euro Techno",
+            "Techno"
+        ],
+        "fallback_search_on_failure": true
+    },
+    "interaction_mode": {
+        "unobtrusive_mode": true,
+        "minimize_interruptions_during_music_playback": true,
+        "minimize_interruptions_during_idle_operation": true
+    },
+    "non_verbal_acknowledgment": true,
+    "avoid_verbal_acknowledgment": true,
+    "preferred_genres": [
+        "90s Euro Techno"
+    ],
+    "unobtrusive_mode_during_music_playback": true,
+    "music_preferred_genres": [
+        "90s Euro Techno",
+        "Techno"
+    ],
+    "music_search_fallback_strategy": [
+        "flexible_music_search_on_failure",
+        "broaden_query_on_no_results"
+    ],
+    "minimize_interruptions_during_playback_and_idle": true,
+    "music_search_strategy_on_failure": "flexible_and_broadening_fallback",
+    "clarification_response_style": "polite_non_verbal",
+    "operation_mode_preference": "unobtrusive",
+    "minimized_interruptions": true,
+    "music_playback_policy": "unobtrusive_mode_and_non_verbal_feedback",
+    "preferred_music_genres_fallback": [
+        "90s Euro Techno",
+        "Techno"
+    ],
+    "failed_music_search_approach": "flexible_and_broaden_query_strategy",
+    "critical_notification_response_override": "verbal",
+    "interaction_during_music_playback": "unobtrusive_non_verbal",
+    "gif_tone_preference": "witty",
+    "default_music_playback_mode": "radio",
+    "verbal_interaction_level": "minimal_unobtrusive",
+    "avoid_verbal_interruptions_during_playback_and_idle": true
 }

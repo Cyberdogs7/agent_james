@@ -1,12 +1,12 @@
-# Agent Context: A.D.A Architecture
+# Agent Context: Agent James Architecture
 
-This document provides context for agents modifying this codebase regarding the overall architectural direction of A.D.A.
+This document provides context for agents modifying this codebase regarding the overall architectural direction of Agent James.
 
 ## The Goal
-A.D.A is a voice-assistant that executes tasks, manages smart devices, and provides various utility functions.
+Agent James is a voice-assistant that executes tasks, manages smart devices, and provides various utility functions.
 
 ## Code Constraints
-- `backend/ada.py`: The central nervous system. Manages the main Audio Loop, tool registry, and routing logic. Keep heavy logic out of here; delegate to specific agents.
+- `backend/agent_james.py`: The central nervous system. Manages the main Audio Loop (`AgentJames` class), tool registry, and routing logic. Keep heavy logic out of here; delegate to specific agents.
 - **Dependency Management:** This project uses specific virtual environments. Ensure you do not arbitrarily add new global dependencies. Testing must be done via the provided `pytest` wrapper script or explicitly activated environment.
 
 ## Pull Request Naming

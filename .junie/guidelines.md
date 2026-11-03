@@ -6,11 +6,11 @@
 - Verification should be done manually or through other means specified by the user.
 
 ## Architecture Overview
-The project is a multimodal AI assistant (A.D.A V2) consisting of:
+The project is a multimodal AI assistant (Agent James) consisting of:
 - **Frontend**: Electron + React + Three.js + MediaPipe Gestures.
 - **Backend**: Python 3.11 + FastAPI + Socket.IO.
 - **Key Components**:
-    - `ada.py`: Gemini Live API integration.
+    - `agent_james.py`: Gemini Live API integration.
     - `web_agent.py`: Playwright-based browser automation.
     - `cad_agent.py`: CAD generation using `build123d`.
     - `printer_agent.py`: 3D printing integration (OrcaSlicer + Moonraker/OctoPrint).

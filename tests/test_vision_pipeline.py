@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 sys.path.append(os.getcwd())
 sys.path.append(os.path.join(os.getcwd(), 'backend'))
 
-# 1. Mock Heavy Dependencies & Agents *before* importing ada
+# 1. Mock Heavy Dependencies & Agents *before* importing agent_james
 sys.modules['google'] = MagicMock()
 sys.modules['google.genai'] = MagicMock()
 sys.modules['google.genai.types'] = MagicMock()
@@ -60,15 +60,15 @@ except ImportError:
 # Mock cv2 specifically
 mock_cv2 = MagicMock()
 sys.modules['cv2'] = mock_cv2
-# Note: PIL might still be imported by other modules, but ada.py no longer uses it for vision.
+# Note: PIL might still be imported by other modules, but agent_james.py no longer uses it for vision.
 # We mock it just in case.
 sys.modules['PIL'] = MagicMock()
 sys.modules['PIL.Image'] = MagicMock()
 sys.modules['mss'] = MagicMock()
 sys.modules['numpy'] = MagicMock()
 
-# Import AudioLoop now that mocks are in place
-from backend.ada import AudioLoop
+# Import AgentJames now that mocks are in place
+from backend.agent_james import AgentJames as AudioLoop
 
 # Test Class
 class TestVisionPipeline(unittest.TestCase):

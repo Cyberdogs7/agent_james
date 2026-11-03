@@ -22,10 +22,13 @@ except ImportError:
 load_dotenv()
 
 class AutomationEngine:
-    def __init__(self, task_manager, project_manager, ada_instance=None):
+    def __init__(self, task_manager, project_manager, agent_instance=None, ada_instance=None):
         self.task_manager = task_manager
         self.project_manager = project_manager
-        self.ada = ada_instance
+        # Agent James (formerly Ada): accept new + legacy kwarg
+        self.agent = agent_instance if agent_instance is not None else ada_instance
+        # Backward compat alias
+        self.ada = self.agent
         self.running = False
         self.stop_event = asyncio.Event()
         self.last_nag_times = {} # {id: timestamp}
@@ -129,8 +132,8 @@ class AutomationEngine:
                         print(f"[AutomationEngine] Detected Git Commit: {event.get('repo')} - {event.get('message')}")
                         await self.trigger_event('git_commit', event)
                         # Also announce via Ada if available
-                        if self.ada:
-                             await self.ada.handle_external_event(event)
+                        if self.agent:
+                             await self.agent.handle_external_event(event)
 
                 pr_events = await self.project_manager.monitor_git_prs()
                 if pr_events:
@@ -149,8 +152,8 @@ class AutomationEngine:
 
                             if is_active:
                                 print(f"[AutomationEngine] Detected new active PR: {repo_name} - {pr_event.get('title')}")
-                                if self.ada:
-                                    await self.ada.handle_external_event(pr_event)
+                                if self.agent:
+                                    await self.agent.handle_external_event(pr_event)
 
             except Exception as e:
                 print(f"[AutomationEngine] Git Monitor Error: {e}")
@@ -224,7 +227,7 @@ class AutomationEngine:
                                                         print(f"[AutomationEngine] Detected New Trello Card: {card.get('name')} in {lst.get('name')}")
                                                         await self.trigger_event('trello_move', event_data)
                                                         if getattr(self, 'ada', None):
-                                                            await self.ada.handle_external_event({'type': 'trello_move', **event_data})
+                                                            await self.agent.handle_external_event({'type': 'trello_move', **event_data})
 
                                                 seen_cards[list_id] = current_card_ids
 
@@ -421,8 +424,8 @@ class AutomationEngine:
                         if auto_merge_master:
                             msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks. Auto merging..."
                             print(f"[AutomationEngine] SMART MERGE (AUTO): {msg}")
-                            if self.ada:
-                                await self.ada.handle_external_event({
+                            if self.agent:
+                                await self.agent.handle_external_event({
                                     "type": "notification",
                                     "message": msg
                                 })
@@ -431,8 +434,8 @@ class AutomationEngine:
                         else:
                             msg = f"Sir, Pull Request #{number} ('{title}') on {owner}/{name} is passing all checks and has been stable for over 24 hours. Shall I merge it for you?"
                             print(f"[AutomationEngine] SMART MERGE: {msg}")
-                            if self.ada:
-                                await self.ada.handle_external_event({
+                            if self.agent:
+                                await self.agent.handle_external_event({
                                     "type": "notification",
                                     "message": msg
                                 })
@@ -543,8 +546,8 @@ class AutomationEngine:
                         msg = f"CI/CD Pipeline for PR #{number} ('{title}') in {owner}/{name} completed with status: {current_status.upper()}."
                         print(f"[AutomationEngine] CI NOTIFICATION: {msg}")
                         
-                        if self.ada:
-                            await self.ada.handle_external_event({
+                        if self.agent:
+                            await self.agent.handle_external_event({
                                 "type": "notification",
                                 "message": msg
                             })
@@ -608,8 +611,8 @@ class AutomationEngine:
                             if now - last_nag > self.NAG_COOLDOWN:
                                 msg = f"Sir, Pull Request #{number} ('{title}') on repository {owner}/{name} has been stalled for over 2 hours. Shall I merge it?"
                                 print(f"[AutomationEngine] NAGGING: {msg}")
-                                if self.ada:
-                                    await self.ada.handle_external_event({
+                                if self.agent:
+                                    await self.agent.handle_external_event({
                                         "type": "notification",
                                         "message": msg
                                     })
@@ -888,17 +891,17 @@ INSTRUCTIONS:
             if act_type == 'notify':
                 msg = f"Automation '{task['title']}' triggered: {act_value}"
                 print(f"[AutomationEngine] ACTION: Notify - {msg}")
-                if self.ada:
+                if self.agent:
                     # Send via UI notification
-                    if self.ada.on_display_content:
-                        self.ada.on_display_content({
+                    if self.agent.on_display_content:
+                        self.agent.on_display_content({
                             "content_type": "notification",
                             "data": {"text": msg},
                             "duration": 10000
                         })
                     # Send via Slack
-                    if self.ada.slack_agent:
-                        asyncio.create_task(self.ada.slack_agent.send_message(msg))
+                    if self.agent.slack_agent:
+                        asyncio.create_task(self.agent.slack_agent.send_message(msg))
                 success = True
 
             elif act_type == 'run_script':
@@ -983,15 +986,15 @@ INSTRUCTIONS:
 
                     # Notify User
                     msg = f"Task '{task['title']}' failed. I have analyzed the error and generated a fix. Please review and apply it in the War Room."
-                    if self.ada:
-                         if self.ada.on_display_content:
-                            self.ada.on_display_content({
+                    if self.agent:
+                         if self.agent.on_display_content:
+                            self.agent.on_display_content({
                                 "content_type": "notification",
                                 "data": {"text": msg},
                                 "duration": 15000
                             })
                          # Trigger voice
-                         if self.ada.session:
-                             asyncio.create_task(self.ada.session.send(input=f"System Notification: {msg}", end_of_turn=False))
+                         if self.agent.session:
+                             asyncio.create_task(self.agent.session.send(input=f"System Notification: {msg}", end_of_turn=False))
                 else:
                     print("[AutomationEngine] Could not generate fix.")

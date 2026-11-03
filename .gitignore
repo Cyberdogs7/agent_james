@@ -7,7 +7,7 @@ venv/
 .venv/
 env/
 
-# ADA Specific Local Data
+# Agent James Specific Local Data
 backend/reference.jpg
 backend/settings.json
 backend/last_cad_generation.json
@@ -48,3 +48,6 @@ test_workspace_thread_small/
 test_workspace_aio_small/
 test_workspace_thread_large/
 test_workspace_aio_large/
+
+# Milkdrop presets (raw .milk files, converted JSON is committed)
+src/presets/cream-of-the-crop-raw/

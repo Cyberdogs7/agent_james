@@ -36,7 +36,7 @@ sys.modules['numpy'] = MagicMock()
 sys.modules['PIL'] = MagicMock()
 sys.modules['PIL.Image'] = MagicMock()
 
-from backend.ada import AudioLoop
+from backend.agent_james import AgentJames as AudioLoop
 
 class TestScreenCaptureOptimization(unittest.TestCase):
     def setUp(self):

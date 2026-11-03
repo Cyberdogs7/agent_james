@@ -1,11 +1,12 @@
 'use client';
 
-import React, { type ComponentProps } from 'react';
+import React, { useState, useCallback, useRef, type ComponentProps } from 'react';
 import { type VariantProps, cva } from 'class-variance-authority';
 
 import { useButterchurnVisualizer } from '../../hooks/agents-ui/use-butterchurn-visualizer';
 import { type AgentState } from '../../hooks/agents-ui/use-agent-audio-visualizer-aura';
 import { cn } from '../../lib/utils';
+import { PresetPicker } from './PresetPicker';
 
 export const AgentAudioVisualizerButterchurnVariants = cva(['aspect-square'], {
   variants: {
@@ -23,54 +24,18 @@ export const AgentAudioVisualizerButterchurnVariants = cva(['aspect-square'], {
 });
 
 export interface AgentAudioVisualizerButterchurnProps {
-  /**
-   * The size of the visualizer.
-   * @defaultValue 'lg'
-   */
   size?: 'icon' | 'sm' | 'md' | 'lg' | 'xl';
-  /**
-   * Agent state
-   * @default 'connecting'
-   */
   state?: AgentState;
-  /**
-   * The volume of the audio (0-1).
-   */
   volume?: number;
-  /**
-   * Preset cycle interval in milliseconds.
-   * @default 15000
-   */
   presetCycleInterval?: number;
-  /**
-   * Whether to automatically rotate through presets.
-   * @default true
-   */
   autoRotatePresets?: boolean;
-  /**
-   * Preset name to use. If provided, will lock to this preset.
-   */
   preset?: string;
-  /**
-   * Socket connection to receive raw PCM stream from the backend.
-   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   socket?: any;
 }
 
-/**
- * A butterchurn-based audio visualizer that displays Milkdrop-style visualizations.
- * Responds to agent state and audio levels with dynamic preset transitions.
- *
- * @example
- * ```tsx
- * <AgentAudioVisualizerButterchurn
- *   size="lg"
- *   state="speaking"
- *   volume={0.5}
- * />
- * ```
- */
+const LONG_PRESS_MS = 500;
+
 export function AgentAudioVisualizerButterchurn({
   size = 'lg',
   state = 'connecting',
@@ -83,15 +48,26 @@ export function AgentAudioVisualizerButterchurn({
   ref,
   ...props
 }: AgentAudioVisualizerButterchurnProps & ComponentProps<'div'>) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggeredRef = useRef(false);
+
   const {
     canvasRef,
     isReady,
     error,
     setPresetByName,
     nextPreset,
+    getAllPresets,
+    getCategories,
+    toggleFavorite,
+    lockedPreset,
+    setLockedPreset,
+    clearLockedPreset,
+    currentPresetName,
   } = useButterchurnVisualizer(state, volume, {
     presetCycleInterval,
-    autoRotatePresets,
+    autoRotatePresets: autoRotatePresets && !lockedPreset,
     socket,
   });
 
@@ -102,27 +78,105 @@ export function AgentAudioVisualizerButterchurn({
     }
   }, [isReady, preset, setPresetByName]);
 
+  const openPicker = useCallback(() => {
+    setPickerOpen(true);
+  }, []);
+
+  const handlePointerDown = useCallback(() => {
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      openPicker();
+    }, LONG_PRESS_MS);
+  }, [openPicker]);
+
+  const handlePointerUp = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // If long press already opened picker, don't do anything else
+    if (longPressTriggeredRef.current) {
+      longPressTriggeredRef.current = false;
+      return;
+    }
+
+    // Shift+click opens picker
+    if (e.shiftKey) {
+      e.preventDefault();
+      openPicker();
+      return;
+    }
+
+    // Normal click advances to next preset
+    nextPreset();
+    props.onClick?.(e);
+  }, [nextPreset, openPicker, props]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    openPicker();
+  }, [openPicker]);
+
   return (
-    <div 
-      ref={ref} 
-      className={cn(AgentAudioVisualizerButterchurnVariants({ size }), className)} 
-      onClick={(e) => {
-        nextPreset();
-        props.onClick?.(e);
-      }}
-      {...props}
-    >
-      {error && (
-        <div className="flex items-center justify-center w-full h-full text-red-500 text-sm">
-          {error}
-        </div>
-      )}
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full"
-        style={{ display: error ? 'none' : 'block' }}
+    <>
+      <div
+        ref={ref}
+        className={cn(
+          AgentAudioVisualizerButterchurnVariants({ size }),
+          'relative',
+          className
+        )}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
+        {...props}
+      >
+        {error && (
+          <div className="flex items-center justify-center w-full h-full text-red-500 text-sm">
+            {error}
+          </div>
+        )}
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full"
+          style={{ display: error ? 'none' : 'block' }}
+        />
+        {/* Current preset name overlay */}
+        {isReady && currentPresetName && size !== 'icon' && size !== 'sm' && (
+          <div className="absolute bottom-1 left-1 right-1 text-center">
+            <span className="inline-block px-1.5 py-0.5 bg-black/60 text-white/70 text-[9px] rounded truncate max-w-full backdrop-blur-sm">
+              {currentPresetName.split('/').pop()?.split('\\').pop() || currentPresetName}
+            </span>
+          </div>
+        )}
+        {/* Lock indicator */}
+        {lockedPreset && (
+          <div className="absolute top-1 right-1">
+            <span className="inline-block w-2 h-2 bg-amber-400 rounded-full animate-pulse" title="Preset locked" />
+          </div>
+        )}
+      </div>
+
+      <PresetPicker
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        presets={getAllPresets()}
+        categories={getCategories()}
+        currentPreset={currentPresetName}
+        lockedPreset={lockedPreset}
+        onSelectPreset={setPresetByName}
+        onToggleFavorite={toggleFavorite}
+        onLockPreset={setLockedPreset}
+        onUnlockPreset={clearLockedPreset}
+        onReshuffle={() => nextPreset()}
       />
-    </div>
+    </>
   );
 }
 

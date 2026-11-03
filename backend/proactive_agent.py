@@ -36,7 +36,7 @@ class ProactiveAgent:
         return False
 
     async def _make_suggestion(self, suggestion):
-        """Sends a suggestion to the user through the AudioLoop session."""
+        """Sends a suggestion to the user through the AgentJames session."""
         if self.session:
             try:
                 self._log(f"[PROACTIVE_AGENT] Making suggestion: {suggestion}")

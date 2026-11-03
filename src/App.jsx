@@ -495,9 +495,9 @@ function App() {
         socket.on('status', (data) => {
             addMessage('System', data.msg);
             // Update status bar based on backend messages
-            if (data.msg === 'A.D.A Started') {
+            if (data.msg === 'Agent James Started') {
                 setStatus('Model Connected');
-            } else if (data.msg === 'A.D.A Stopped') {
+            } else if (data.msg === 'Agent James Stopped') {
                 setStatus('Connected');
             }
 
@@ -899,33 +899,29 @@ function App() {
     }
   }, []);
 
-  // Media key handler (works globally, even when music player is hidden)
+  // Electron globalShortcut media key handler
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      switch (e.code) {
-        case 'MediaPlayPause':
-          e.preventDefault();
+    if (!ipcRenderer?.on) return;
+
+    const handleMediaKey = (_event, action) => {
+      switch (action) {
+        case 'play_pause':
           socket.emit('control_music', { action: musicStatus.status === 'playing' ? 'pause' : 'resume' });
           break;
-        case 'MediaStop':
-          e.preventDefault();
+        case 'stop':
           socket.emit('control_music', { action: 'stop' });
           break;
-        case 'MediaTrackNext':
-          e.preventDefault();
+        case 'next':
           socket.emit('control_music', { action: 'next' });
           break;
-        case 'MediaTrackPrevious':
-          e.preventDefault();
+        case 'previous':
           socket.emit('control_music', { action: 'previous' });
-          break;
-        default:
           break;
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    ipcRenderer.on('media-key', handleMediaKey);
+    return () => ipcRenderer.removeListener('media-key', handleMediaKey);
   }, [musicStatus.status, socket]);
 
   // Persist device selections to localStorage when they change
@@ -1807,7 +1803,7 @@ function App() {
       >
         <div className="flex items-center gap-4 pl-2">
           <h1 className="text-xl font-bold tracking-[0.2em] text-gold9 drop-shadow-[0_0_10px_rgba(255,215,0,0.5)]">
-            A.D.A
+            AGENT JAMES
           </h1>
           <div className="text-[10px] text-gold9/70 border border-gold9/20 px-1 rounded">
             V2.0.0

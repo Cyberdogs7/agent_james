@@ -22,7 +22,7 @@ class MusicAgent:
         self.ffmpeg_process = None
         self._stop_event = threading.Event()
         self.main_loop = None
-        self._audio_queue = None # Set by ada.py if pushing to global mix
+        self._audio_queue = None # Set by agent_james.py if pushing to global mix
         self.internal_queue = queue.Queue(maxsize=2000) # Pre-buffer up to ~5.5 minutes of audio
         self._download_task = None
 
@@ -34,7 +34,7 @@ class MusicAgent:
         self._play_task = None
 
     def set_audio_queue(self, queue):
-        """Allows ADA to inject the main audio queue."""
+        """Allows James to inject the main audio queue."""
         self._audio_queue = queue
 
     async def start(self):
@@ -520,7 +520,7 @@ class MusicAgent:
             if is_finished:
                 break
 
-            # Push to ADA's queue if available
+            # Push to James' queue if available
             if self._audio_queue:
                 process_data = self._process_and_push_chunk(process_data)
 
@@ -575,7 +575,7 @@ class MusicAgent:
         return process_data, small_chunk_buffer, is_finished
 
     def _process_and_push_chunk(self, process_data):
-        """Processes audio chunk for volume, visualization, and pushes to ADA queue."""
+        """Processes audio chunk for volume, visualization, and pushes to James queue."""
         import array
         import audioop
 

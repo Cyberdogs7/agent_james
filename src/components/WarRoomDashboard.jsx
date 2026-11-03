@@ -395,7 +395,7 @@ const WarRoomDashboard = ({ data, socket, onClose, messages = [], inputValue, se
                 {/* FOOTER */}
                 <motion.div variants={itemVariants} className="mt-4 text-[10px] text-gold9/40 flex justify-between uppercase tracking-widest">
                     <div>SECURE CONNECTION ESTABLISHED</div>
-                    <div>A.D.A OS v2.0 // AUTH: JAMES</div>
+                    <div>AGENT JAMES OS v2.0</div>
                 </motion.div>
 
                 {/* COMMAND MODAL */}

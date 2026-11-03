@@ -30,13 +30,13 @@ from pathlib import Path
 
 
 
-# Ensure we can import ada and backend modules
+# Ensure we can import agent_james and backend modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.append(project_root)
 sys.path.append(current_dir)
 
-from backend import ada
+from backend import agent_james
 from authenticator import FaceAuthenticator
 from kasa_agent import KasaAgent
 from project_manager import ProjectManager
@@ -352,7 +352,7 @@ async def startup_event():
 
 @app.get("/status")
 async def status():
-    return {"status": "running", "service": "A.D.A Backend"}
+    return {"status": "running", "service": "Agent James Backend"}
 
 @app.get("/mobile", response_class=HTMLResponse)
 async def mobile_ui():
@@ -403,7 +403,7 @@ async def connect(sid, environ):
                 await sio.disconnect(sid)
                 return
 
-    await sio.emit('status', {'msg': 'Connected to A.D.A Backend'}, room=sid)
+    await sio.emit('status', {'msg': 'Connected to Agent James Backend'}, room=sid)
 
     global authenticator
     
@@ -479,7 +479,7 @@ async def start_audio(sid, data=None):
              loop_task = None
         else:
              print("Audio loop already running. Re-connecting client to session.")
-             await sio.emit('status', {'msg': 'A.D.A Already Running'})
+             await sio.emit('status', {'msg': 'Agent James Already Running'})
              return
 
 
@@ -507,7 +507,7 @@ async def start_audio(sid, data=None):
         
     # Callback to send Transcription data to frontend
     def on_transcription(data):
-        # data = {"sender": "User"|"ADA", "text": "..."}
+        # data = {"sender": "User"|"James", "text": "..."}
         if server_loop:
 
             asyncio.run_coroutine_threadsafe(sio.emit('transcription', data), server_loop)
@@ -523,7 +523,7 @@ async def start_audio(sid, data=None):
     # Callback to send CAD status to frontend
     def on_cad_status(status):
         # status can be: 
-        # - a string like "generating" (from ada.py handle_cad_request)
+        # - a string like "generating" (from agent_james.py handle_cad_request)
         # - a dict with {status, attempt, max_attempts, error} (from CadAgent)
         if isinstance(status, dict):
             print(f"Sending CAD Status: {status.get('status')} (attempt {status.get('attempt')}/{status.get('max_attempts')})")
@@ -576,10 +576,10 @@ async def start_audio(sid, data=None):
 
                 asyncio.run_coroutine_threadsafe(sio.emit('display_content', data), server_loop)
 
-    # Initialize ADA
+    # Initialize Agent James
     try:
-        print(f"Initializing AudioLoop with device_index={device_index}")
-        audio_loop = ada.AudioLoop(
+        print(f"Initializing AgentJames with device_index={device_index}")
+        audio_loop = agent_james.AgentJames(
             sio=sio,
             video_mode="none", 
             on_audio_data=on_audio_data,
@@ -601,7 +601,7 @@ async def start_audio(sid, data=None):
             slack_agent=slack_agent,
             scraper_agent=scraper_agent
         )
-        print("AudioLoop initialized successfully.")
+        print("AgentJames initialized successfully.")
 
         # Apply current permissions
         audio_loop.update_permissions(SETTINGS["tool_permissions"])
@@ -611,7 +611,7 @@ async def start_audio(sid, data=None):
             print("Starting with Audio Paused")
             audio_loop.set_paused(True)
 
-        print("Creating asyncio task for AudioLoop.run()")
+        print("Creating asyncio task for AgentJames.run()")
         def run_audio_loop_in_thread(loop_instance):
             new_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(new_loop)
@@ -626,11 +626,12 @@ async def start_audio(sid, data=None):
         
         audio_loop.update_agent.sio = sio
 
-        # Connect Automation Engine to Ada for notifications
+        # Connect Automation Engine to James for notifications
         if automation_engine:
-            automation_engine.ada = audio_loop
+            automation_engine.agent = audio_loop
+            automation_engine.ada = audio_loop  # backward compat
             audio_loop.automation_engine = automation_engine
-            print("[SERVER] Connected Automation Engine to Ada instance (Bidirectional).")
+            print("[SERVER] Connected Automation Engine to James instance (Bidirectional).")
 
         # Trigger initial briefing check after a short delay to allow connection
         async def delayed_briefing_check():
@@ -638,8 +639,8 @@ async def start_audio(sid, data=None):
             await check_morning_briefing_trigger()
         asyncio.create_task(delayed_briefing_check())
 
-        print("Emitting 'A.D.A Started'")
-        await sio.emit('status', {'msg': 'A.D.A Started'})
+        print("Emitting 'Agent James Started'")
+        await sio.emit('status', {'msg': 'Agent James Started'})
 
         # Load saved printers
         saved_printers = SETTINGS.get("printers", [])
@@ -658,7 +659,7 @@ async def start_audio(sid, data=None):
         asyncio.create_task(monitor_printers_loop())
         
     except Exception as e:
-        print(f"CRITICAL ERROR STARTING ADA: {e}")
+        print(f"CRITICAL ERROR STARTING AGENT JAMES: {e}")
         import traceback
         traceback.print_exc()
         await sio.emit('error', {'msg': f"Failed to start: {str(e)}"})
@@ -728,7 +729,7 @@ async def stop_audio(sid):
         audio_loop.stop() 
         print("Stopping Audio Loop")
         audio_loop = None
-        await sio.emit('status', {'msg': 'A.D.A Stopped'})
+        await sio.emit('status', {'msg': 'Agent James Stopped'})
 
 @sio.event
 async def pause_audio(sid):
@@ -1136,7 +1137,7 @@ async def discover_printers(sid):
             return
         else:
             await sio.emit('printer_list', [])
-            await sio.emit('status', {'msg': "Connect to A.D.A to enable printer discovery"})
+            await sio.emit('status', {'msg': "Connect to Agent James to enable printer discovery"})
             return
         
     try:

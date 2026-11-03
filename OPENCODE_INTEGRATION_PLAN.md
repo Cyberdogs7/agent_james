@@ -1,9 +1,9 @@
-# OpenCode Integration for ADA V2 - Implementation Summary
+# OpenCode Integration for Agent James - Implementation Summary
 
 ## Status: Implemented
 
 ## Overview
-OpenCode has been integrated into ADA as a local coding agent. ADA can now send coding tasks to OpenCode, poll for progress, and receive updates via voice and UI.
+OpenCode has been integrated into Agent James as a local coding agent. Agent James can now send coding tasks to OpenCode, poll for progress, and receive updates via voice and UI.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ OpenCode has been integrated into ADA as a local coding agent. ADA can now send 
 |------|---------|
 | `backend/opencode_agent.py` | Core agent class (~400 lines) - HTTP client, session management, polling, workspaces |
 | `backend/tools.py` | 6 new tool declarations for OpenCode operations |
-| `backend/ada.py` | Handler methods, voice routing, triage interceptor |
+| `backend/agent_james.py` | Handler methods, voice routing, triage interceptor |
 | `backend/server.py` | Settings defaults, Socket.IO event handlers |
 | `backend/fleet_manager.py` | OpenCode session tracking methods |
 | `src/components/SettingsWindow.jsx` | UI configuration panel |
@@ -59,8 +59,8 @@ OpenCode has been integrated into ADA as a local coding agent. ADA can now send 
 ## Features
 
 ### Voice Routing
-- Say "opencode" or "open code" when ADA asks which agent to use
-- ADA will route the task to OpenCode automatically
+- Say "opencode" or "open code" when Agent James asks which agent to use
+- Agent James will route the task to OpenCode automatically
 
 ### Workspace Isolation (Default ON)
 - Creates git worktrees for each task to prevent file conflicts
@@ -78,17 +78,17 @@ OpenCode has been integrated into ADA as a local coding agent. ADA can now send 
 - Available free models: Big Pickle, DeepSeek V4 Flash, MiniMax M2.5, Nemotron 3 Super
 
 ### Server Lifecycle
-- ADA automatically starts `opencode serve` if not running
+- Agent James automatically starts `opencode serve` if not running
 - Health checks with exponential backoff
-- Graceful shutdown on ADA exit
+- Graceful shutdown on Agent James exit
 
 ## Usage
 
 ### Via Voice
 1. Say "create a coding task" or similar
-2. ADA asks which agent to use
+2. Agent James asks which agent to use
 3. Say "OpenCode"
-4. ADA creates session and starts working
+4. Agent James creates session and starts working
 
 ### Via Tool Call
 ```python
@@ -123,9 +123,9 @@ run_opencode_agent(prompt="Add dark mode", repo_path="/path/to/repo", model_tier
 OpenCode tasks are now integrated with the WorkspaceBoard kanban system. Tasks automatically receive mode prefixes (Plan/Execute) based on their kanban lane status.
 
 ### Workflow
-1. **Task Created** → Status: `backlog` → ADA dispatches with Plan mode prefix
+1. **Task Created** → Status: `backlog` → Agent James dispatches with Plan mode prefix
 2. **User Reviews** → Drags to `dev_implementation` → Socket.IO triggers mode switch
-3. **ADA Re-prompts** → Same session receives Execute mode prefix
+3. **Agent James Re-prompts** → Same session receives Execute mode prefix
 4. **OpenCode Completes** → Auto-moves task to `completed` lane
 
 ### Mode Prefixes
@@ -145,6 +145,6 @@ run_opencode_agent(
 
 ### Files Modified
 - `backend/tools.py` - Added `kanban_status` enum parameter
-- `backend/ada.py` - Added mode prefix injection and fleet tracking
+- `backend/agent_james.py` - Added mode prefix injection and fleet tracking
 - `backend/server.py` - Enhanced `update_task_status_lane` handler
 - `backend/fleet_manager.py` - Added `get_task_by_session` helper

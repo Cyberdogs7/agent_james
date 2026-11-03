@@ -862,7 +862,7 @@ run_opencode_agent_tool = {
             "model_tier": {
                 "type": "STRING",
                 "enum": ["high", "medium", "low"],
-                "description": "Optional: Model complexity tier. Maps to configured model in settings. If not provided, ADA will ask."
+                "description": "Optional: Model complexity tier. Maps to configured model in settings. If not provided, Agent James will ask."
             },
             "kanban_status": {
                 "type": "STRING",

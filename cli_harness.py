@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 # Ensure the backend module can be found
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from backend.ada import AudioLoop
+from backend.agent_james import AgentJames
 from backend.tools import tools_list
 from backend.project_manager import ProjectManager
 
@@ -46,12 +46,12 @@ def convert_gemini_to_openai(gemini_tools):
     return openai_tools
 
 async def run_harness():
-    print("Initializing A.D.A Test Harness (OpenAI/OpenRouter/Local Mode)...")
+    print("Initializing Agent James Test Harness (OpenAI/OpenRouter/Local Mode)...")
     print("This may take a moment as agents start up...")
     
     project_root = os.path.dirname(os.path.abspath(__file__))
     pm = ProjectManager(project_root)
-    ada = AudioLoop(project_manager=pm)
+    james = AgentJames(project_manager=pm)
     
     await asyncio.sleep(2)
     
@@ -76,11 +76,11 @@ async def run_harness():
     openai_tools = convert_gemini_to_openai(tools_list)
     
     messages = [
-        {"role": "system", "content": "You are A.D.A, an advanced AI agent with numerous tools. You are currently running in a generic CLI test harness. Use your tools to fulfill the user's requests."}
+        {"role": "system", "content": "You are Agent James, an advanced AI agent with numerous tools. You are currently running in a generic CLI test harness. Use your tools to fulfill the user's requests."}
     ]
     
     print("\n================================================")
-    print("   A.D.A Generic Test Harness Initialized")
+    print("   Agent James Generic Test Harness Initialized")
     print("================================================")
     print("Type your commands. Type 'quit', 'exit', or 'q' to stop.")
     
@@ -114,7 +114,7 @@ async def run_harness():
                         
                         try:
                             args = json.loads(call.function.arguments)
-                            result = await ada.tool_registry.dispatch(call.function.name, args)
+                            result = await james.tool_registry.dispatch(call.function.name, args)
                         except Exception as e:
                             result = f"Error executing tool: {e}"
                             
@@ -133,7 +133,7 @@ async def run_harness():
                         
                     await asyncio.sleep(2) 
                 else:
-                    print(f"\nA.D.A: {message.content}")
+                    print(f"\nAgent James: {message.content}")
                     break
                     
         except KeyboardInterrupt:
@@ -143,7 +143,7 @@ async def run_harness():
             break
             
     print("\nShutting down harness...")
-    ada.stop()
+    james.stop()
 
 if __name__ == "__main__":
     from dotenv import load_dotenv

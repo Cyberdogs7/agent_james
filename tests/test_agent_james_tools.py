@@ -94,19 +94,19 @@ class TestToolDefinitions:
         print(f"iterate_cad tool: {iterate_cad_tool['name']}")
 
 
-class TestAudioLoopClass:
-    """Test AudioLoop class structure."""
-    
-    def test_audioloop_class_exists(self):
-        """Test AudioLoop class can be imported."""
-        from ada import AudioLoop
-        assert AudioLoop is not None
-        print("AudioLoop class imported successfully")
-    
-    def test_audioloop_methods(self):
-        """Test AudioLoop has required methods."""
-        from ada import AudioLoop
-        
+class TestAgentJamesClass:
+    """Test AgentJames class structure."""
+
+    def test_agentjames_class_exists(self):
+        """Test AgentJames class can be imported."""
+        from backend.agent_james import AgentJames
+        assert AgentJames is not None
+        print("AgentJames class imported successfully")
+
+    def test_agentjames_methods(self):
+        """Test AgentJames has required methods."""
+        from backend.agent_james import AgentJames
+
         required_methods = [
             'run',
             'stop',
@@ -120,25 +120,29 @@ class TestAudioLoopClass:
             'set_paused',
             'clear_audio_queue',
         ]
-        
+
         for method in required_methods:
-            assert hasattr(AudioLoop, method), f"Missing method: {method}"
+            assert hasattr(AgentJames, method), f"Missing method: {method}"
             print(f"  ✓ {method}")
 
 
+# Backward compat: old AudioLoop name still available
+AudioLoop = __import__("backend.agent_james", fromlist=["AgentJames"]).AgentJames
+
+
 class TestAgentIntegration:
-    """Test agent integration in AudioLoop."""
-    
+    """Test agent integration in AgentJames."""
+
     def test_fs_agent_exists(self):
         """Test fs_agent is instantiated."""
-        from ada import AudioLoop
-        # Just ensure we can import AudioLoop, instantiating it might be heavy/fail in test env
-        assert AudioLoop is not None
+        from backend.agent_james import AgentJames
+        # Just ensure we can import AgentJames, instantiating it might be heavy/fail in test env
+        assert AgentJames is not None
 
     def test_git_agent_exists(self):
         """Test git_agent is instantiated."""
-        from ada import AudioLoop
-        assert AudioLoop is not None
+        from backend.agent_james import AgentJames
+        assert AgentJames is not None
 
 
 class TestLiveConnectConfig:
@@ -146,11 +150,11 @@ class TestLiveConnectConfig:
 
     def test_config_generation(self):
         """Test that the LiveConnectConfig is generated correctly."""
-        from ada import AudioLoop
+        from backend.agent_james import AgentJames
         from google.genai import types
 
-        # Instantiate AudioLoop to access the config generation method
-        audio_loop = AudioLoop()
+        # Instantiate AgentJames to access the config generation method
+        audio_loop = AgentJames()
         config = audio_loop._get_live_connect_config()
 
         assert config is not None, "Config object should not be None"
@@ -164,8 +168,8 @@ class TestLiveConnectConfig:
         # But wait, MagicMock.response_modalities will be another MagicMock.
         # 'AUDIO' in MagicMock() evaluates to False (iterating mock).
         # So the assertion below will likely fail if it's a raw mock.
-        # Unless the code in ada.py sets it.
-        # ada.py: return types.LiveConnectConfig(response_modalities=["AUDIO"], ...)
+        # Unless the code in agent_james.py sets it.
+        # agent_james.py: return types.LiveConnectConfig(response_modalities=["AUDIO"], ...)
         # The mock constructor returns a mock. It doesn't automatically set attributes from kwargs unless side_effect does.
 
         # So verifying properties on a MagicMock returned by a constructor call is tricky without configuring the mock return_value.
@@ -174,35 +178,35 @@ class TestLiveConnectConfig:
 
 
 class TestAgentImports:
-    """Test agent module imports in ada.py."""
-    
+    """Test agent module imports in agent_james.py."""
+
     def test_cad_agent_import(self):
         """Test CadAgent is imported."""
-        from ada import CadAgent
+        from backend.agent_james import CadAgent
         assert CadAgent is not None
         print("CadAgent imported")
-    
+
     def test_web_agent_import(self):
         """Test LocalWebAgent is imported."""
-        from ada import LocalWebAgent
+        from backend.agent_james import LocalWebAgent
         assert LocalWebAgent is not None
         print("LocalWebAgent imported")
-    
+
     def test_kasa_agent_import(self):
         """Test KasaAgent is imported."""
-        from ada import KasaAgent
+        from backend.agent_james import KasaAgent
         assert KasaAgent is not None
         print("KasaAgent imported")
-    
+
     def test_printer_agent_import(self):
         """Test PrinterAgent is imported."""
-        from ada import PrinterAgent
+        from backend.agent_james import PrinterAgent
         assert PrinterAgent is not None
         print("PrinterAgent imported")
 
     def test_music_agent_import(self):
         """Test MusicAgent is imported."""
-        from ada import MusicAgent
+        from backend.agent_james import MusicAgent
         assert MusicAgent is not None
         print("MusicAgent imported")
 
@@ -212,8 +216,8 @@ class TestToolConfirmation:
     
     def test_resolve_tool_confirmation_method(self):
         """Test resolve_tool_confirmation exists."""
-        from ada import AudioLoop
-        assert hasattr(AudioLoop, 'resolve_tool_confirmation')
+        from backend.agent_james import AgentJames
+        assert hasattr(AgentJames, 'resolve_tool_confirmation')
         print("resolve_tool_confirmation method exists")
 
 

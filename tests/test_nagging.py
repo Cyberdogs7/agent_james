@@ -14,12 +14,14 @@ class TestNaggingSecretary(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.task_manager = MagicMock()
         self.project_manager = MagicMock()
-        self.ada = MagicMock()
+        self.agent = MagicMock()
 
-        self.engine = AutomationEngine(self.task_manager, self.project_manager, self.ada)
+        self.engine = AutomationEngine(self.task_manager, self.project_manager, self.agent)
 
         # Mock handle_external_event as async
-        self.ada.handle_external_event = AsyncMock()
+        self.agent.handle_external_event = AsyncMock()
+        # Backward compat alias
+        self.ada = self.agent
 
     @patch('automation_engine.GitHubClient')
     @patch.dict("sys.modules", {"backend.server": MagicMock()})
@@ -53,8 +55,8 @@ class TestNaggingSecretary(unittest.IsolatedAsyncioTestCase):
         await self.engine._monitor_stalled_items()
 
         # Assert
-        self.ada.handle_external_event.assert_called_once()
-        args, _ = self.ada.handle_external_event.call_args
+        self.agent.handle_external_event.assert_called_once()
+        args, _ = self.agent.handle_external_event.call_args
         event = args[0]
         self.assertEqual(event['type'], 'notification')
         self.assertIn("Feature X", event['message'])
