@@ -2025,13 +2025,19 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 self.on_transcription({"sender": "James", "text": reply})
             except Exception:
                 pass
-        # Optional TTS → audio_data for realtime feel
+        # Full-reply TTS → audio_data. Chunks stream out as each finishes, so
+        # the frontend starts playing while later chunks still render.
         try:
             from backend.voice_pipeline import TTSProvider, split_sentences
             tts = TTSProvider()
             if reply and tts.is_available() and self.on_audio_data:
-                for chunk in split_sentences(reply)[:3]:
-                    pcm = await tts.synthesize(chunk)
+                for i, chunk in enumerate(split_sentences(reply), 1):
+                    try:
+                        pcm = await tts.synthesize(chunk)
+                    except Exception as e:
+                        if INCLUDE_RAW_LOGS:
+                            print(f"[JAMES DEBUG] [ERR] TTS chunk {i} failed: {e}")
+                        continue
                     if pcm:
                         self.on_audio_data(pcm)
         except Exception as e:
