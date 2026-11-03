@@ -63,6 +63,12 @@ async def _render_all() -> None:
         pass
 
 
+async def warm_async() -> bool:
+    """Pre-render acks (also pre-loads the TTS model). Returns True if ready."""
+    await _render_all()
+    return is_ready()
+
+
 def warm_in_background() -> None:
     """Fire-and-forget pre-render (also pre-warms the TTS model). Idempotent."""
     global _warming

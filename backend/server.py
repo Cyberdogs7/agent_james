@@ -642,13 +642,18 @@ async def start_audio(sid, data=None):
         print("Emitting 'Agent James Started'")
         await sio.emit('status', {'msg': 'Agent James Started'})
 
-        # Pre-render instant ack clips in the background (also pre-warms TTS),
-        # so the first user message already has ~0ms voice cover.
-        try:
-            from backend.ack_cache import warm_in_background as _ack_warm
-            _ack_warm()
-        except ImportError:
-            pass
+        # Pre-render instant ack clips in the background (also pre-loads the
+        # TTS model), so the first user message already has ~0ms voice cover.
+        # Announces readiness so the UI can show it instead of silent cold.
+        async def _voice_warmup():
+            try:
+                from backend.ack_cache import warm_async as _warm
+                if await _warm():
+                    await sio.emit('status', {'msg': 'Voice ready'})
+                    print("[SERVER] Voice pre-warm complete (ack clips + TTS model).")
+            except Exception as e:
+                print(f"[SERVER] Voice pre-warm failed: {e}")
+        asyncio.create_task(_voice_warmup())
 
         # Load saved printers
         saved_printers = SETTINGS.get("printers", [])
