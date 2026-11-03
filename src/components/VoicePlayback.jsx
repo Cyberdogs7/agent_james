@@ -45,6 +45,11 @@ export default function VoicePlayback({ socket, speakerId, muted }) {
     if (playingRef.current) return;
     const ctx = ensureCtx();
     if (!ctx) return;
+    if (ctx.state === "suspended") {
+      // No user gesture yet — hold the queue (capped) until unlock.
+      while (queueRef.current.length > 750) queueRef.current.shift(); // ~30s cap
+      return;
+    }
     const chunk = queueRef.current.shift();
     if (!chunk) return;
     playingRef.current = true;
@@ -111,11 +116,21 @@ export default function VoicePlayback({ socket, speakerId, muted }) {
   }, [socket, muted, speakerId]);
 
   // Autoplay policy: browsers need a user gesture before audio plays.
+  // Typing counts — the chat box is the primary gesture here.
   useEffect(() => {
-    const unlock = () => ensureCtx();
+    const unlock = () => {
+      const ctx = ensureCtx();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().then(pump).catch(() => {});
+      } else {
+        pump(); // flush anything queued while suspended
+      }
+    };
     window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
     return () => {
       window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
       stopAll();
       ctxRef.current?.close().catch(() => {});
       ctxRef.current = null;
