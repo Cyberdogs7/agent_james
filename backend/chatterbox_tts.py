@@ -95,6 +95,21 @@ def synthesize_sync(text: str) -> bytes:
     audio = np.asarray(wav.squeeze().cpu() if hasattr(wav, "cpu") else wav,
                        dtype=np.float32)
     pcm = (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16)
+    # Trim vocoder lead-in silence + fade onset (same as qwen_tts path:
+    # dead air then mid-cycle start reads as a garbled first word).
+    import array as _array
+    samples = _array.array("h", pcm.tobytes())
+    n = len(samples)
+    start = 0
+    while start < n and abs(samples[start]) <= 300:
+        start += 1
+    if start < n:
+        kept = min(240, start)
+        start = start - kept
+        out = _array.array("h", samples[start:])
+        for j in range(min(120, len(out) - kept)):
+            out[kept + j] = int(out[kept + j] * (j + 1) / 120)
+        return out.tobytes()
     return pcm.tobytes()
 
 

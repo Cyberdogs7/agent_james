@@ -168,7 +168,29 @@ def wav_to_pcm24k(path: str | Path) -> bytes:
             frame = samples[i:i + nch]
             mono.append(sum(frame) // len(frame))
         samples = mono
-    return _resample_mono_pcm16(samples, sr)
+    return _resample_mono_pcm16(_trim_and_fade(samples), sr)
+
+
+def _trim_and_fade(samples, threshold=300, preroll=240, fade=120):
+    """Trim vocoder lead-in silence + fade the onset.
+
+    TTS models emit dead air (measured 117ms) then start mid-cycle, which
+    ears hear as a clipped/garbled first word. Keep 10ms pre-roll, ramp the
+    first 5ms linearly. Returns the same array type.
+    """
+    n = len(samples)
+    start = 0
+    while start < n and abs(samples[start]) <= threshold:
+        start += 1
+    if start >= n:
+        return samples  # all silence: leave untouched
+    kept = min(preroll, start)  # pre-roll zeros preserved before speech
+    start = start - kept
+    out = array("h", samples[start:])
+    # Ramp starts at speech onset (after the kept pre-roll), not at 0.
+    for j in range(min(fade, len(out) - kept)):
+        out[kept + j] = int(out[kept + j] * (j + 1) / fade)
+    return out
 
 
 class QwenTTS:
