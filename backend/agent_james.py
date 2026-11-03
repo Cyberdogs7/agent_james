@@ -1928,6 +1928,15 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         """
         from backend.local_web_agent import convert_gemini_to_openai as _to_openai
         try:
+            from backend.ack_cache import warm_in_background as _ack_warm
+            _ack_warm()
+        except ImportError:
+            try:
+                from ack_cache import warm_in_background as _ack_warm
+                _ack_warm()
+            except ImportError:
+                pass
+        try:
             llm = get_llm()
         except Exception as e:
             err = f"LLM unavailable (set OPENROUTER_API_KEY or LM_STUDIO_BASE_URL): {e}"
@@ -2125,7 +2134,21 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         # --- Dual processing: fast talker up front, deep thinker behind. ---
         # Talker (slim prompt, no tools) answers chitchat directly or defers
         # with <DEFER>ack</DEFER>; thinker runs concurrently and the talker
-        # presents its result. First audio lands in ~2s either way.
+        # presents its result. Task-like turns skip the talker: a pre-rendered
+        # ack plays instantly (~0ms, no inference) while the thinker works.
+        def _likely_task(_t):
+            import re as _re4
+            _t = (_t or "").strip().lower()
+            if not _t:
+                return False
+            _patterns = (
+                r"^(what|when|where|who|whom|whose|which|how|why)\b",
+                r"\b(what time|what(?:'s| is) the (time|date|weather|temperature)|weather|forecast)\b",
+                r"^(turn|set|start|stop|open|close|play|pause|send|create|delete|remove|add|schedule|remind|search|find|look|check|run|show|list|tell me|give me)\b",
+                r"\b(timer|alarm|reminder|lights?|music|song|printer|print|volume|calendar|email|message|aftershock|browser|tab|volume)\b",
+                r"\?$",
+            )
+            return any(_re4.search(_p, _t) for _p in _patterns)
         _TALKER_SYSTEM = (
             "You are James, a witty British voice assistant speaking aloud. "
             "Keep replies to 1-2 SHORT sentences (they are spoken). "
@@ -2139,7 +2162,26 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         _thinker_task = asyncio.create_task(
             _run_loop(messages, openai_tools, 0.2, False, "think")
         )
-        _talk_raw = await _run_loop(_talk_msgs, None, 0.7, True, "talk")
+        # Instant cover: task-like turns play a pre-rendered ack in ~0ms
+        # (no LLM, no TTS render) and skip straight to the thinker. The
+        # talker DEFER below stays as fallback for heuristic misses.
+        _task_like = _likely_task(text)
+        if _task_like:
+            try:
+                from backend.ack_cache import get_ack_pcm as _ack_pcm
+            except ImportError:
+                try:
+                    from ack_cache import get_ack_pcm as _ack_pcm
+                except ImportError:
+                    _ack_pcm = None
+            _ack = _ack_pcm() if _ack_pcm is not None else None
+            if _ack and _consumer is not None and self.on_audio_data:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[JAMES DEBUG] [ACK] instant cover ({len(_ack)} bytes)")
+                self.on_audio_data(_ack)
+                _talk_raw = "<DEFER></DEFER>"  # ack already voiced; go to thinker
+        if not (_task_like and _ack):
+            _talk_raw = await _run_loop(_talk_msgs, None, 0.7, True, "talk")
         import re as _re2
         _deferred = "<DEFER>" in _talk_raw
         _talk_clean = _re2.sub(r"<DEFER>.*?</DEFER>", "", _talk_raw, flags=_re2.DOTALL).strip()
