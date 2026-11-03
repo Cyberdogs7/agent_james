@@ -43,10 +43,10 @@ class WritingAgent:
              return f"Error: Script {script_name} not found in {autonovel_dir}. Ensure 'autonovel' is downloaded."
 
         # The autonovel scripts expect to run via 'uv run python' or 'python'.
-        # Since 'uv run python' manages virtual environments which may not be present,
-        # we will attempt to execute them via the current standard 'python' executable.
-        # Alternatively, if 'uv' is installed on this host, it could be used. For safety, we use the local python env.
-        cmd = ["python", script_path]
+        # Run them with this backend's interpreter so the .venv (deps) is used,
+        # never the ambient system python.
+        import sys as _sys
+        cmd = [_sys.executable, script_path]
 
         parsed_args = self._parse_args(args)
         if parsed_args:

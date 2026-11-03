@@ -912,7 +912,8 @@ INSTRUCTIONS:
                 # Execute Script
                 # Determine runner based on extension
                 if script_path.endswith('.py'):
-                    cmd = ["python", script_path]
+                    import sys as _sys
+                    cmd = [_sys.executable, script_path]
                 elif script_path.endswith('.sh'):
                     cmd = ["bash", script_path]
                 elif script_path.endswith('.js'):

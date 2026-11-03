@@ -1990,7 +1990,7 @@ async def run_task(sid, data):
             else:
                 # Determine runner based on extension
                 if script_path.endswith('.py'):
-                    cmd = ["python", script_path]
+                    cmd = [sys.executable, script_path]
                 elif script_path.endswith('.sh'):
                     cmd = ["bash", script_path]
                 elif script_path.endswith('.js'):
@@ -2328,6 +2328,17 @@ async def oauth_logout(sid, data):
 
 if __name__ == "__main__":
     port = int(os.getenv("SERVER_PORT", 8180))
+    # NOTE: .venv/Scripts/python.exe is a virtualenv shim that re-execs the
+    # base interpreter (anaconda) with the venv activated — same process tree
+    # showing two python.exe images in Task Manager/WMI is EXPECTED, not a bug.
+    print(f"[SERVER] Interpreter: {sys.executable} "
+          f"(v{sys.version.split()[0]}, prefix={sys.prefix})")
+    try:
+        from backend.llm_client import _resolve_target as _llm_target
+        _b, _k, _m, _p = _llm_target()
+        print(f"[SERVER] LLM provider: {_p} | model: {_m} | endpoint: {_b}")
+    except Exception as e:
+        print(f"[SERVER] LLM provider resolution failed: {e}")
     print(f"[SERVER] Starting server on port {port}")
     print(f"[SERVER] Access from phone: http://{LAN_IP}:{port}/mobile")
     uvicorn.run(
