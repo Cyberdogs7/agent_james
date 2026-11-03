@@ -35,10 +35,8 @@ class OmniTTS:
     """Resident OmniVoice worker (serve mode) with one-shot fallback."""
 
     def __init__(self):
-        self.venv = os.getenv(
-            "JAMES_OMNI_VENV",
-            "C:/Users/Chad/AppData/Local/Temp/opencode/tts-omni/Scripts/python.exe",
-        )
+        _default_venv = str(_repo_root() / "tts-venv" / "Scripts" / "python.exe")
+        self.venv = os.getenv("JAMES_OMNI_VENV", _default_venv)
         default_worker = str(_repo_root() / "backend" / "omni_worker.py")
         self.worker = os.getenv("JAMES_OMNI_WORKER", default_worker)
         default_ref = str(_repo_root() / "voices" / "james_ref_short.wav")

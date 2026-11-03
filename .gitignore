@@ -56,3 +56,6 @@ src/presets/cream-of-the-crop-raw/
 
 # Playwright MCP snapshots/logs (local debugging artifacts)
 .playwright-mcp/
+
+# Local TTS model venv (torch cu128 + omnivoice, GBs — reinstallable)
+tts-venv/
