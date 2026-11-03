@@ -2,12 +2,12 @@ import asyncio
 import os
 import sys
 import json
-from openai import AsyncOpenAI
 
 # Ensure the backend module can be found
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from backend.agent_james import AgentJames
+from backend.llm_client import get_llm_client
 from backend.tools import tools_list
 from backend.project_manager import ProjectManager
 
@@ -32,24 +32,14 @@ async def run_harness():
     
     await asyncio.sleep(2)
     
-    openrouter_key = os.getenv("OPENROUTER_API_KEY")
-    if openrouter_key:
-        base_url = "https://openrouter.ai/api/v1"
-        api_key = openrouter_key
-        model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
-    else:
-        base_url = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
-        if base_url and not base_url.endswith("/v1"):
-            base_url = base_url.rstrip("/") + "/v1"
-        api_key = "lm-studio"
-        model = os.getenv("LM_STUDIO_MODEL", "local-model")
-    
-    print(f"\nUsing LLM API:")
-    print(f"Base URL: {base_url}")
-    print(f"Model: {model}")
+    # Raw httpx LLM (OpenRouter → LM Studio → Ollama /v1); no SDK.
+    llm = get_llm_client(prefer_openrouter=True)
+
+    print(f"\nUsing LLM API (raw httpx):")
+    print(f"Provider: {llm.provider}")
+    print(f"Model: {llm.model}")
     print(f"To change this, set OPENROUTER_API_KEY and OPENROUTER_MODEL, or LM_STUDIO_BASE_URL and LM_STUDIO_MODEL in your .env file.")
-    
-    client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
     openai_tools = convert_gemini_to_openai(tools_list)
     
     messages = [
@@ -74,15 +64,14 @@ async def run_harness():
             messages.append({"role": "user", "content": user_input})
             
             while True:
-                response = await client.chat.completions.create(
-                    model=model,
+                response = await llm.chat_completion(
                     messages=messages,
                     tools=openai_tools,
                     temperature=0.2
                 )
-                
+
                 message = response.choices[0].message
-                messages.append(message)
+                messages.append(message.to_dict() if hasattr(message, "to_dict") else message)
                 
                 if message.tool_calls:
                     for call in message.tool_calls:

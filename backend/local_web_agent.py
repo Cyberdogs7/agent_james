@@ -1,8 +1,7 @@
-import os
 import json
 import base64
 import asyncio
-from openai import AsyncOpenAI
+from backend.llm_client import get_llm_client
 from backend.tools import (
     browser_navigate_tool, 
     browser_execute_javascript_tool, 
@@ -56,20 +55,10 @@ class LocalWebAgent:
     def __init__(self, browser_agent, tool_registry):
         self.browser_agent = browser_agent
         self.tool_registry = tool_registry
-        
-        openrouter_key = os.getenv("OPENROUTER_API_KEY")
-        if openrouter_key:
-            base_url = "https://openrouter.ai/api/v1"
-            api_key = openrouter_key
-            self.model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet")
-        else:
-            base_url = os.getenv("LM_STUDIO_BASE_URL", "http://localhost:1234/v1")
-            if base_url and not base_url.endswith("/v1"):
-                base_url = base_url.rstrip("/") + "/v1"
-            api_key = "lm-studio"
-            self.model = os.getenv("LM_STUDIO_MODEL", "local-model")
-            
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+
+        # Raw httpx LLM (OpenRouter → LM Studio → Ollama /v1); model resolved centrally.
+        self.llm = get_llm_client(prefer_openrouter=True)
+        self.model = self.llm.model
         
         raw_tools = [
             browser_navigate_tool,
@@ -129,15 +118,14 @@ Output your findings as a JSON object with:
 
         while not self._is_interrupted:
             try:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
+                response = await self.llm.chat_completion(
                     messages=messages,
                     tools=self.openai_tools,
                     temperature=0.2
                 )
 
                 message = response.choices[0].message
-                messages.append(message)
+                messages.append(message.to_dict() if hasattr(message, "to_dict") else message)
 
                 if message.tool_calls:
                     for call in message.tool_calls:
@@ -212,15 +200,14 @@ Please provide a comprehensive research report on this topic. Include:
                 return "Research interrupted."
 
             try:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
+                response = await self.llm.chat_completion(
                     messages=messages,
                     tools=self.openai_tools,
                     temperature=0.2
                 )
 
                 message = response.choices[0].message
-                messages.append(message)
+                messages.append(message.to_dict() if hasattr(message, "to_dict") else message)
 
                 if message.tool_calls:
                     for call in message.tool_calls:
@@ -265,15 +252,14 @@ Please provide a comprehensive research report on this topic. Include:
                 return msg
 
             try:
-                response = await self.client.chat.completions.create(
-                    model=self.model,
+                response = await self.llm.chat_completion(
                     messages=messages,
                     tools=self.openai_tools,
                     temperature=0.2
                 )
-                
+
                 message = response.choices[0].message
-                messages.append(message)
+                messages.append(message.to_dict() if hasattr(message, "to_dict") else message)
                 
                 if message.content:
                     await self._send_screenshot(update_callback, f"Agent: {message.content[:100]}...")

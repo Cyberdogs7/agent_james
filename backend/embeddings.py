@@ -23,17 +23,24 @@ def local_embed(text):
 
 
 async def api_embed(text):
-    """Optional OpenAI-compatible embeddings. Returns None if unconfigured."""
-    base_url = os.getenv("OPENAI_EMBED_BASE_URL", "")
+    """Optional OpenAI-compatible embeddings via raw httpx. None if unconfigured."""
+    import httpx
+    base_url = os.getenv("OPENAI_EMBED_BASE_URL", "").rstrip("/")
     model = os.getenv("OPENAI_EMBED_MODEL", "")
     api_key = os.getenv("OPENAI_EMBED_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
     if not base_url or not model:
         return None
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=api_key or "local", base_url=base_url)
-        res = await client.embeddings.create(model=model, input=text)
-        return list(res.data[0].embedding)
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(f"{base_url}/embeddings",
+                                     json={"model": model, "input": text},
+                                     headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            return list((data.get("data") or [{}])[0].get("embedding") or [])
     except Exception:
         return None
 

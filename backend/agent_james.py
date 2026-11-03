@@ -1963,7 +1963,7 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 reply = f"LLM error: {e}"
                 break
             msg = resp.choices[0].message
-            messages.append(msg)
+            messages.append(msg.to_dict() if hasattr(msg, "to_dict") else msg)
             if getattr(msg, "tool_calls", None):
                 import json as _json
                 for call in msg.tool_calls:

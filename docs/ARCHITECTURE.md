@@ -2,11 +2,11 @@
 
 > Canonical working knowledge for agents. Read this + `docs/issues/` before starting tasks. Do not rely on chat history.
 > Renamed from A.D.A (Advanced Design Assistant) to **Agent James** — persona: James (British, witty, professional).
-> google-genai/Gemini removed. Hybrid LLM (OpenRouter/LM Studio/Ollama) + local/hybrid voice (STT→LLM→TTS).
+> google-genai/Gemini removed. Raw httpx LLM (OpenRouter/LM Studio/Ollama, no SDK) + local/hybrid voice (STT→LLM→TTS).
 
 ## 1. Overview
 Voice-first Electron + React + Python assistant.
-`Hybrid LLM (LLMClient) + voice_pipeline (STT→LLM→TTS)` → `backend/agent_james.py:AgentJames` → `backend/server.py:FastAPI + Socket.IO :8180` → ~35 specialist agents + React UI.
+`Raw httpx LLM (LLMClient) + voice_pipeline (STT→LLM→TTS)` → `backend/agent_james.py:AgentJames` → `backend/server.py:FastAPI + Socket.IO :8180` → ~35 specialist agents + React UI.
 
 - Backend entry: `backend/agent_james.py` (`AgentJames`, alias `AudioLoop` for backward compat)
 - Server: `backend/server.py` (Socket.IOano events, `/status`, `/mobile`, static `/projects`)
@@ -39,10 +39,12 @@ Voice-first Electron + React + Python assistant.
 - Package `ada-v2` → `agent-james`; conda `ada_v2` → `agent_james`; repo `nazirlouis/ada_v2` → `Cyberdogs7/agent_james`
 - Intentional transitional refs kept: backward-compat aliases + comments mentioning old import paths.
 
-## 6. Dependencies — google-genai removal (done)
-**google-genai removed from requirements. Hybrid LLM + local/hybrid voice is default.**
+## 6. Dependencies — google-genai + openai SDK removal (done)
+**google-genai removed; `openai` SDK also removed. Raw httpx only (anime pattern).**
 
-- `requirements.txt` / `requirements_safe.txt`: `google-genai` → `openai` (OpenAI-compatible)
+- `requirements.txt` / `requirements_safe.txt`: `google-genai` gone, `openai` gone — `httpx` only
+- `backend/llm_client.py`: raw `POST {base}/chat/completions` via httpx (sync+async, SSE streaming); `response_format` never sent (local servers 400) — prompt-enforced JSON + `_extract_json` retries; `max_tokens` omitted by default (`JAMES_MAX_OUTPUT_TOKENS`); OpenAI-shaped `_Resp` shim keeps callers unchanged; chain `JAMES_LLM_*` override → OpenRouter → LM Studio → Ollama `/v1`
+- `backend/local_web_agent.py`, `cli_harness.py`, `backend/embeddings.py`: ex-`AsyncOpenAI` call sites → raw `LLMClient`/httpx
 - `backend/agent_james.py`: no top-level genai import/client; Gemini Live disabled; text chat via `handle_text_chat()` (LLMClient + tools + optional TTS); `_session_runner` runs background LLM tasks in text mode
 - `backend/voice_pipeline.py` (new): STT (`faster-whisper` opt-in, default none/frontend text) + TTS (auto: ElevenLabs → Kokoro → Piper → none, native 24kHz) + `get_llm()` (LLMClient)
 - `backend/embeddings.py` (new): local hashed embeddings (no network); optional OpenAI-compatible `api_embed`

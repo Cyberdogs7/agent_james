@@ -12,8 +12,8 @@ if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
 # Mock dependencies that might be missing in the environment
+# (LLM uses raw httpx — no openai SDK to mock)
 mock_modules = [
-    'openai',
     'dotenv',
     'cv2',
     'pyaudio',
@@ -44,7 +44,6 @@ mock_modules = [
     'beautifulsoup4',
     'bs4',
     'imageio_ffmpeg',
-    'openai'
 ]
 
 for module in mock_modules:

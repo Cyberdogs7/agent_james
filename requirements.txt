@@ -2,8 +2,8 @@ fastapi
 uvicorn
 python-socketio[asyncio_client]
 python-multipart
-# LLM (OpenAI-compatible: OpenRouter / LM Studio / Ollama) + local/hybrid voice
-openai
+# LLM via raw httpx (OpenAI-compatible: OpenRouter / LM Studio / Ollama) — no SDK
+# local/hybrid voice: faster-whisper + Kokoro/Piper opt-in (see .env.example)
 # Computer Vision & Audio
 opencv-python-headless
 pillow
