@@ -1959,9 +1959,10 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         # while the model is still generating (no wait for full reply).
         import time as _time
         from backend.voice_pipeline import split_sentences as _split
+        from backend.voice_pipeline import split_speech_chunks as _chunks
 
         speak_queue: asyncio.Queue = asyncio.Queue()
-        _spoken_chars = 0
+        _spoken_sents = 0
 
         async def _tts_consumer():
             _n = 0
@@ -1994,8 +1995,12 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         _defer_spoken = False
 
         def _feed_streamed(full_text):
-            """Queue newly completed speakable sentences from streamed text."""
-            nonlocal _spoken_chars, _defer_spoken
+            """Queue newly completed sentence PAIRS from streamed text.
+
+            Pairs (not singles) go to TTS: zero-shot cloners condition per
+            call, and single short sentences drift voice + reset prosody.
+            """
+            nonlocal _spoken_sents, _defer_spoken
             if "<tool_call>" in full_text or "<function" in full_text:
                 return  # tool-call text is never spoken; parsed later
             if "<DEFER>" in full_text:
@@ -2008,26 +2013,25 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                         speak_queue.put_nowait(_m.group(1).strip())
                 return
             _sents = _split(full_text)
-            if not _sents:
-                return
-            # Speak all but the last (possibly incomplete) sentence.
-            _prefix = " ".join(_sents[:-1])
-            if len(_prefix) > _spoken_chars:
-                _new = _prefix[_spoken_chars:].strip()
-                _spoken_chars = len(_prefix)
-                if _new and _consumer is not None:
-                    speak_queue.put_nowait(_new)
+            # Hold back the last (possibly incomplete) sentence; queue
+            # completed pairs beyond what was already spoken.
+            _ready = _sents[:-1] if len(_sents) > 1 else []
+            while len(_ready) - _spoken_sents >= 2 and _consumer is not None:
+                _pair = " ".join(_ready[_spoken_sents:_spoken_sents + 2])
+                _spoken_sents += 2
+                if _pair.strip():
+                    speak_queue.put_nowait(_pair.strip())
 
         async def _run_loop(_msgs, _tls, _temp, _speak, _tag):
             """One tool-calling loop (max 5 turns). Returns final reply text."""
-            nonlocal _spoken_chars
+            nonlocal _spoken_sents
             _reply = ""
             for _turn in range(5):
                 _t0 = _time.time()
                 _stream_ok = False
                 try:
                     if _speak:
-                        _spoken_chars = 0
+                        _spoken_sents = 0
                     resp = await llm.achat_stream_full(
                         messages=_msgs, tools=_tls, temperature=_temp,
                         on_progress=(
@@ -2090,11 +2094,12 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                         })
                     continue
                 _reply = msg.content or ""
-                # Speak the trailing sentence the streamer held back.
+                # Speak the trailing sentences the streamer held back, paired.
                 if _speak and _consumer is not None and _reply:
-                    _tail = _reply[_spoken_chars:].strip()
-                    if _tail and all(_t not in _tail for _t in ("<tool_call>", "<function", "<DEFER")):
-                        speak_queue.put_nowait(_tail)
+                    _rest = " ".join(_split(_reply)[_spoken_sents:]).strip()
+                    if _rest and all(_t not in _rest for _t in ("<tool_call>", "<function", "<DEFER")):
+                        for _c in _chunks(_rest):
+                            speak_queue.put_nowait(_c)
                 break
             # Never display/speak unparsed pseudo-XML tool blocks.
             if _reply and "<tool_call>" in _reply:

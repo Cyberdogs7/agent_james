@@ -33,6 +33,33 @@ def split_sentences(text):
     return [p.strip() for p in parts if p.strip()]
 
 
+def split_speech_chunks(text, per_chunk=2, max_chars=280):
+    """Pair sentences into TTS chunks.
+
+    Zero-shot cloners condition per call: single short sentences drift voice
+    and reset prosody every few seconds (choppy, morphing). Pairs give each
+    call enough context for a stable voice and flowing prosody, at the cost
+    of slightly later first audio. Overlong pairs are split back up.
+    """
+    sents = split_sentences(text)
+    chunks, buf = [], []
+    for s in sents:
+        buf.append(s)
+        joined = " ".join(buf)
+        if len(buf) >= per_chunk or len(joined) >= max_chars:
+            chunks.append(joined)
+            buf = []
+    # Flush: merge a leftover single sentence into the previous chunk so no
+    # call ever goes out with a bare short sentence (worst for voice drift).
+    if buf:
+        leftover = " ".join(buf)
+        if chunks and len(buf) < per_chunk:
+            chunks[-1] = (chunks[-1] + " " + leftover).strip()
+        else:
+            chunks.append(leftover)
+    return chunks
+
+
 class STTProvider:
     """Speech-to-text. Default: unavailable (frontend text input). Opt-in local Whisper."""
 

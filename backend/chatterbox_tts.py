@@ -19,7 +19,8 @@ Env:
   JAMES_CB_DEVICE    cuda|cpu (default cuda)
   JAMES_CB_EXAGGERATION  emotion intensity 0-1 (default 0.5)
   JAMES_CB_CFG       guidance weight (default 0.5)
-  JAMES_CB_TEMPERATURE (default 0.8)
+  JAMES_CB_TEMPERATURE sampling temperature (default 0.3 — lower = steadier
+                         voice across chunks; 0.8 default drifts per call)
 """
 from __future__ import annotations
 
@@ -88,7 +89,7 @@ def synthesize_sync(text: str) -> bytes:
         audio_prompt_path=str(ref),
         exaggeration=float(os.getenv("JAMES_CB_EXAGGERATION", "0.5") or 0.5),
         cfg_weight=float(os.getenv("JAMES_CB_CFG", "0.5") or 0.5),
-        temperature=float(os.getenv("JAMES_CB_TEMPERATURE", "0.8") or 0.8),
+        temperature=float(os.getenv("JAMES_CB_TEMPERATURE", "0.3") or 0.3),
     )
     import numpy as np
     audio = np.asarray(wav.squeeze().cpu() if hasattr(wav, "cpu") else wav,

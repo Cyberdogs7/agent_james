@@ -40,14 +40,14 @@ def play_wav(path: str = OUT_WAV):
 
 
 async def say(text: str, play: bool = True):
-    from backend.voice_pipeline import TTSProvider, split_sentences
+    from backend.voice_pipeline import TTSProvider, split_speech_chunks
     tts = TTSProvider()
     print(f"[test] TTS backend: {tts.selected_backend()}")
     if not tts.is_available():
         print("[test] No TTS backend available. Chatterbox needs voices/james_ref.wav + torch/CUDA.")
         return
     full = b""
-    for i, chunk in enumerate(split_sentences(text), 1):
+    for i, chunk in enumerate(split_speech_chunks(text), 1):
         print(f"[test] synth chunk {i}: {chunk[:60]}...")
         pcm = await tts.synthesize(chunk)
         full += pcm
@@ -61,7 +61,7 @@ async def say(text: str, play: bool = True):
 
 async def chat():
     from backend.llm_client import get_llm_client
-    from backend.voice_pipeline import TTSProvider, split_sentences
+    from backend.voice_pipeline import TTSProvider, split_speech_chunks
     try:
         llm = get_llm_client(prefer_openrouter=True)
     except Exception as e:
@@ -94,7 +94,7 @@ async def chat():
             continue
         print(f"\nJames: {reply}")
         full = b""
-        for chunk in split_sentences(reply):
+        for chunk in split_speech_chunks(reply):
             try:
                 full += await tts.synthesize(chunk)
             except Exception as e:
