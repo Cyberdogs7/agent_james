@@ -577,6 +577,20 @@ class LLMClient:
         return await self._raw.achat(messages=msgs, temperature=temperature,
                                      max_tokens=max_tokens, tools=tools)
 
+    async def achat_stream_full(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict]] = None,
+        temperature: float = 0.2,
+        max_tokens: Optional[int] = None,
+        on_progress=None,
+    ):
+        """Stream a completion; returns content AND tool calls (see RawLLMClient)."""
+        assert self._raw is not None
+        return await self._raw.achat_stream_full(messages, temperature=temperature,
+                                                 max_tokens=max_tokens, tools=tools,
+                                                 on_progress=on_progress)
+
     async def structured_completion(
         self,
         messages: List[Dict[str, Any]],
