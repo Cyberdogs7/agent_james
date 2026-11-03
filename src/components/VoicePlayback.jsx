@@ -44,12 +44,17 @@ export default function VoicePlayback({ socket, speakerId, muted }) {
   const pump = () => {
     if (playingRef.current) return;
     const ctx = ensureCtx();
-    if (!ctx) return;
+    if (!ctx) {
+      console.warn("[VoicePlayback] no AudioContext");
+      return;
+    }
     if (ctx.state === "suspended") {
       // No user gesture yet — hold the queue (capped) until unlock.
+      console.log("[VoicePlayback] context suspended, holding", queueRef.current.length, "chunks");
       while (queueRef.current.length > 750) queueRef.current.shift(); // ~30s cap
       return;
     }
+    console.log("[VoicePlayback] playing chunk, queue:", queueRef.current.length, "state:", ctx.state);
     const chunk = queueRef.current.shift();
     if (!chunk) return;
     playingRef.current = true;
@@ -83,8 +88,20 @@ export default function VoicePlayback({ socket, speakerId, muted }) {
     if (!socket) return;
     const handleAudio = (data) => {
       try {
-        if (muted) return;
+        if (muted) {
+          console.log("[VoicePlayback] muted, dropping chunk");
+          return;
+        }
         const raw = data?.data ?? data;
+        const nbytes =
+          raw instanceof ArrayBuffer
+            ? raw.byteLength
+            : ArrayBuffer.isView(raw)
+              ? raw.byteLength
+              : typeof raw === "string"
+                ? raw.length
+                : -1;
+        console.log("[VoicePlayback] audio_data received, bytes:", nbytes);
         if (raw instanceof ArrayBuffer) {
           enqueuePcm(new Int16Array(raw));
         } else if (ArrayBuffer.isView(raw)) {

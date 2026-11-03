@@ -1,0 +1,63 @@
+- generic [ref=f3e3]:
+  - generic [ref=f3e4]:
+    - generic [ref=f3e5]:
+      - heading "AGENT JAMES" [level=1] [ref=f3e6]
+      - generic [ref=f3e7]: V2.0.0
+      - generic [ref=f3e8]: "FPS: 0"
+      - generic [ref=f3e88]: 1 Printer
+    - generic [ref=f3e11]:
+      - button "Notifications" [ref=f3e12] [cursor=pointer]
+      - generic [ref=f3e16]: 12:29 AM
+      - button [ref=f3e21] [cursor=pointer]
+      - button [ref=f3e23] [cursor=pointer]
+      - button [ref=f3e25] [cursor=pointer]
+  - generic [ref=f3e29]:
+    - generic:
+      - generic:
+        - generic:
+          - img "Audio Visualizer - Agent is muted or sleeping":
+            - 'button "Mode: Aura"'
+    - generic: "PROJECT: DEFAULT"
+    - generic: CAM_01
+    - generic [ref=f3e30]:
+      - generic [ref=f3e31]:
+        - generic [ref=f3e32]:
+          - generic [ref=f3e33]: "[12:29:30 AM]"
+          - text: System
+          - generic [ref=f3e34]: Agent James Already Running
+          - button "Copy message text" [ref=f3e35] [cursor=pointer]
+        - generic [ref=f3e94]:
+          - generic [ref=f3e95]: "[12:29:32 AM]"
+          - text: System
+          - generic [ref=f3e96]: Found 0 Kasa devices
+          - button "Copy message text" [ref=f3e97] [cursor=pointer]
+        - generic [ref=f3e101]:
+          - generic [ref=f3e102]: "[12:29:35 AM]"
+          - text: System
+          - generic [ref=f3e103]: Found 0 Kasa devices
+          - button "Copy message text" [ref=f3e104] [cursor=pointer]
+        - generic [ref=f3e108]:
+          - generic [ref=f3e109]: "[12:29:35 AM]"
+          - text: System
+          - generic [ref=f3e110]: Found 1 printers
+          - button "Copy message text" [ref=f3e111] [cursor=pointer]
+        - generic [ref=f3e115]:
+          - generic [ref=f3e116]: "[12:29:40 AM]"
+          - text: You
+          - generic [ref=f3e117]: Say the words voice test clearly
+          - button "Copy message text" [ref=f3e118] [cursor=pointer]
+      - generic [ref=f3e39]:
+        - textbox "INITIALIZE COMMAND..." [active] [ref=f3e40]
+        - button "STOP" [ref=f3e41] [cursor=pointer]
+    - generic [ref=f3e43]:
+      - button "Disconnect System" [ref=f3e44] [cursor=pointer]
+      - button "Unmute Microphone" [ref=f3e47] [cursor=pointer]
+      - button "Turn Camera On" [ref=f3e54] [cursor=pointer]
+      - button "Open Settings" [ref=f3e59] [cursor=pointer]
+      - button "Fleet Accounts" [ref=f3e63] [cursor=pointer]
+      - button "Toggle Music Visualizer" [ref=f3e67] [cursor=pointer]
+      - button "Toggle Media Controls" [ref=f3e70] [cursor=pointer]
+      - button "Toggle Web Browser Agent" [ref=f3e75] [cursor=pointer]
+      - button "Switch Project" [ref=f3e79] [cursor=pointer]
+      - button "Enable Writing Mode" [ref=f3e82] [cursor=pointer]
+      - button "Toggle War Room" [ref=f3e85] [cursor=pointer]

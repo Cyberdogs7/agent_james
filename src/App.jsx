@@ -75,6 +75,7 @@ function App() {
 
   const [isConnected, setIsConnected] = useState(true); // Power state DEFAULT ON
   const [isMuted, setIsMuted] = useState(true); // Mic state DEFAULT MUTED
+  const [isVoiceMuted, setIsVoiceMuted] = useState(false); // Speaker state DEFAULT ON
   const [isVideoOn, setIsVideoOn] = useState(false); // Video state
   const [messages, setMessages] = useState([]);
   const [cadData, setCadData] = useState(null);
@@ -1943,7 +1944,7 @@ function App() {
             <VoicePlayback
               socket={socket}
               speakerId={selectedSpeakerId}
-              muted={isMuted}
+              muted={isVoiceMuted}
             />
           </div>
           {isModularMode && (
@@ -2114,11 +2115,13 @@ function App() {
           <ToolsModule
             isConnected={isConnected}
             isMuted={isMuted}
+            isVoiceMuted={isVoiceMuted}
             isVideoOn={isVideoOn}
             isHandTrackingEnabled={isHandTrackingEnabled}
             showSettings={showSettings}
             onTogglePower={togglePower}
             onToggleMute={toggleMute}
+            onToggleVoiceMute={() => setIsVoiceMuted((v) => !v)}
             onToggleVideo={toggleVideo}
             onToggleSettings={() => setShowSettings(!showSettings)}
             onToggleFleetSettings={() =>

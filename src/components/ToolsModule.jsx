@@ -1,14 +1,16 @@
 import React from 'react';
-import { Mic, MicOff, Settings, Server, Power, Video, VideoOff, Globe, Activity, Music, Pen, Folder, Layout } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Settings, Server, Power, Video, VideoOff, Globe, Activity, Music, Pen, Folder, Layout } from 'lucide-react';
 
 const ToolsModule = ({
     isConnected,
     isMuted,
+    isVoiceMuted,
     isVideoOn,
     isHandTrackingEnabled,
     showSettings,
     onTogglePower,
     onToggleMute,
+    onToggleVoiceMute,
     onToggleVideo,
     onToggleSettings,
     onToggleFleetSettings,
@@ -74,6 +76,22 @@ const ToolsModule = ({
                         } `}
                 >
                     {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                </button>
+
+                {/* Speaker Button (voice output — independent of mic mute) */}
+                <button
+                    onClick={onToggleVoiceMute}
+                    disabled={!isConnected}
+                    title={isVoiceMuted ? "Unmute Speaker" : "Mute Speaker"}
+                    aria-label={isVoiceMuted ? "Unmute Speaker" : "Mute Speaker"}
+                    className={`p-3 rounded-full border-2 transition-all duration-300 ${!isConnected
+                        ? 'border-gray-800 text-gray-800 cursor-not-allowed'
+                        : isVoiceMuted
+                            ? 'border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
+                            : 'border-gold9 bg-gold9/10 text-gold9 hover:bg-gold9/20 shadow-[0_0_15px_rgba(255,215,0,0.3)]'
+                        } `}
+                >
+                    {isVoiceMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
                 </button>
 
                 {/* Video Button */}
