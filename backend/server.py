@@ -642,6 +642,14 @@ async def start_audio(sid, data=None):
         print("Emitting 'Agent James Started'")
         await sio.emit('status', {'msg': 'Agent James Started'})
 
+        # Pre-render instant ack clips in the background (also pre-warms TTS),
+        # so the first user message already has ~0ms voice cover.
+        try:
+            from backend.ack_cache import warm_in_background as _ack_warm
+            _ack_warm()
+        except ImportError:
+            pass
+
         # Load saved printers
         saved_printers = SETTINGS.get("printers", [])
         if audio_loop.printer_agent:
