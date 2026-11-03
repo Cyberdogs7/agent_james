@@ -1954,19 +1954,82 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 self.project_manager.log_chat("User", text)
             except Exception:
                 pass
-        # Tool-calling loop (max 5 turns)
+        # Tool-calling loop (max 5 turns). Each turn streams: completed
+        # sentences go to the TTS consumer immediately, so first audio starts
+        # while the model is still generating (no wait for full reply).
         import time as _time
+        from backend.voice_pipeline import split_sentences as _split
+
+        speak_queue: asyncio.Queue = asyncio.Queue()
+        _spoken_chars = 0
+
+        async def _tts_consumer():
+            _n = 0
+            while True:
+                _sentence = await speak_queue.get()
+                if _sentence is None:
+                    return
+                _n += 1
+                _c0 = _time.time()
+                try:
+                    _pcm = await _tts.synthesize(_sentence)
+                except Exception as e:
+                    if INCLUDE_RAW_LOGS:
+                        print(f"[JAMES DEBUG] [ERR] TTS chunk {_n} failed: {e}")
+                    continue
+                if INCLUDE_RAW_LOGS:
+                    print(f"[JAMES DEBUG] [TTS] chunk {_n} took {_time.time() - _c0:.1f}s "
+                          f"({len(_sentence)} chars)")
+                if _pcm and self.on_audio_data:
+                    self.on_audio_data(_pcm)
+
+        try:
+            from backend.voice_pipeline import TTSProvider
+            _tts = TTSProvider()
+            _tts_on = _tts.is_available() and self.on_audio_data is not None
+        except Exception:
+            _tts, _tts_on = None, False
+        _consumer = asyncio.create_task(_tts_consumer()) if _tts_on else None
+
+        def _feed_streamed(full_text):
+            """Queue newly completed speakable sentences from streamed text."""
+            nonlocal _spoken_chars
+            if "<tool_call>" in full_text or "<function" in full_text:
+                return  # tool-call text is never spoken; parsed later
+            _sents = _split(full_text)
+            if not _sents:
+                return
+            # Speak all but the last (possibly incomplete) sentence.
+            _prefix = " ".join(_sents[:-1])
+            if len(_prefix) > _spoken_chars:
+                _new = _prefix[_spoken_chars:].strip()
+                _spoken_chars = len(_prefix)
+                if _new and _consumer is not None:
+                    speak_queue.put_nowait(_new)
+
         reply = ""
         for _turn in range(5):
             _t0 = _time.time()
+            _stream_ok = False
             try:
-                resp = await llm.chat_completion(messages=messages, tools=openai_tools, temperature=0.2)
+                _spoken_chars = 0
+                resp = await llm.achat_stream_full(
+                    messages=messages, tools=openai_tools, temperature=0.2,
+                    on_progress=lambda _n, _t: _feed_streamed(_t),
+                )
+                _stream_ok = True
             except Exception as e:
-                reply = f"LLM error: {e}"
-                break
+                if INCLUDE_RAW_LOGS:
+                    print(f"[JAMES DEBUG] [LLM] stream failed, falling back: {e}")
+                try:
+                    resp = await llm.chat_completion(messages=messages, tools=openai_tools, temperature=0.2)
+                except Exception as e2:
+                    reply = f"LLM error: {e2}"
+                    break
             msg = resp.choices[0].message
             if INCLUDE_RAW_LOGS:
-                print(f"[JAMES DEBUG] [LLM] turn {_turn + 1} took {_time.time() - _t0:.1f}s, "
+                print(f"[JAMES DEBUG] [LLM] turn {_turn + 1} took {_time.time() - _t0:.1f}s "
+                      f"(stream={_stream_ok}), "
                       f"native_calls={len(getattr(msg, 'tool_calls', None) or [])}")
             messages.append(msg.to_dict() if hasattr(msg, "to_dict") else msg)
             pending = []
@@ -2010,6 +2073,11 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     })
                 continue
             reply = msg.content or ""
+            # Speak the trailing sentence the streamer held back.
+            if _consumer is not None and reply:
+                _tail = reply[_spoken_chars:].strip()
+                if _tail and "<tool_call>" not in _tail and "<function" not in _tail:
+                    speak_queue.put_nowait(_tail)
             break
         # Never display/speak unparsed pseudo-XML tool blocks.
         if reply and "<tool_call>" in reply:
@@ -2025,24 +2093,14 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                 self.on_transcription({"sender": "James", "text": reply})
             except Exception:
                 pass
-        # Full-reply TTS → audio_data. Chunks stream out as each finishes, so
-        # the frontend starts playing while later chunks still render.
-        try:
-            from backend.voice_pipeline import TTSProvider, split_sentences
-            tts = TTSProvider()
-            if reply and tts.is_available() and self.on_audio_data:
-                for i, chunk in enumerate(split_sentences(reply), 1):
-                    try:
-                        pcm = await tts.synthesize(chunk)
-                    except Exception as e:
-                        if INCLUDE_RAW_LOGS:
-                            print(f"[JAMES DEBUG] [ERR] TTS chunk {i} failed: {e}")
-                        continue
-                    if pcm:
-                        self.on_audio_data(pcm)
-        except Exception as e:
-            if INCLUDE_RAW_LOGS:
-                print(f"[JAMES DEBUG] [ERR] TTS fallback failed: {e}")
+        # Drain the TTS consumer (all spoken audio out) before returning.
+        if _consumer is not None:
+            try:
+                speak_queue.put_nowait(None)
+                await _consumer
+            except Exception as e:
+                if INCLUDE_RAW_LOGS:
+                    print(f"[JAMES DEBUG] [ERR] TTS consumer drain failed: {e}")
         return reply
 
     async def receive_audio(self):

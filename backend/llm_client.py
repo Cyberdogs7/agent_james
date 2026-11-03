@@ -365,6 +365,8 @@ class RawLLMClient:
         if tools:
             body["tools"] = tools
         parts: List[str] = []
+        # Accumulated tool_call deltas, keyed by stream index.
+        tc_acc: Dict[int, Dict[str, Any]] = {}
         timeout = httpx.Timeout(connect=min(self.timeout, 30.0), read=300.0,
                                 write=None, pool=None)
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -379,16 +381,49 @@ class RawLLMClient:
                     if payload == "[DONE]":
                         break
                     try:
-                        delta = (((json.loads(payload).get("choices") or [{}])[0]
-                                  .get("delta") or {}).get("content", ""))
+                        delta = ((json.loads(payload).get("choices") or [{}])[0]
+                                 .get("delta") or {})
                     except Exception:
                         continue
-                    if delta:
-                        parts.append(delta)
+                    text = delta.get("content") or ""
+                    for tc in delta.get("tool_calls") or []:
+                        idx = tc.get("index", 0)
+                        slot = tc_acc.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                        if tc.get("id"):
+                            slot["id"] = tc["id"]
+                        fn = tc.get("function") or {}
+                        if fn.get("name"):
+                            slot["name"] += fn["name"]
+                        if fn.get("arguments"):
+                            slot["arguments"] += fn["arguments"]
+                    if text:
+                        parts.append(text)
                         n += 1
                         if on_progress:
                             on_progress(n, "".join(parts))
-        return "".join(parts)
+        text = "".join(parts)
+        calls = [_ToolCall(call_id=s.get("id", ""), name=s.get("name", ""),
+                           arguments=s.get("arguments", "") or "{}")
+                 for s in tc_acc.values() if s.get("name")]
+        # Stash calls for achat_stream_full; plain callers ignore them.
+        self._last_stream_calls = calls
+        return text
+
+    async def achat_stream_full(self, messages: List[Any], temperature: float = 0.2,
+                                max_tokens: int | None = None,
+                                tools: Optional[List[Dict]] = None,
+                                on_progress=None) -> _Resp:
+        """Stream a completion and return content AND tool calls.
+
+        Same SSE path as achat_stream, but tool_call deltas are accumulated
+        and returned (cleaned) instead of dropped. Enables speak-as-it-streams
+        without losing function calling.
+        """
+        self._last_stream_calls = []
+        text = await self.achat_stream(messages, temperature=temperature,
+                                       max_tokens=max_tokens, tools=tools,
+                                       on_progress=on_progress)
+        return _Resp(_clean_content(text), self._last_stream_calls or [])
 
     async def achat_json(self, messages: List[Any], temperature: float = 0.2,
                          max_tokens: int | None = None, retries: int = 3) -> Dict[str, Any]:
