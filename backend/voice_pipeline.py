@@ -33,74 +33,17 @@ def split_sentences(text):
     return [p.strip() for p in parts if p.strip()]
 
 
-_ONES = ("zero one two three four five six seven eight nine ten eleven twelve "
-         "thirteen fourteen fifteen sixteen seventeen eighteen nineteen").split()
-_TENS = {20: "twenty", 30: "thirty", 40: "forty", 50: "fifty"}
-
-
-def _two_digit(n):
-    n = int(n)
-    if n < 20:
-        return _ONES[n]
-    tens, ones = (n // 10) * 10, n % 10
-    return _TENS[tens] + ("" if ones == 0 else " " + _ONES[ones])
-
-
-def _ordinal(n):
-    n = int(n)
-    if n < 20:
-        if n in (1, 2, 3):
-            return {1: "first", 2: "second", 3: "third"}[n]
-        if 10 <= n <= 20:
-            return _ONES[n] + "th"
-        return _ONES[n] + "th"
-    if n < 100:
-        last = n % 10
-        if last in (1, 2, 3):
-            return _two_digit(n - last) + " " + {1: "first", 2: "second", 3: "third"}[last]
-        base = _two_digit(n)
-        return (base[:-1] + "ieth") if base.endswith("y") else (base + "th")
-    return str(n) + "th"
-
-
-def _year_words(y):
-    y = int(y)
-    if 2000 <= y < 2010:
-        rest = y - 2000
-        return "two thousand" if rest == 0 else "two thousand " + _ONES[rest]
-    if 2010 <= y < 2100:
-        return "twenty " + (_ONES[y - 2000] if y - 2000 < 10 else _two_digit(y - 2000))
-    return str(y)
-
-
 def normalize_for_speech(text):
-    """Rewrite LLM text the way it should be SPOKEN.
+    """Make LLM text safe for TTS. Deliberately minimal.
 
-    TTS models read literally: "11:54 AM" becomes "eleven thousand four".
-    Expand times, dates, ordinals, years; strip markdown and symbols.
+    Number/date expansion lives in the MODEL prompts (talker + presenter are
+    instructed to write speakable text: times/dates in words, no markdown).
+    Regex cannot do that job robustly ("May" the month vs the verb, "St."
+    the saint vs the street, decimals, currencies...). This only strips
+    characters that are NEVER spoken: markdown and formatting symbols.
     """
     t = text or ""
-    t = re.sub(r"[*_`#>|]", "", t)  # markdown
-    # Times: 11:54 AM / 3:05pm / 12:00 P.M.
-    def _time(m):
-        h, mi, ap = int(m.group(1)), m.group(2), m.group(3).upper()
-        h12 = h % 12 or 12
-        hw = _ONES[h12]
-        mw = "o'clock" if mi == "00" else ("oh " + _ONES[int(mi)] if mi.startswith("0") else _two_digit(mi))
-        return f"{hw} {mw} {'A' if ap == 'A' else 'P'} M"
-    t = re.sub(r"\b(\d{1,2}):(\d{2})\s*([AP])\.?\s*M\.?", _time, t)
-    # Dates with year: November 3, 2026 -> November third, twenty twenty-six
-    def _date(m):
-        return f"{m.group(1)} {_ordinal(m.group(2))}, {_year_words(m.group(3))}"
-    t = re.sub(r"\b(January|February|March|April|May|June|July|August|September|"
-               r"October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b", _date, t)
-    # Standalone ordinals: 3rd -> third
-    t = re.sub(r"\b(\d{1,2})(st|nd|rd|th)\b", lambda m: _ordinal(m.group(1)), t)
-    # Bare years: 2026 -> twenty twenty-six
-    t = re.sub(r"\b(20\d{2})\b", lambda m: _year_words(m.group(1)), t)
-    # Lone AM/PM -> A M / P M
-    t = re.sub(r"\bAM\b", "A M", t)
-    t = re.sub(r"\bPM\b", "P M", t)
+    t = re.sub(r"[*_`#>|]", "", t)  # markdown / formatting, never spoken
     t = re.sub(r"\s{2,}", " ", t).strip()
     return t
 

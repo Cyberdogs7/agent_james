@@ -2159,6 +2159,9 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
         _TALKER_SYSTEM = (
             "You are James, a witty British voice assistant speaking aloud. "
             "Keep replies to 1-2 SHORT sentences (they are spoken). "
+            "Write everything exactly as it should be SPOKEN: times, dates, and "
+            "numbers fully in words (eleven fifty-four A M, not 11:54 AM; "
+            "November third, not Nov 3rd), no markdown, no symbols, no emojis. "
             "If the request needs tools, data lookup, or multi-step work, do NOT "
             "answer — reply ONLY: <DEFER>one brief ack like 'On it — checking now.'</DEFER>"
         )
@@ -2203,7 +2206,8 @@ Always pass a rich, detailed `prompt`. For images default `aspect_ratio` is `1:1
                     {"role": "system", "content": _TALKER_SYSTEM},
                     {"role": "user", "content":
                      f"Original request: {text}\nResult: {reply}\n"
-                     f"Present this result aloud in 2 short sentences."},
+                     f"Present this result aloud in 2 short sentences, with all "
+                     f"times, dates, and numbers written fully in spoken words."},
                 ]
                 await _run_loop(_present_msgs, None, 0.7, True, "present")
         else:
